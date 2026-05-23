@@ -3282,6 +3282,25 @@ document.querySelectorAll('.horse-row.clickable').forEach(row=>{{
   }},1000);
 }})();
 </script>
+
+<!-- Mobile bottom nav -->
+<nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+  <button class="active" data-view="dashboard" onclick="showView('dashboard');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Dashboard
+  </button>
+  <button data-view="agent" onclick="showView('agent');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
+    Agent
+  </button>
+</nav>
+<script>
+function updateMobileNav(btn){{
+  document.querySelectorAll('.mobile-bottom-nav button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}}
+</script>
+
 </body>
 </html>"""
 
@@ -3535,24 +3554,6 @@ border-top:1px solid #2e3138}
     el.innerHTML=html||'<p style="color:#6b7280">Inga omg\\u00e5ngar hittade.</p>';
   }catch(e){el.innerHTML='<p style="color:#ef4444">Kunde inte ladda.</p>';}
 })();
-</script>
-
-<!-- Mobile bottom nav -->
-<nav class="mobile-bottom-nav" id="mobile-bottom-nav">
-  <button class="active" data-view="dashboard" onclick="showView('dashboard');updateMobileNav(this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    Dashboard
-  </button>
-  <button data-view="agent" onclick="showView('agent');updateMobileNav(this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
-    Agent
-  </button>
-</nav>
-<script>
-function updateMobileNav(btn){{
-  document.querySelectorAll('.mobile-bottom-nav button').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}}
 </script>
 
 </body>

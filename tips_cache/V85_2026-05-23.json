@@ -1,0 +1,66 @@
+{
+  "game_type": "V85",
+  "round_date": "2026-05-23",
+  "track": "Gävle",
+  "sources": {
+    "travcash": {
+      "author": "Referenten",
+      "published": "2026-05-21",
+      "url": "https://travcash.se/v85-tips/v85-tips-arjang-lordag-23-5-jackpott/",
+      "picks": {
+        "V85-1": "11 Official Sox",
+        "V85-2": "1,2,4,6,7,8,9,11,12,13,14,15",
+        "V85-3": "2,6,7",
+        "V85-4": "7,13",
+        "V85-5": "Samtliga tio startande",
+        "V85-6": "3 Eagle Of Oak",
+        "V85-7": "Samtliga tolv startande",
+        "V85-8": "7 PolePosition"
+      },
+      "best_spike": "Eagle Of Oak (V85-6)",
+      "best_drag": "Brisgås Milly (V85-2)",
+      "rankings": {
+        "V85-1": "11-3-6-8-5-15-1-10-13-7-9-14-4-12-2",
+        "V85-2": "6-15-1-9-13-8-4-12-14-11-7-2-5-10-3",
+        "V85-3": "7-2-6-8-4-1-10-9-11-5-3-12",
+        "V85-4": "7-13-6-3-5-15-12-10-8-1-9-4-14-2-11",
+        "V85-5": "Alla brett",
+        "V85-6": "3-2-7-8-11-1-4-5-6-9-10-12",
+        "V85-7": "Alla brett",
+        "V85-8": "7-4-10-5-8-6-9-2-11-1-12-3"
+      }
+    },
+    "sharps_berglund": {
+      "author": "Daniel Berglund",
+      "published": "2026-05-23",
+      "url": "https://www.sharps.se/forums/service-plays/63610-berglund-v85-gaevle/",
+      "rankings": {
+        "V85-1": {"A": "3-11", "B": "1-6-8-5-15-10", "BC": "13-7", "C": "9-14-4-12-2"},
+        "V85-2": {"A": "9-8-15", "B": "6-1-11-12", "BC": "14-13-4-7-2", "C": "10-5-3"},
+        "V85-3": {"A": "7", "B": "2-6", "BC": "8-4-11-1-10-9", "C": "5-3-12"},
+        "V85-4": {"A": "6", "B": "7-13-3-5-15", "BC": "12-10-8", "C": "1-9-4-14-2-11"},
+        "V85-5": {"A": "6-5-10", "B": "9-1", "BC": "2-3", "C": "8-7"},
+        "V85-6": {"A": "3-2", "B": "7-8", "BC": "11-1-4-5-6-9", "C": "10-12"},
+        "V85-7": {"A": "6", "B": "2-5-7-11-10-9", "BC": "12-1-3", "C": "4-8"},
+        "V85-8": {"A": "7", "B": "8-5-10-12", "BC": "6-4", "C": "9-2-1-11-3"}
+      },
+      "summary": "Ojämna lag - dela om! Jackpott med 19.2M extra. Svår inledning med tre 15-hästarslopp."
+    },
+    "sharps_jensa": {
+      "author": "Jens Sjödén",
+      "published": "2026-05-23",
+      "url": "https://www.sharps.se/forums/service-plays/63611-jensa-v85-gaevle/",
+      "picks": {
+        "V85-1": "3, 11",
+        "V85-2": "1, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15",
+        "V85-3": "7 Snickers (15%) - SPIK",
+        "V85-4": "6, 7, 13",
+        "V85-5": "5, 6, 10",
+        "V85-6": "3 Eagle of Oak (54%) - SPIK",
+        "V85-7": "6 Villiamson BB (10%) - SPIK",
+        "V85-8": "7 Pole Position (50%) - SPIK"
+      },
+      "summary": "Statistikanalys V85. Sexsiffrig utdelning mest sannolikt. Fyra hästar med spikbara chanser."
+    }
+  }
+}

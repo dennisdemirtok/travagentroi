@@ -61,6 +61,98 @@
         "V85-8": "7 Pole Position (50%) - SPIK"
       },
       "summary": "Statistikanalys V85. Sexsiffrig utdelning mest sannolikt. Fyra hästar med spikbara chanser."
+    },
+    "expressen_edholm": {
+      "author": "Fredrik Edholm (Expressen)",
+      "published": "2026-05-22",
+      "url": "https://www.expressen.se/sport/trav/jag-tror-att-spiken-bara-krossar-dem-/",
+      "rankings": {
+        "V85-1": {"A": "11-1-8-3", "B": "15-14-5-13", "C": "7-10-6-4-9", "D": "12-2"},
+        "V85-2": {"A": "6-13-15", "B": "8-12-1-2-11", "C": "4-14-9-7", "D": "5-10-3"},
+        "V85-3": {"A": "6-2-7", "B": "1-4-8", "C": "5-11-10-3", "D": "12-9"},
+        "V85-4": {"A": "6-13", "B": "7-5-15", "C": "12-3-10-9-8-1", "D": "14-11-4-2"},
+        "V85-5": {"A": "5", "B": "10", "C": "9-6-3-1", "D": "2-7-8"},
+        "V85-6": {"A": "8-3", "B": "7-11-1-4", "C": "2-5-9-6", "D": "10-12"},
+        "V85-7": {"A": "2-11-6", "B": "5-9-10-12", "C": "3-1-7-4-8"},
+        "V85-8": {"A": "7", "B": "5-8-4", "C": "12-6-2-10-9", "D": "1-11-3"}
+      },
+      "picks": {
+        "V85-1": "1, 3, 8, 11 (15, 14)",
+        "V85-2": "6, 8, 12, 13, 15 (1, 2)",
+        "V85-3": "6 R.K.Pascal (2, 7)",
+        "V85-4": "6, 13 (7, 5)",
+        "V85-5": "5 Keep Asking (10, 9)",
+        "V85-6": "3, 8 (7, 11)",
+        "V85-7": "2, 5, 6, 11 (9, 10)",
+        "V85-8": "7 PolePosition (5, 8)"
+      },
+      "best_spike": "PolePosition (V85-8)",
+      "best_drag": "Brigsås Milly (V85-2), R.K.Pascal (V85-3), Golden Kronos (V85-6)",
+      "summary": "Öppen och svårlöst omgång. Förlitar sig på firma Redén/Kihlström. Bästa spik PolePosition, näst bästa Keep Asking. Helgardering V85-2. Överspelade: Qulör (V85-1), Lille Rose G.L. (V85-2), Bazoo Can (V85-4)."
+    },
+    "aftonbladet_mario": {
+      "author": "Mario Lipovac (Aftonbladet/Sportbladet)",
+      "published": "2026-05-23",
+      "url": "https://www.aftonbladet.se/sportbladet/trav365/a/9pqvyr/v85-tips-gavle-lordagen-23-maj-basta-skrallarna-andelssystem-jackpott-41-miljoner",
+      "picks": {
+        "V85-1": "Skräll: 8 Ditte Gel",
+        "V85-5": "Skräll: 6 Kentucky River (synar favoriten 5 Keep Asking)",
+        "V85-6": "Skräll: 2 Huchuy Qosqo (synar favoriten Eagle of Oak)",
+        "V85-8": "SPIK: 7 PolePosition"
+      },
+      "best_spike": "PolePosition (V85-8)",
+      "summary": "Spiken i avslutningen, PolePosition. Skrällar: Ditte Gel (V85-1), Kentucky River (V85-5), Huchuy Qosqo (V85-6)."
+    },
+    "aftonbladet_robert": {
+      "author": "Robert Lipovac (Aftonbladet/Sportbladet)",
+      "published": "2026-05-23",
+      "url": "https://www.aftonbladet.se/sportbladet/trav365/a/9pqvyr/v85-tips-gavle-lordagen-23-maj-basta-skrallarna-andelssystem-jackpott-41-miljoner",
+      "picks": {
+        "V85-5": "SPIK: 5 Keep Asking (Daniel Redén snackat upp, vill till Elitloppet)",
+        "V85-6": "Skräll: 2 Huchuy Qosqo (järnskor till barfota runt om)",
+        "V85-7": "Skräll: 7 Don E.Star (barfotabalans fungerade senast)",
+        "V85-8": "SPIK: 7 PolePosition (form i topp, lätt att spika)"
+      },
+      "best_spike": "Keep Asking (V85-5), PolePosition (V85-8)",
+      "summary": "Dubbla spikar: Keep Asking och PolePosition. Skrällar: Huchuy Qosqo (V85-6), Don E.Star (V85-7). Procenten för låg på skrällarna."
+    },
+    "aftonbladet_kim": {
+      "author": "Kim Brask (Aftonbladet/Sportbladet)",
+      "published": "2026-05-23",
+      "url": "https://www.aftonbladet.se/sportbladet/trav365/a/9pqvyr/v85-tips-gavle-lordagen-23-maj-basta-skrallarna-andelssystem-jackpott-41-miljoner",
+      "picks": {
+        "V85-1": "SPIK: 11 Official Sox (tar ställning trots 15-hästarslopp)",
+        "V85-4": "Skräll: 15 Hulte Adam (riktigt bra, ensam på 40m tillägg)",
+        "V85-7": "Skräll: 10 Husavik (heroisk prestation senast)",
+        "V85-8": "SPIK: 7 PolePosition (fin ut i årets starter, skor av + bike)"
+      },
+      "best_spike": "PolePosition (V85-8), Official Sox (V85-1)",
+      "summary": "PolePosition tydlig spik. Official Sox andra spiken. Skrällar: Hulte Adam (V85-4), Husavik (V85-7)."
+    },
+    "aftonbladet_quist": {
+      "author": "Micke Quist (Aftonbladet/Sportbladet)",
+      "published": "2026-05-23",
+      "url": "https://www.aftonbladet.se/sportbladet/trav365/a/9pqvyr/v85-tips-gavle-lordagen-23-maj-basta-skrallarna-andelssystem-jackpott-41-miljoner",
+      "picks": {
+        "V85-5": "Skräll: 6 Kentucky River (blir bättre och bättre, stark och oöm)",
+        "V85-6": "Skräll: 7 Justcantgetenough (blir bortglömd, full fart i startrusningen)",
+        "V85-7": "Skräll: 5 Chico de Calamar (gör alltid sitt, kämpar hela vägen)",
+        "V85-8": "SPIK: 7 PolePosition (toppform, skor av + bike)"
+      },
+      "best_spike": "PolePosition (V85-8)",
+      "summary": "PolePosition enda spiken. Stora skrällidén: Justcantgetenough (V85-6) som blir bortglömd. Kentucky River (V85-5), Chico de Calamar (V85-7)."
+    },
+    "aftonbladet_nils": {
+      "author": "Nils Larsson (Aftonbladet/Sportbladet)",
+      "published": "2026-05-23",
+      "url": "https://www.aftonbladet.se/sportbladet/trav365/a/9pqvyr/v85-tips-gavle-lordagen-23-maj-basta-skrallarna-andelssystem-jackpott-41-miljoner",
+      "picks": {
+        "V85-5": "Skräll: 9 Luke the Spook (hamnade i trött rygg senast, bättre klaff nu)",
+        "V85-6": "SPIK: 2 Huchuy Qosqo (spännande, öppnar bra, barfota)",
+        "V85-8": "SPIK: 7 PolePosition (fin senaste start, spännande säsong)"
+      },
+      "best_spike": "Huchuy Qosqo (V85-6), PolePosition (V85-8)",
+      "summary": "Dubbelspikar: Huchuy Qosqo (V85-6) och PolePosition (V85-8). Skräll: Luke the Spook (V85-5)."
     }
   }
 }

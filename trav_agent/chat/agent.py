@@ -120,6 +120,32 @@ def build_round_context(game_round) -> str:
                     f"{career.wins}v-{career.seconds}p-{career.thirds}t, "
                     f"vinst: {career.win_rate:.0%}, pris: {career.total_prize_money:,} kr"
                 )
+            recent = entry.horse.recent_starts(5)
+            if recent:
+                lines.append("    Senaste starter:")
+                for ps in recent:
+                    plac = str(ps.placement) if ps.placement else "disk"
+                    km = ""
+                    if ps.km_time and ps.km_time > 0:
+                        mins = int(ps.km_time // 60)
+                        secs = ps.km_time % 60
+                        km = f"{mins}.{secs:04.1f}"
+                    else:
+                        km = "-"
+                    sm = "auto"
+                    try:
+                        if hasattr(ps.start_method, "value"):
+                            sm = ps.start_method.value
+                        elif "VOLT" in str(ps.start_method).upper():
+                            sm = "volt"
+                    except Exception:
+                        pass
+                    lines.append(
+                        f"      {ps.start_date} {ps.track_name} "
+                        f"{ps.distance}m {sm}: "
+                        f"plac {plac}/{ps.num_starters}, km {km}, "
+                        f"kusk {ps.driver_name}, pris {ps.prize_money:,} kr"
+                    )
 
         if race.result_order:
             winner_num = race.result_order[0]
@@ -380,7 +406,7 @@ async def chat(
             "https://api.anthropic.com/v1/messages",
             json={
                 "model": model,
-                "max_tokens": 2048,
+                "max_tokens": 4096,
                 "system": system_prompt,
                 "messages": messages,
             },
@@ -426,7 +452,7 @@ async def chat_stream(
             "https://api.anthropic.com/v1/messages",
             json={
                 "model": model,
-                "max_tokens": 2048,
+                "max_tokens": 4096,
                 "system": system_prompt,
                 "messages": messages,
                 "stream": True,

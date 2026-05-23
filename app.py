@@ -332,6 +332,13 @@ async def delete_chat_session(round_key: str):
     return {"status": "cleared"}
 
 
+@app.get("/api/chat/sessions")
+async def list_chat_sessions():
+    """List all saved chat sessions with metadata."""
+    from trav_agent.chat.memory import list_sessions
+    return {"sessions": list_sessions()}
+
+
 # ── Tips API ────────────────────────────────────────────────────────────────
 
 @app.get("/api/tips/{game_type}/{day}")

@@ -9,4 +9,5 @@ output_reports/
 .env
 .DS_Store
 backlog.json
+chat_sessions/
 !tips_cache/*.json

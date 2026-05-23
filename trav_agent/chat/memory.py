@@ -1,23 +1,38 @@
 """Agent memory — knowledge system and session persistence.
 
 Provides track-pattern analysis, historical performance context,
-and in-memory chat session storage.
+and file-backed chat session storage that survives server restarts.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Session persistence (in-memory) ─────────────────────────────────────────
+# ── Session persistence (file-backed) ─────────────────────────────────────
 
+_SESSIONS_DIR = Path(__file__).parent.parent.parent / "chat_sessions"
+_SESSIONS_DIR.mkdir(exist_ok=True)
+
+# In-memory cache (hot layer)
 _chat_sessions: dict[str, list] = {}
+_session_meta: dict[str, dict] = {}
+
+
+def _session_file(round_key: str) -> Path:
+    """Return file path for a session, e.g. chat_sessions/V85__2026-05-23.json."""
+    safe_key = round_key.replace("/", "__")
+    return _SESSIONS_DIR / f"{safe_key}.json"
 
 
 def save_session(round_key: str, messages: list) -> None:
-    """Save chat messages for a round.
+    """Save chat messages for a round (both in-memory and to disk).
 
     Args:
         round_key: e.g. "V85/2026-05-23"
@@ -25,9 +40,34 @@ def save_session(round_key: str, messages: list) -> None:
     """
     _chat_sessions[round_key] = list(messages)
 
+    # Build metadata
+    user_msgs = [m for m in messages if m.get("role") == "user"]
+    first_q = user_msgs[0]["content"][:80] if user_msgs else ""
+    meta = {
+        "round_key": round_key,
+        "message_count": len(messages),
+        "first_question": first_q,
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if round_key not in _session_meta:
+        meta["created_at"] = meta["updated_at"]
+    else:
+        meta["created_at"] = _session_meta[round_key].get("created_at", meta["updated_at"])
+    _session_meta[round_key] = meta
+
+    # Persist to disk
+    try:
+        path = _session_file(round_key)
+        data = {"meta": meta, "messages": messages}
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Failed to save session {round_key}: {e}")
+
 
 def load_session(round_key: str) -> list:
     """Load previous chat messages for a round.
+
+    Checks in-memory cache first, falls back to disk.
 
     Args:
         round_key: e.g. "V85/2026-05-23"
@@ -35,12 +75,62 @@ def load_session(round_key: str) -> list:
     Returns:
         List of {role, content} dicts, or empty list.
     """
-    return list(_chat_sessions.get(round_key, []))
+    if round_key in _chat_sessions:
+        return list(_chat_sessions[round_key])
+
+    # Try loading from disk
+    path = _session_file(round_key)
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            messages = data.get("messages", [])
+            _chat_sessions[round_key] = messages
+            if data.get("meta"):
+                _session_meta[round_key] = data["meta"]
+            return list(messages)
+        except Exception as e:
+            logger.warning(f"Failed to load session {round_key}: {e}")
+
+    return []
 
 
 def clear_session(round_key: str) -> None:
-    """Clear stored chat session for a round."""
+    """Clear stored chat session for a round (memory + disk)."""
     _chat_sessions.pop(round_key, None)
+    _session_meta.pop(round_key, None)
+    path = _session_file(round_key)
+    try:
+        path.unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning(f"Failed to delete session file {round_key}: {e}")
+
+
+def list_sessions() -> list[dict]:
+    """List all saved chat sessions with metadata.
+
+    Returns:
+        List of dicts with round_key, message_count, first_question,
+        created_at, updated_at. Sorted by most recent first.
+    """
+    # Load any on-disk sessions not yet in memory
+    try:
+        for path in _SESSIONS_DIR.glob("*.json"):
+            key = path.stem.replace("__", "/")
+            if key not in _session_meta:
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    meta = data.get("meta", {})
+                    if meta:
+                        _session_meta[key] = meta
+                        _chat_sessions[key] = data.get("messages", [])
+                except Exception:
+                    continue
+    except Exception as e:
+        logger.warning(f"Failed to scan sessions dir: {e}")
+
+    sessions = list(_session_meta.values())
+    sessions.sort(key=lambda s: s.get("updated_at", ""), reverse=True)
+    return sessions
 
 
 # ── Track knowledge ─────────────────────────────────────────────────────────

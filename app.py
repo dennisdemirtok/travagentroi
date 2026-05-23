@@ -240,7 +240,8 @@ async def api_chat(request: Request):
     try:
         from trav_agent.chat.agent import (
             build_backlog_context, build_consensus_ranking,
-            build_round_context, chat_stream,
+            build_model_performance_context, build_round_context,
+            chat_stream,
         )
         from trav_agent.chat.memory import build_learning_context, save_session
         from trav_agent.data.tips_scraper import (
@@ -267,6 +268,11 @@ async def api_chat(request: Request):
             tips_raw = load_tips_cache_raw(game_type, round_date)
             consensus_ctx = build_consensus_ranking(game_round, tips_raw)
 
+        # Build model performance context
+        model_perf_ctx = ""
+        if backlog_data:
+            model_perf_ctx = build_model_performance_context(backlog_data)
+
         # Build memory context
         memory_ctx = ""
         if game_round and backlog_data:
@@ -279,6 +285,7 @@ async def api_chat(request: Request):
                     messages, round_ctx, bl_ctx, ANTHROPIC_API_KEY,
                     tips_context=tips_ctx, memory_context=memory_ctx,
                     consensus_context=consensus_ctx,
+                    model_perf_context=model_perf_ctx,
                 ):
                     full_response += chunk
                     yield f"data: {json.dumps({'delta': chunk})}\n\n"

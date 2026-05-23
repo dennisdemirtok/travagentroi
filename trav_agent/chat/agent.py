@@ -7,6 +7,7 @@ import logging
 import os
 import re
 from collections import defaultdict
+from datetime import date, timedelta
 from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
@@ -527,12 +528,110 @@ def build_backlog_context(game_round, backlog_data: dict) -> str:
     return "\n".join(lines)
 
 
+def build_model_performance_context(backlog_data: dict) -> str:
+    """Build model performance summary for AI context.
+
+    Calculates monthly ROI trend for the last 6 months, summarises
+    model v2 changes (2026-04-05) and flags performance anomalies.
+    """
+    if not backlog_data:
+        return ""
+
+    entries = backlog_data.get("entries", [])
+    # Guard: some entries may be bare strings instead of dicts
+    entries = [e for e in entries if isinstance(e, dict)]
+    if not entries:
+        return ""
+
+    today = date.today()
+    six_months_ago = today - timedelta(days=180)
+
+    # Collect entries per calendar month within the window
+    monthly: dict[str, dict] = {}
+    for e in entries:
+        d_str = e.get("date", "")
+        if not d_str:
+            continue
+        try:
+            d = date.fromisoformat(d_str)
+        except (ValueError, TypeError):
+            continue
+        if d < six_months_ago:
+            continue
+        month_key = d_str[:7]  # "YYYY-MM"
+        if month_key not in monthly:
+            monthly[month_key] = {"cost": 0, "payout": 0, "n": 0, "hits": 0}
+        monthly[month_key]["cost"] += e.get("cost", 0) or 0
+        monthly[month_key]["payout"] += e.get("payout", 0) or 0
+        monthly[month_key]["n"] += 1
+        if (e.get("payout") or 0) > 0:
+            monthly[month_key]["hits"] += 1
+
+    lines = []
+    lines.append("=" * 50)
+    lines.append("MODELL-PRESTANDA (senaste 6 månaderna)")
+    lines.append("=" * 50)
+
+    # Monthly ROI trend
+    if monthly:
+        lines.append("\n--- Månads-ROI trend ---")
+        prev_roi = None
+        for mk in sorted(monthly.keys()):
+            m = monthly[mk]
+            cost = m["cost"]
+            payout = m["payout"]
+            roi = (payout - cost) / cost * 100 if cost > 0 else 0
+            wr = m["hits"] / m["n"] * 100 if m["n"] > 0 else 0
+            netto = payout - cost
+
+            # Flag anomalies
+            anomaly = ""
+            if prev_roi is not None and roi < prev_roi - 50:
+                anomaly = " ⚠ KRAFTIGT FALL"
+            elif roi < -50:
+                anomaly = " ⚠ STOR FÖRLUST"
+            prev_roi = roi
+
+            lines.append(
+                f"  {mk}: {m['n']} omg, ROI {roi:+.1f}%, "
+                f"vinstfrekvens {wr:.0f}%, netto {netto:+,.0f} kr{anomaly}"
+            )
+    else:
+        lines.append("\n  Inga entries de senaste 6 månaderna.")
+
+    # Model v2 changelog
+    lines.append("\n--- Modell v2 ändringar (2026-04-05) ---")
+    lines.append("  Fixade kritiska problem som orsakade divergens backtest vs live:")
+    lines.append("  - Dataläckage: super_score använde slutlig streckprocent i backtest (45% marknadsvikt -> 15%)")
+    lines.append("  - Inverterade vikter: tid höjd till 0.28, form 0.22, pris 0.18 (var överoptimerade på läckt data)")
+    lines.append("  - Temporal filtrering: tillagd i generate_backlog och roi_backtest (saknades helt)")
+    lines.append("  - Karriärstatistik: recompute_career_from_starts() tillagd (använde framtida data)")
+    lines.append("  - Konfidensformel: 75% modell / 25% marknad (var 75% marknad)")
+    lines.append("  - Interaktionstermer (bana*post, bana*kategori) satta till 0.0")
+    lines.append("  OBS: Alla resultat före 2026-04-05 är opålitliga pga dataläckage.")
+
+    # Known strengths and weaknesses
+    lines.append("\n--- Kända styrkor/svagheter ---")
+    lines.append("  Styrkor:")
+    lines.append("    - Tidsfaktorn (0.28 vikt) är starkaste prediktorn")
+    lines.append("    - Form-analys (0.22) fångar aktuell trend väl")
+    lines.append("    - Value-identifiering: hög modellpoäng + låg streckprocent")
+    lines.append("  Svagheter:")
+    lines.append("    - Kuskvikt (0.05) kan underskatta toppkuskar i finaler")
+    lines.append("    - Banspecifik faktor (0.05) ger begränsad edge på unika banor")
+    lines.append("    - Modellen har svårare med korta lopp (<1640m auto) där position väger tyngre")
+    lines.append("    - Skrällprediktion: identifierar risk men har svårt att välja rätt skrällhäst")
+
+    return "\n".join(lines)
+
+
 def _build_system_prompt(
     round_context: str,
     backlog_context: str,
     tips_context: str = "",
     memory_context: str = "",
     consensus_context: str = "",
+    model_perf_context: str = "",
 ) -> str:
     """Build the enhanced system prompt for the agent."""
     parts = [
@@ -566,6 +665,9 @@ def _build_system_prompt(
     if backlog_context:
         parts.append(f"\n### Historisk statistik\n{backlog_context}\n")
 
+    if model_perf_context:
+        parts.append(f"\n### Modellprestanda\n{model_perf_context}\n")
+
     if tips_context:
         parts.append(f"\n### Externa tips\n{tips_context}\n")
 
@@ -594,13 +696,14 @@ async def chat(
     tips_context: str = "",
     memory_context: str = "",
     consensus_context: str = "",
+    model_perf_context: str = "",
 ) -> str:
     """Skicka meddelanden till Anthropic API och returnera svaret."""
     import httpx
 
     system_prompt = _build_system_prompt(
         round_context, backlog_context, tips_context, memory_context,
-        consensus_context,
+        consensus_context, model_perf_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
@@ -634,6 +737,7 @@ async def chat_stream(
     tips_context: str = "",
     memory_context: str = "",
     consensus_context: str = "",
+    model_perf_context: str = "",
 ) -> AsyncIterator[str]:
     """Stream chat response from Anthropic API, yielding text chunks.
 
@@ -647,7 +751,7 @@ async def chat_stream(
 
     system_prompt = _build_system_prompt(
         round_context, backlog_context, tips_context, memory_context,
-        consensus_context,
+        consensus_context, model_perf_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")

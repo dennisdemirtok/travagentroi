@@ -1477,10 +1477,95 @@ def _stats_html(backlog_data: dict | None = None) -> str:
             f'</div>'
         )
 
+    # ── Månadsvis ROI — senaste 6 månaderna (aggregerat alla strategier) ──
+    monthly_roi_html = ""
+    entries_for_monthly = backlog_data.get("entries", [])
+    if entries_for_monthly:
+        from collections import defaultdict as _defaultdict
+        month_agg = _defaultdict(lambda: {
+            "cost": 0, "payout": 0, "rounds": 0, "hits": 0,
+        })
+        for entry in entries_for_monthly:
+            d = entry.get("date", "")
+            if len(d) >= 7:
+                ym = d[:7]  # YYYY-MM
+                ma = month_agg[ym]
+                ma["cost"] += entry.get("cost", 0)
+                ma["payout"] += entry.get("payout", 0)
+                ma["rounds"] += 1
+                if entry.get("hit"):
+                    ma["hits"] += 1
+
+        if month_agg:
+            sorted_months = sorted(month_agg.keys(), reverse=True)[:6]
+            # Find max abs ROI for bar scaling
+            roi_values = []
+            for ym in sorted_months:
+                ma = month_agg[ym]
+                roi_val = ((ma["payout"] - ma["cost"]) / ma["cost"] * 100) if ma["cost"] > 0 else 0
+                roi_values.append(abs(roi_val))
+            max_abs_roi = max(roi_values) if roi_values else 1
+            if max_abs_roi == 0:
+                max_abs_roi = 1
+
+            MONTH_NAMES_SV = {
+                "01": "Januari", "02": "Februari", "03": "Mars",
+                "04": "April", "05": "Maj", "06": "Juni",
+                "07": "Juli", "08": "Augusti", "09": "September",
+                "10": "Oktober", "11": "November", "12": "December",
+            }
+
+            m_roi_rows = []
+            for ym in sorted_months:
+                ma = month_agg[ym]
+                roi = ((ma["payout"] - ma["cost"]) / ma["cost"] * 100) if ma["cost"] > 0 else 0
+                netto = ma["payout"] - ma["cost"]
+                win_rate = (ma["hits"] / ma["rounds"] * 100) if ma["rounds"] > 0 else 0
+                roi_color = "#22c55e" if roi >= 0 else "#ef4444"
+                netto_color = "#22c55e" if netto >= 0 else "#ef4444"
+                bar_width = abs(roi) / max_abs_roi * 100
+                bar_bg = "rgba(34,197,94,0.25)" if roi >= 0 else "rgba(239,68,68,0.25)"
+                bar_border = "#22c55e" if roi >= 0 else "#ef4444"
+                month_num = ym[5:7]
+                year_short = ym[2:4]
+                month_label = f"{MONTH_NAMES_SV.get(month_num, month_num)} '{year_short}"
+                m_roi_rows.append(
+                    f'<tr>'
+                    f'<td><strong>{month_label}</strong></td>'
+                    f'<td style="text-align:center">{ma["rounds"]}</td>'
+                    f'<td style="color:{roi_color};font-weight:700;text-align:right">{roi:+.1f}%</td>'
+                    f'<td>'
+                    f'<div style="display:flex;align-items:center;gap:6px">'
+                    f'<div style="width:{bar_width:.0f}%;min-width:2px;height:16px;'
+                    f'background:{bar_bg};border-left:3px solid {bar_border};'
+                    f'border-radius:2px"></div>'
+                    f'</div>'
+                    f'</td>'
+                    f'<td style="text-align:center">{win_rate:.0f}%</td>'
+                    f'<td style="color:{netto_color};font-weight:700;text-align:right">'
+                    f'{netto:+,.0f} kr</td>'
+                    f'</tr>'
+                )
+
+            monthly_roi_html = (
+                f'<div class="stats-block">'
+                f'<h3>📆 Månadsvis ROI — senaste 6 månaderna</h3>'
+                f'<div class="table-wrap"><table class="stats-table">'
+                f'<thead><tr>'
+                f'<th>Månad</th><th style="text-align:center">Omgångar</th>'
+                f'<th style="text-align:right">ROI</th><th style="min-width:120px"></th>'
+                f'<th style="text-align:center">Vinstfrekvens</th>'
+                f'<th style="text-align:right">Netto</th>'
+                f'</tr></thead>'
+                f'<tbody>{"".join(m_roi_rows)}</tbody>'
+                f'</table></div></div>'
+            )
+
     return (
         f'<div id="stats" class="summary-card stats-section">'
         f'<h2>📈 Statistik — ROI per år, månad, speltyp & bana</h2>'
         f'{chart_html}'
+        f'{monthly_roi_html}'
         f'<div class="strat-filter">{"".join(strat_buttons)}</div>'
         f'<div class="strat-filter gt-filter-row">{"".join(gt_buttons)}</div>'
         f'{overview_html}'
@@ -1854,11 +1939,24 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
     TIER_ORDER = ["A", "B", "BC", "C", "D"]
     gt = _esc(game_round.game_type)
 
+    # -- Weight legend computation --
+    _w_model = SOURCE_WEIGHTS["model"]
+    _w_sharps = sum(v for k, v in SOURCE_WEIGHTS.items() if k.startswith("sharps_"))
+    _w_media = (
+        sum(v for k, v in SOURCE_WEIGHTS.items() if k.startswith("aftonbladet_"))
+        + SOURCE_WEIGHTS.get("expressen_edholm", 0)
+    )
+    _w_travcash = SOURCE_WEIGHTS.get("travcash", 0)
+    _w_total = _w_model + _w_sharps + _w_media + _w_travcash
+
     rows = []
     for race in game_round.races:
         race_key = f"{gt}-{race.race_number}"
         horse_scores: dict[str, float] = defaultdict(float)
         horse_weights: dict[str, float] = defaultdict(float)
+
+        # -- Track model A-tier picks for agreement indicator --
+        model_a_picks: set[str] = set()
 
         sorted_entries = sorted(
             race.active_entries, key=lambda e: e.super_score, reverse=True,
@@ -1870,6 +1968,7 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
             pct = i / total_e if total_e else 0
             if pct < 0.15:
                 tier = "A"
+                model_a_picks.add(num)
             elif pct < 0.35:
                 tier = "B"
             elif pct < 0.55:
@@ -1880,6 +1979,10 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
                 tier = "D"
             horse_scores[num] += TIER_POINTS[tier] * model_w
             horse_weights[num] += model_w
+
+        # -- Track expert A-tier votes (weighted) for agreement indicator --
+        expert_a_votes: dict[str, float] = defaultdict(float)
+        expert_total_weight = 0.0
 
         for src_key, src_data in sources.items():
             weight = SOURCE_WEIGHTS.get(src_key, 0.8)
@@ -1910,6 +2013,9 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
                     pts = TIER_POINTS.get(tier, 1)
                     horse_scores[num] += pts * weight
                     horse_weights[num] += weight
+                    if tier == "A":
+                        expert_a_votes[num] += weight
+                expert_total_weight += weight
 
             picks = src_data.get("picks", {})
             race_picks = picks.get(race_key)
@@ -1920,11 +2026,14 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
                     for num in nums[:1]:
                         horse_scores[num] += TIER_POINTS["A"] * weight
                         horse_weights[num] += weight
+                        expert_a_votes[num] += weight
+                    expert_total_weight += weight
                 elif "Skräll" in pick_str:
                     nums = _re.findall(r"\d+", pick_str.split("(")[0])
                     for num in nums[:1]:
                         horse_scores[num] += TIER_POINTS["B"] * weight
                         horse_weights[num] += weight
+                    expert_total_weight += weight
 
         if not horse_scores:
             continue
@@ -1960,10 +2069,31 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
             else:
                 cells.append('<td class="rank-cell rank-empty">&mdash;</td>')
 
+        # -- Agreement indicator: compare model A-tier vs expert A-tier --
+        expert_a_picks: set[str] = set()
+        if expert_total_weight > 0:
+            for num, vote_w in expert_a_votes.items():
+                if vote_w / expert_total_weight >= 0.30:
+                    expert_a_picks.add(num)
+
+        if model_a_picks and expert_a_picks:
+            overlap = model_a_picks & expert_a_picks
+            union = model_a_picks | expert_a_picks
+            jaccard = len(overlap) / len(union) if union else 0
+            if jaccard >= 0.5:
+                agree_icon = '<span class="rank-agree" title="Modell och experter enas">&#10003;</span>'
+            else:
+                agree_icon = '<span class="rank-disagree" title="Modell och experter oeniga">&#9888;</span>'
+        elif not model_a_picks and not expert_a_picks:
+            agree_icon = '<span class="rank-agree" title="Inga tydliga A-val">&#8211;</span>'
+        else:
+            agree_icon = '<span class="rank-disagree" title="Modell och experter oeniga">&#9888;</span>'
+
         rows.append(
             f'<tr>'
             f'<td class="rank-race">{race_key}</td>'
             f'{"".join(cells)}'
+            f'<td class="rank-cell rank-agree-cell">{agree_icon}</td>'
             f'</tr>'
         )
 
@@ -1971,11 +2101,30 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
         return ""
 
     num_sources = len([s for s in sources if s != "expressen_tranarsnack"])
+
+    # -- Weight legend pills --
+    def _wpill(label: str, weight: float, color: str, bg: str) -> str:
+        pct = round(weight / _w_total * 100)
+        return (
+            f'<span class="wt-pill" style="color:{color};background:{bg}">'
+            f'{label} <b>{pct}%</b></span>'
+        )
+
+    legend = (
+        f'<div class="wt-legend">'
+        + _wpill("Modell", _w_model, "#92400e", "rgba(254,243,199,0.6)")
+        + _wpill("Sharps", _w_sharps, "#1e40af", "rgba(219,234,254,0.6)")
+        + _wpill("Media", _w_media, "#6b21a8", "rgba(243,232,255,0.6)")
+        + _wpill("Travcash", _w_travcash, "#065f46", "rgba(209,250,229,0.6)")
+        + f'</div>'
+    )
+
     return (
         f'<div class="ranking-card">'
         f'<div class="ranking-header">Konsensus-ranking '
         f'<span style="font-weight:400;font-size:.75rem;color:#64748b">'
         f'(modell + {num_sources} experter)</span></div>'
+        f'{legend}'
         f'<div class="table-wrap">'
         f'<table class="ranking-table">'
         f'<thead><tr>'
@@ -1985,6 +2134,8 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
         f'<th class="rank-th rank-th-bc">BC</th>'
         f'<th class="rank-th rank-th-c">C</th>'
         f'<th class="rank-th rank-th-d">D</th>'
+        f'<th class="rank-th rank-th-agree" title="Modell vs experter: enas eller oeniga om A-tier">'
+        f'<span style="font-size:.7rem">M/E</span></th>'
         f'</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
@@ -2462,6 +2613,16 @@ font-weight:600;margin:1px 2px;font-family:'JetBrains Mono',monospace}}
 .rank-pill.rank-c{{background:#f1f5f9;color:#475569}}
 .rank-pill.rank-d{{background:#fee2e2;color:#991b1b}}
 
+/* Weight legend & agreement indicator */
+.wt-legend{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}}
+.wt-pill{{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;
+font-size:.65rem;font-weight:500;letter-spacing:.01em}}
+.wt-pill b{{font-weight:700}}
+.rank-th-agree{{color:#64748b;background:rgba(241,245,249,0.5);width:36px;text-align:center !important}}
+.rank-agree-cell{{width:36px;text-align:center !important}}
+.rank-agree{{color:#16a34a;font-size:.85rem;font-weight:700}}
+.rank-disagree{{color:#d97706;font-size:.85rem}}
+
 /* Track record banner */
 .track-banner{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
 padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;
@@ -2686,6 +2847,9 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   .overview-race-grid{{grid-template-columns:1fr}}
   .ranking-table{{font-size:.75rem}}
   .rank-pill{{min-width:20px;height:20px;font-size:.65rem;padding:0 4px}}
+  .wt-legend{{gap:4px}}
+  .wt-pill{{font-size:.58rem;padding:1px 6px}}
+  .rank-agree,.rank-disagree{{font-size:.72rem}}
   table{{font-size:.75rem}}
   th,td{{padding:8px 8px}}
   .driver{{display:none}}

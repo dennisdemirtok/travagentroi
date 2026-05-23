@@ -2171,8 +2171,9 @@ def generate_dashboard_html(
             round_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
         round_dropdown = '<select class="round-select" onchange="changeRound(this)">' + "".join(round_options) + '</select>'
 
-    # Round navigator for sidebar
-    round_navigator = ""
+    # Round navigator for sidebar — always show current round label
+    prev_key = ""
+    next_key = ""
     if norm_rounds and len(norm_rounds) >= 2:
         sorted_rounds = sorted(norm_rounds, key=lambda r: r[2])
         current_idx = -1
@@ -2180,23 +2181,25 @@ def generate_dashboard_html(
             if key == current_key:
                 current_idx = i
                 break
+        if current_idx < 0:
+            current_idx = len(sorted_rounds) - 1
         prev_key = sorted_rounds[current_idx - 1][0] if current_idx > 0 else ""
         next_key = sorted_rounds[current_idx + 1][0] if current_idx < len(sorted_rounds) - 1 else ""
-        prev_disabled = " disabled" if not prev_key else ""
-        next_disabled = " disabled" if not next_key else ""
-        prev_href = f"data-key=\"{prev_key}\"" if prev_key else ""
-        next_href = f"data-key=\"{next_key}\"" if next_key else ""
-        round_navigator = (
-            f'<div class="round-nav">'
-            f'<button class="round-nav-btn"{prev_disabled} {prev_href} data-action="nav-round">'
-            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>'
-            f'</button>'
-            f'<span class="round-nav-label">{_esc(game_round.game_type)} {date_str}</span>'
-            f'<button class="round-nav-btn"{next_disabled} {next_href} data-action="nav-round">'
-            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
-            f'</button>'
-            f'</div>'
-        )
+    prev_disabled = " disabled" if not prev_key else ""
+    next_disabled = " disabled" if not next_key else ""
+    prev_href = f' data-key="{prev_key}"' if prev_key else ""
+    next_href = f' data-key="{next_key}"' if next_key else ""
+    round_navigator = (
+        f'<div class="round-nav">'
+        f'<button class="round-nav-btn"{prev_disabled}{prev_href} data-action="nav-round">'
+        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>'
+        f'</button>'
+        f'<span class="round-nav-label">{_esc(game_round.game_type)} {date_str}</span>'
+        f'<button class="round-nav-btn"{next_disabled}{next_href} data-action="nav-round">'
+        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
+        f'</button>'
+        f'</div>'
+    )
 
     # Race sections (all visible — no premium gating)
     race_sections_parts = []
@@ -3036,6 +3039,13 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   .agent-layout{{height:auto;min-height:calc(100vh - 56px - 48px)}}
   .chat-msg{{max-width:90%}}
   .nav-clock{{display:none}}
+  .sc-grid{{grid-template-columns:1fr}}
+  .hist-agg-grid-outer{{grid-template-columns:1fr}}
+  .mbar-row{{grid-template-columns:55px 1fr 50px;gap:4px}}
+  .mbar-netto,.mbar-meta{{display:none}}
+  .bl-filter-bar,.stats-filter-bar{{padding:10px}}
+  .strat-filter{{gap:.3rem}}
+  .strat-btn,.gt-btn{{padding:.3rem .6rem;font-size:.72rem}}
 }}
 </style>
 </head>
@@ -3240,14 +3250,6 @@ function changeRound(sel){{
 }}
 
 // ── Backlog helpers ──
-function toggleShowAll(){{
-  const section=document.getElementById('backlog');
-  const btn=document.getElementById('bl-show-all-btn');
-  if(!section||!btn)return;
-  if(!btn.dataset.origText) btn.dataset.origText=btn.textContent;
-  section.classList.toggle('bl-show-all');
-  btn.textContent=section.classList.contains('bl-show-all')?'Dölj äldre':btn.dataset.origText;
-}}
 function toggleBlDetail(id){{
   const el=document.getElementById(id);
   if(!el)return;
@@ -3260,22 +3262,10 @@ function toggleBlDetail(id){{
   }}
 }}
 
-// ── Dubbelfiltrering: strategi x speltyp ──
+// ── Dubbelfiltrering: strategi x speltyp (event delegation) ──
 let activeStatsStrat='all', activeStatsGT='all';
 let activeBacklogStrat='all', activeBacklogGT='all';
 
-function filterStats(strat){{
-  activeStatsStrat=strat;
-  document.querySelectorAll('.stats-section .strat-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyStatsFilter();
-}}
-function filterStatsGT(gt){{
-  activeStatsGT=gt;
-  document.querySelectorAll('.stats-section .gt-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyStatsFilter();
-}}
 function applyStatsFilter(){{
   document.querySelectorAll('.strat-block').forEach(block=>{{
     const matchS=activeStatsStrat==='all'||block.dataset.strat===activeStatsStrat;
@@ -3287,33 +3277,13 @@ function applyStatsFilter(){{
     row.style.display=matchG?'':'none';
   }});
 }}
-function filterBacklog(strat){{
-  activeBacklogStrat=strat;
-  document.querySelectorAll('.bl-filter .strat-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyBacklogFilter();
-}}
-function filterBacklogGT(gt){{
-  activeBacklogGT=gt;
-  document.querySelectorAll('.bl-gt-filter .gt-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
-  applyBacklogFilter();
-}}
-function filterBacklogRecent(months){{
-  const cutoff=new Date();
-  cutoff.setMonth(cutoff.getMonth()-months);
-  const cutoffStr=cutoff.toISOString().slice(0,10);
-  activeBacklogGT='recent_'+months;
-  document.querySelectorAll('.bl-gt-filter .gt-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
+function applyBacklogFilter(){{
   let rounds=0,full=0,partial=0,cost=0,payout=0;
   document.querySelectorAll('.backlog-table tbody tr').forEach(row=>{{
     if(!row.dataset.strategy)return;
     const matchS=activeBacklogStrat==='all'||row.dataset.strategy===activeBacklogStrat;
-    const dateCell=row.querySelector('td');
-    const dateText=dateCell?dateCell.textContent.trim().slice(0,10):'';
-    const matchDate=dateText>=cutoffStr;
-    const match=matchS&&matchDate;
+    const matchG=activeBacklogGT==='all'||row.dataset.gt===activeBacklogGT;
+    const match=matchS&&matchG;
     row.style.display=match?'':'none';
     if(match&&!row.classList.contains('bl-detail-container')){{
       rounds++;
@@ -3331,13 +3301,19 @@ function filterBacklogRecent(months){{
   }});
   updateBlSummary(rounds,full,partial,cost,payout);
 }}
-function applyBacklogFilter(){{
+function applyBacklogRecent(months){{
+  const cutoff=new Date();
+  cutoff.setMonth(cutoff.getMonth()-months);
+  const cutoffStr=cutoff.toISOString().slice(0,10);
+  activeBacklogGT='recent_'+months;
   let rounds=0,full=0,partial=0,cost=0,payout=0;
   document.querySelectorAll('.backlog-table tbody tr').forEach(row=>{{
     if(!row.dataset.strategy)return;
     const matchS=activeBacklogStrat==='all'||row.dataset.strategy===activeBacklogStrat;
-    const matchG=activeBacklogGT==='all'||row.dataset.gt===activeBacklogGT;
-    const match=matchS&&matchG;
+    const dateCell=row.querySelector('td');
+    const dateText=dateCell?dateCell.textContent.trim().slice(0,10):'';
+    const matchDate=dateText>=cutoffStr;
+    const match=matchS&&matchDate;
     row.style.display=match?'':'none';
     if(match&&!row.classList.contains('bl-detail-container')){{
       rounds++;
@@ -3371,6 +3347,66 @@ function updateBlSummary(rounds,full,partial,cost,payout){{
   if(el('bl-roi')){{el('bl-roi').textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';el('bl-roi').style.color=clr;}}
   if(el('bl-netto')){{el('bl-netto').textContent=(netto>=0?'+':'')+fmt(netto)+' kr';el('bl-netto').style.color=clr;}}
 }}
+
+// ── Event delegation for data-action buttons ──
+document.addEventListener('click',function(ev){{
+  const btn=ev.target.closest('[data-action]');
+  if(!btn)return;
+  const action=btn.dataset.action;
+
+  if(action==='nav-round'){{
+    const key=btn.dataset.key;
+    if(key)window.location.href='/dashboard/'+key;
+    return;
+  }}
+  if(action==='toggle-variants'){{
+    const wrap=btn.closest('.sc-section').querySelector('.sc-variants-wrap');
+    if(wrap){{
+      const shown=wrap.style.display!=='none';
+      wrap.style.display=shown?'none':'block';
+      btn.textContent=shown?btn.textContent.replace('Dolj','Visa'):btn.textContent.replace('Visa','Dolj');
+    }}
+    return;
+  }}
+  if(action==='toggle-bl-detail'){{
+    toggleBlDetail(btn.dataset.detail);
+    return;
+  }}
+  if(action==='filter-stats'){{
+    activeStatsStrat=btn.dataset.strat;
+    btn.closest('.strat-filter').querySelectorAll('.strat-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyStatsFilter();
+    return;
+  }}
+  if(action==='filter-stats-gt'){{
+    activeStatsGT=btn.dataset.gt;
+    btn.closest('.strat-filter').querySelectorAll('.gt-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyStatsFilter();
+    return;
+  }}
+  if(action==='filter-backlog'){{
+    activeBacklogStrat=btn.dataset.strat;
+    btn.closest('.strat-filter').querySelectorAll('.strat-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyBacklogFilter();
+    return;
+  }}
+  if(action==='filter-backlog-gt'){{
+    activeBacklogGT=btn.dataset.gt;
+    btn.closest('.strat-filter').querySelectorAll('.gt-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyBacklogFilter();
+    return;
+  }}
+  if(action==='filter-backlog-recent'){{
+    btn.closest('.strat-filter').querySelectorAll('.gt-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyBacklogRecent(parseInt(btn.dataset.months)||12);
+    return;
+  }}
+}});
 
 // ── Mobile sidebar ──
 function toggleMobileSidebar(){{

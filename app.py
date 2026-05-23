@@ -208,7 +208,8 @@ async def api_chat(request: Request):
     except Exception:
         return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
 
-    messages = data.get("messages", [])
+    raw_messages = data.get("messages", [])
+    messages = [{"role": m["role"], "content": m["content"]} for m in raw_messages if m.get("role") and m.get("content")]
     round_key = data.get("round_key", "")
 
     game_round = _round_cache.get(round_key)

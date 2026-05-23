@@ -27,6 +27,76 @@ _backlog_cache: dict | None = None
 _tips_cache: dict[str, dict] = {}
 
 
+def _build_strategies_summary(backlog: dict) -> dict:
+    """Build strategies summary from raw entries for _stats_html().
+
+    Returns the backlog dict enriched with a "strategies" key containing
+    per-strategy aggregates (rounds, hits, ROI, netto, game_types breakdown).
+    """
+    entries = backlog.get("entries", [])
+    if not entries or "strategies" in backlog:
+        return backlog  # already has strategies or empty
+
+    from collections import defaultdict
+
+    strats: dict[str, dict] = {}
+    gt_data: dict[str, dict[str, dict]] = {}  # strat -> game_type -> stats
+
+    for e in entries:
+        s = e.get("strategy", "unknown")
+        gt = e.get("game_type", "?")
+        cost = e.get("cost", 0) or 0
+        payout = e.get("payout", 0) or 0
+        hit = e.get("hit", False)
+        num_correct = e.get("num_correct", 0) or 0
+        num_races = e.get("num_races", 0) or 0
+
+        if s not in strats:
+            strats[s] = {
+                "rounds_played": 0, "full_hits": 0, "partial_hits": 0,
+                "total_cost": 0, "total_payout": 0, "game_types": {},
+            }
+        ss = strats[s]
+        ss["rounds_played"] += 1
+        ss["total_cost"] += cost
+        ss["total_payout"] += payout
+        if hit:
+            ss["full_hits"] += 1
+        elif num_correct >= num_races - 1 and num_races > 0:
+            ss["partial_hits"] += 1
+
+        # Per game type
+        if gt not in ss["game_types"]:
+            ss["game_types"][gt] = {
+                "rounds": 0, "full": 0, "wins": 0,
+                "cost": 0, "payout": 0,
+            }
+        g = ss["game_types"][gt]
+        g["rounds"] += 1
+        g["cost"] += cost
+        g["payout"] += payout
+        if hit:
+            g["full"] += 1
+        if payout > 0:
+            g["wins"] += 1
+
+    # Compute ROI and netto
+    for s, ss in strats.items():
+        tc = ss["total_cost"]
+        tp = ss["total_payout"]
+        ss["netto"] = tp - tc
+        ss["roi"] = ((tp - tc) / tc * 100) if tc > 0 else 0
+        for gt, g in ss["game_types"].items():
+            gc = g["cost"]
+            gp = g["payout"]
+            g["netto"] = gp - gc
+            g["roi"] = ((gp - gc) / gc * 100) if gc > 0 else 0
+
+    backlog["strategies"] = strats
+    logger.info(f"Built strategies summary: {len(strats)} strategies from {len(entries)} entries")
+    return backlog
+
+
 async def _load_backlog():
     """Load backlog data from Supabase or local file."""
     global _backlog_cache
@@ -39,6 +109,7 @@ async def _load_backlog():
             _backlog_cache = load_backlog_from_supabase(limit=3000)
             n = len(_backlog_cache.get("entries", []))
             logger.info(f"Backlog loaded from Supabase: {n} entries")
+            _backlog_cache = _build_strategies_summary(_backlog_cache)
             return _backlog_cache
         except Exception as e:
             logger.warning(f"Failed to load backlog from Supabase: {e}")
@@ -53,12 +124,14 @@ async def _load_backlog():
                 _backlog_cache = json.load(f)
             n = len(_backlog_cache.get("entries", []))
             logger.info(f"Backlog loaded from gzip: {n} entries")
+            _backlog_cache = _build_strategies_summary(_backlog_cache)
             return _backlog_cache
         elif plain_path.exists():
             with open(plain_path) as f:
                 _backlog_cache = json.load(f)
             n = len(_backlog_cache.get("entries", []))
             logger.info(f"Backlog loaded from file: {n} entries")
+            _backlog_cache = _build_strategies_summary(_backlog_cache)
             return _backlog_cache
     except Exception as e:
         logger.warning(f"Failed to load backlog from file: {e}")

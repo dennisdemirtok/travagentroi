@@ -1,7 +1,65 @@
 """AI chat agent — travanalys med Anthropic API."""
 
 from __future__ import annotations
-from typing import Optional
+
+import json
+import logging
+from typing import AsyncIterator, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def _build_ranking_tiers(game_round) -> str:
+    """Build ranking tier context (A/B/BC/C/D) from race entries.
+
+    Tiers based on recommendations:
+      A  = spik (clear top pick)
+      B  = 2-val (strong contender)
+      BC = 3-val (decent chance)
+      C  = gardering (outsider/hedge)
+      D  = strykning (skip)
+    """
+    if not game_round:
+        return ""
+
+    tier_map = {
+        "spik": "A",
+        "2-val": "B",
+        "3-val": "BC",
+        "gardering": "C",
+        "strykning": "D",
+    }
+
+    lines = []
+    for race in game_round.races:
+        sorted_entries = sorted(
+            race.active_entries,
+            key=lambda e: e.super_score,
+            reverse=True,
+        )
+        tiers: dict[str, list[str]] = {"A": [], "B": [], "BC": [], "C": [], "D": []}
+        for entry in sorted_entries:
+            tier = tier_map.get(entry.recommendation, "D")
+            tiers[tier].append(
+                f"#{entry.post_position} {entry.horse.name} "
+                f"({entry.super_score:.0f}p, "
+                f"{entry.bet_percentage:.0%})" if entry.bet_percentage
+                else f"#{entry.post_position} {entry.horse.name} "
+                f"({entry.super_score:.0f}p)"
+            )
+
+        tier_parts = []
+        for t in ["A", "B", "BC", "C", "D"]:
+            if tiers[t]:
+                tier_parts.append(f"    {t}: {', '.join(tiers[t])}")
+
+        lines.append(f"  Lopp {race.race_number}:")
+        lines.extend(tier_parts)
+
+    if not lines:
+        return ""
+
+    return "\nRANKING (A=spik, B=2-val, BC=3-val, C=gardering, D=strykning):\n" + "\n".join(lines)
 
 
 def build_round_context(game_round) -> str:
@@ -71,6 +129,11 @@ def build_round_context(game_round) -> str:
                 odds_str = f" (odds: {race.win_odds:.2f})" if race.win_odds else ""
                 lines.append(f"\n  VINNARE: #{winner_num} {winner.horse.name}{odds_str}")
         lines.append("")
+
+    # Add ranking tiers
+    ranking = _build_ranking_tiers(game_round)
+    if ranking:
+        lines.append(ranking)
 
     return "\n".join(lines)
 
@@ -242,27 +305,71 @@ def build_backlog_context(game_round, backlog_data: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_system_prompt(
+    round_context: str,
+    backlog_context: str,
+    tips_context: str = "",
+    memory_context: str = "",
+) -> str:
+    """Build the enhanced system prompt for the agent."""
+    parts = [
+        "Du är **Kungens Trav AI** — en expertassistent för svensk travanalys "
+        "integrerad i Kungens Trav-dashboarden. Du svarar alltid på svenska.\n",
+
+        "## Dina uppgifter\n"
+        "- Analysera hästar, kuskar och tränare i omgången\n"
+        "- Presentera rankingar med tydliga kategorier: "
+        "**A** (spik), **B** (2-val), **BC** (3-val), **C** (gardering), **D** (strykning)\n"
+        "- Identifiera value-hästar (hög modellpoäng, låg streckprocent)\n"
+        "- Bedöma skrällrisker och ge garderingsråd\n"
+        "- Ge konkreta spelförslag — inte bara analys\n"
+        "- Jämföra med tips från externa källor när tillgängligt\n"
+        "- Referera till banspecifika mönster och historisk statistik\n",
+
+        "## Format\n"
+        "- Använd **fetstil** för viktiga namn och siffror\n"
+        "- Använd listor och struktur för tydlighet\n"
+        "- Var konkret: \"Spika #3 Hästen\" istället för \"Häst #3 ser bra ut\"\n"
+        "- Avsluta gärna med en kort sammanfattning av dina rekommendationer\n",
+
+        "## Data",
+        f"\n### Omgångsdata\n{round_context}\n",
+    ]
+
+    if backlog_context:
+        parts.append(f"\n### Historisk statistik\n{backlog_context}\n")
+
+    if tips_context:
+        parts.append(f"\n### Externa tips\n{tips_context}\n")
+
+    if memory_context:
+        parts.append(f"\n### Inlärda mönster\n{memory_context}\n")
+
+    parts.append(
+        "\n## Regler\n"
+        "- Svara kortfattat och informativt men med substans\n"
+        "- Basera alla rekommendationer på data — modellpoäng, streckprocent, form\n"
+        "- Flagga alltid om en rekommendation går emot marknaden (streckprocent)\n"
+        "- Om tips från externa källor finns, jämför med modellens egna analyser\n"
+        "- Om banspecifika mönster finns, nämn dem i relevanta svar\n"
+    )
+
+    return "\n".join(parts)
+
+
 async def chat(
     messages: list[dict],
     round_context: str,
     backlog_context: str,
     api_key: str,
+    tips_context: str = "",
+    memory_context: str = "",
 ) -> str:
     """Skicka meddelanden till Anthropic API och returnera svaret."""
     import httpx
 
-    system_prompt = (
-        "Du är en AI-assistent för travanalys integrerad i Kungens Trav-dashboarden. "
-        "Du svarar på svenska.\n\n"
-        f"Här är data för den aktuella omgången:\n\n{round_context}\n\n"
-        f"{backlog_context}\n\n"
-        "Du kan svara på frågor om:\n"
-        "- Hästar, kuskar, tränare i omgången\n"
-        "- Modellpoäng, rekommendationer och skrällrisker\n"
-        "- Historisk statistik: ROI per strategi, spelform och bana\n"
-        "- Senaste resultat och trender\n"
-        "- Strategianalys och spelförslag\n\n"
-        "Svara kortfattat och informativt. Använd data från omgången och backlog-statistiken."
+    system_prompt = _build_system_prompt(
+        round_context, backlog_context, tips_context, memory_context
     )
 
     async with httpx.AsyncClient(timeout=60) as client:
@@ -283,3 +390,83 @@ async def chat(
         resp.raise_for_status()
         result = resp.json()
         return result["content"][0]["text"]
+
+
+async def chat_stream(
+    messages: list[dict],
+    round_context: str,
+    backlog_context: str,
+    api_key: str,
+    tips_context: str = "",
+    memory_context: str = "",
+) -> AsyncIterator[str]:
+    """Stream chat response from Anthropic API, yielding text chunks.
+
+    Uses the Anthropic messages API with stream=true.
+    SSE events of interest:
+      - content_block_delta: has delta.text with the text chunk
+      - message_stop: signals completion
+      - error: signals an error
+    """
+    import httpx
+
+    system_prompt = _build_system_prompt(
+        round_context, backlog_context, tips_context, memory_context
+    )
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream(
+            "POST",
+            "https://api.anthropic.com/v1/messages",
+            json={
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 2048,
+                "system": system_prompt,
+                "messages": messages,
+                "stream": True,
+            },
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        ) as resp:
+            resp.raise_for_status()
+
+            # Parse SSE events from the stream
+            buffer = ""
+            async for chunk in resp.aiter_text():
+                buffer += chunk
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            return
+
+                        try:
+                            event_data = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+
+                        event_type = event_data.get("type", "")
+
+                        if event_type == "content_block_delta":
+                            delta = event_data.get("delta", {})
+                            text = delta.get("text", "")
+                            if text:
+                                yield text
+
+                        elif event_type == "message_stop":
+                            return
+
+                        elif event_type == "error":
+                            error_msg = event_data.get("error", {}).get(
+                                "message", "Okänt fel"
+                            )
+                            raise RuntimeError(f"Anthropic API error: {error_msg}")

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from trav_agent.analysis.composite import CompositeAnalyzer
 from trav_agent.config import ANTHROPIC_API_KEY, GAME_TYPES, SUPABASE_ENABLED
@@ -22,6 +23,7 @@ MAIN_GAME_TYPES = {"V75", "V85", "V86", "V64", "GS75"}
 # In-memory cache for analyzed rounds (avoid re-fetching on chat)
 _round_cache: dict[str, object] = {}
 _backlog_cache: dict | None = None
+_tips_cache: dict[str, dict] = {}
 
 
 async def _load_backlog():
@@ -42,7 +44,6 @@ async def _load_backlog():
 
     # Fallback: local file
     try:
-        import json
         from trav_agent.config import PROJECT_ROOT
         path = PROJECT_ROOT / "backlog.json"
         if path.exists():
@@ -192,7 +193,7 @@ async def dashboard(game_type: str, day: str):
     return html
 
 
-# ── AI Chat ──────────────────────────────────────────────────────────────────
+# ── AI Chat (SSE Streaming) ────────────────────────────────────────────────
 
 @app.post("/api/chat")
 async def api_chat(request: Request):
@@ -214,16 +215,137 @@ async def api_chat(request: Request):
     backlog_data = await _load_backlog()
 
     try:
-        from trav_agent.chat.agent import build_backlog_context, build_round_context, chat
+        from trav_agent.chat.agent import build_backlog_context, build_round_context, chat_stream
+        from trav_agent.chat.memory import build_learning_context, save_session
+        from trav_agent.data.tips_scraper import build_tips_context, scrape_tips
 
         round_ctx = build_round_context(game_round) if game_round else "Ingen omgångsdata."
         bl_ctx = build_backlog_context(game_round, backlog_data) if game_round and backlog_data else ""
 
-        response_text = await chat(messages, round_ctx, bl_ctx, ANTHROPIC_API_KEY)
-        return {"response": response_text}
+        # Build tips context
+        tips_ctx = ""
+        if game_round:
+            game_type = game_round.game_type
+            round_date = str(game_round.round_date)
+            cache_key = f"{game_type}:{round_date}"
+            if cache_key not in _tips_cache:
+                try:
+                    _tips_cache[cache_key] = await scrape_tips(game_type, round_date)
+                except Exception:
+                    _tips_cache[cache_key] = {}
+            tips_ctx = build_tips_context(_tips_cache.get(cache_key, {}))
+
+        # Build memory context
+        memory_ctx = ""
+        if game_round and backlog_data:
+            memory_ctx = build_learning_context(backlog_data, game_round)
+
+        async def event_generator():
+            full_response = ""
+            try:
+                async for chunk in chat_stream(
+                    messages, round_ctx, bl_ctx, ANTHROPIC_API_KEY,
+                    tips_context=tips_ctx, memory_context=memory_ctx,
+                ):
+                    full_response += chunk
+                    yield f"data: {json.dumps({'delta': chunk})}\n\n"
+
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+                # Save session after successful completion
+                if round_key:
+                    all_msgs = list(messages) + [{"role": "assistant", "content": full_response}]
+                    save_session(round_key, all_msgs)
+
+            except Exception as e:
+                logger.error(f"Chat stream error: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Chat Session Endpoints ──────────────────────────────────────────────────
+
+@app.get("/api/chat/session/{round_key:path}")
+async def get_chat_session(round_key: str):
+    from trav_agent.chat.memory import load_session
+    messages = load_session(round_key)
+    return {"messages": messages}
+
+
+@app.delete("/api/chat/session/{round_key:path}")
+async def delete_chat_session(round_key: str):
+    from trav_agent.chat.memory import clear_session
+    clear_session(round_key)
+    return {"status": "cleared"}
+
+
+# ── Tips API ────────────────────────────────────────────────────────────────
+
+@app.get("/api/tips/{game_type}/{day}")
+async def get_tips(game_type: str, day: str):
+    """Fetch tips from all available sources."""
+    game_type = game_type.upper()
+
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, f"Ogiltigt datum: {day}")
+
+    cache_key = f"{game_type}:{day}"
+
+    # Check in-memory cache
+    if cache_key in _tips_cache:
+        return {"tips": _tips_cache[cache_key]}
+
+    try:
+        from trav_agent.data.tips_scraper import scrape_tips
+        tips = await scrape_tips(game_type, day)
+        _tips_cache[cache_key] = tips
+        return {"tips": tips}
+    except Exception as e:
+        logger.warning(f"Tips fetch error: {e}")
+        return {"tips": {}, "error": str(e)}
+
+
+@app.post("/api/tips/manual")
+async def post_manual_tips(request: Request):
+    """Store manually pasted tips from a named source."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    source = data.get("source", "")
+    text = data.get("text", "")
+
+    if not source or not text:
+        return JSONResponse(
+            {"error": "Både 'source' och 'text' krävs"},
+            status_code=400,
+        )
+
+    from trav_agent.data.tips_scraper import add_manual_tips
+    add_manual_tips(source, text)
+
+    # Invalidate relevant tips caches (manual tips apply globally)
+    keys_to_remove = [k for k in _tips_cache]
+    for k in keys_to_remove:
+        del _tips_cache[k]
+
+    return {"status": "stored", "source": source, "length": len(text)}
 
 
 # ── Backlog API ──────────────────────────────────────────────────────────────

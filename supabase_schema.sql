@@ -254,6 +254,28 @@ CREATE TABLE IF NOT EXISTS backlog_race_picks (
 );
 CREATE INDEX IF NOT EXISTS idx_backlog_race_picks_round ON backlog_race_picks(backlog_round_id);
 
+-- 13. AGENT CHAT-SESSIONER
+CREATE TABLE IF NOT EXISTS agent_sessions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    round_key TEXT NOT NULL,
+    messages JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_round ON agent_sessions(round_key);
+
+-- 14. CACHADE TIPS FRÅN EXTERNA KÄLLOR
+CREATE TABLE IF NOT EXISTS tips_cache (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    game_type TEXT NOT NULL,
+    round_date DATE NOT NULL,
+    source TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(game_type, round_date, source)
+);
+CREATE INDEX IF NOT EXISTS idx_tips_cache_lookup ON tips_cache(game_type, round_date);
+
 -- ============================================================
 -- Klar! Verifiera med: SELECT tablename FROM pg_tables WHERE schemaname = 'public';
 -- ============================================================

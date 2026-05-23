@@ -19,20 +19,20 @@ def _esc(s: str) -> str:
 def _rec_color(rec: str) -> str:
     return {
         "spik": "#92400e",
-        "2-val": "#1e3a5f",
-        "3-val": "#581c87",
-        "gardering": "#334155",
+        "2-val": "#1e40af",
+        "3-val": "#6b21a8",
+        "gardering": "#475569",
         "strykning": "#991b1b",
     }.get(rec, "#64748b")
 
 
 def _rec_bg(rec: str) -> str:
     return {
-        "spik": "rgba(245,158,11,0.15)",
-        "2-val": "rgba(59,130,246,0.12)",
-        "3-val": "rgba(168,85,247,0.12)",
-        "gardering": "rgba(100,116,139,0.1)",
-        "strykning": "rgba(239,68,68,0.12)",
+        "spik": "#fef3c7",
+        "2-val": "#dbeafe",
+        "3-val": "#f3e8ff",
+        "gardering": "#f1f5f9",
+        "strykning": "#fee2e2",
     }.get(rec, "rgba(0,0,0,0.04)")
 
 
@@ -653,9 +653,10 @@ def _race_table_html(race: Race) -> str:
 
 
 def _summary_html(game_round: GameRound) -> str:
-    """Row-based division list for overview."""
+    """Visual race-card grid for overview, with key info per race."""
     is_round_finished = game_round.is_finished
-    rows = []
+    gt = _esc(game_round.game_type)
+    cards = []
     for race in game_round.races:
         sorted_entries = sorted(
             race.active_entries,
@@ -671,7 +672,7 @@ def _summary_html(game_round: GameRound) -> str:
             if e.recommendation in ("2-val", "3-val")
         ]
         gard_str = ", ".join(
-            f"{e.post_position} {_esc(e.horse.name[:8])}"
+            f"{e.post_position} {_esc(e.horse.name[:10])}"
             for e in gardering[:3]
         )
         bet_pct = top.bet_percentage * 100 if top.bet_percentage else 0
@@ -683,15 +684,19 @@ def _summary_html(game_round: GameRound) -> str:
         risk_pct = race.upset_risk
         if risk_pct >= 50:
             risk_color = "#ef4444"
+            risk_bg = "rgba(239,68,68,0.08)"
+            risk_cls = "high"
         elif risk_pct >= 25:
             risk_color = "#eab308"
+            risk_bg = "rgba(234,179,8,0.06)"
+            risk_cls = "medium"
         else:
             risk_color = "#22c55e"
+            risk_bg = "rgba(34,197,94,0.06)"
+            risk_cls = "low"
 
         # Driver name
-        driver = ""
-        if top.driver_name:
-            driver = _esc(top.driver_name[:15])
+        driver = _esc(top.driver_name[:18]) if top.driver_name else ""
 
         # Result badge for finished races
         result_badge = ""
@@ -709,27 +714,42 @@ def _summary_html(game_round: GameRound) -> str:
                 else:
                     result_badge = '<span class="miss-badge" style="font-size:.7rem">&#10007;</span>'
 
-        rows.append(
-            f'<div class="division-row" onclick="showDivision({race.race_number})">'
-            f'<span class="div-num-lg">{race.race_number}</span>'
-            f'<div class="pick-info">'
-            f'<strong>{top.post_position} {_esc(top.horse.name[:15])}</strong> '
-            f'<span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem">{_esc(top.recommendation)}</span>'
+        # Race info line
+        dist_str = f"{race.distance}m"
+        method_str = race.start_method.value[0].upper()
+        breed_str = race.breed.value
+
+        cards.append(
+            f'<div class="overview-race-card" onclick="showDivision({race.race_number})">'
+            f'<div class="orc-top">'
+            f'<span class="orc-num">{race.race_number}</span>'
+            f'<span class="orc-label">{gt}-{race.race_number}</span>'
+            f'<span class="orc-risk" style="color:{risk_color};background:{risk_bg}">{risk_pct:.0f}%</span>'
+            f'</div>'
+            f'<div class="orc-meta">{dist_str} {method_str} &middot; {race.num_starters} st &middot; {breed_str}</div>'
+            f'<div class="orc-pick">'
+            f'<div class="orc-pick-main">'
+            f'<strong>{top.post_position} {_esc(top.horse.name[:16])}</strong>'
+            f' <span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem;padding:.15rem .5rem">{_esc(top.recommendation)}</span>'
             f'{result_badge}'
-            f'<div class="driver-name">{driver}</div>'
             f'</div>'
-            f'<span class="score-val">{top.super_score:.0f}</span>'
-            f'<div style="display:flex;align-items:center;gap:6px">'
-            f'<div class="streck-bar"><div style="width:{bet_pct:.0f}%"></div></div>'
-            f'<span style="font-size:.7rem;color:#4b5563;font-family:\'DM Mono\',monospace">{bet_str}</span>'
+            f'<div class="orc-driver">{driver}</div>'
             f'</div>'
-            f'<span class="gard-text">{gard_str if gard_str else "—"}</span>'
-            f'<span class="risk-pct" style="color:{risk_color}">{risk_pct:.0f}%</span>'
-            f'<span class="arrow-icon">→</span>'
+            f'<div class="orc-stats">'
+            f'<div class="orc-stat">'
+            f'<span class="orc-stat-val">{top.super_score:.0f}</span>'
+            f'<span class="orc-stat-lbl">Poang</span>'
+            f'</div>'
+            f'<div class="orc-stat">'
+            f'<span class="orc-stat-val">{bet_str}</span>'
+            f'<span class="orc-stat-lbl">Streck</span>'
+            f'</div>'
+            f'</div>'
+            f'<div class="orc-gard">{gard_str if gard_str else "&mdash;"}</div>'
             f'</div>'
         )
 
-    return f'<div class="division-list">{"".join(rows)}</div>'
+    return f'<div class="overview-race-grid">{"".join(cards)}</div>'
 
 
 def _risk_summary_bar(game_round: GameRound) -> str:
@@ -1732,6 +1752,83 @@ def _backlog_html(
     )
 
 
+def _ranking_html(game_round: GameRound) -> str:
+    """Create compact ranking table grouping horses by tier (A/B/BC/C/D) per race."""
+    import json as _json
+
+    TIER_MAP = {
+        "spik": "A",
+        "2-val": "B",
+        "3-val": "BC",
+        "gardering": "C",
+        "strykning": "D",
+    }
+    TIER_ORDER = ["A", "B", "BC", "C", "D"]
+    gt = _esc(game_round.game_type)
+
+    rows = []
+    ranking_data = []  # For embedding in chat context
+
+    for race in game_round.races:
+        tiers: dict[str, list[int]] = {t: [] for t in TIER_ORDER}
+        for entry in sorted(race.active_entries, key=lambda e: e.super_score, reverse=True):
+            tier = TIER_MAP.get(entry.recommendation, "D")
+            tiers[tier].append(entry.post_position)
+
+        # Build row cells
+        cells = []
+        for tier in TIER_ORDER:
+            nums = tiers[tier]
+            if nums:
+                pills = "".join(
+                    f'<span class="rank-pill rank-{tier.lower()}">{n}</span>'
+                    for n in nums
+                )
+                cells.append(f'<td class="rank-cell">{pills}</td>')
+            else:
+                cells.append('<td class="rank-cell rank-empty">&mdash;</td>')
+
+        rows.append(
+            f'<tr>'
+            f'<td class="rank-race">{gt}-{race.race_number}</td>'
+            f'{"".join(cells)}'
+            f'</tr>'
+        )
+
+        # Collect data for chat context
+        race_ranking = {
+            "race": f"{gt}-{race.race_number}",
+            "A": tiers["A"],
+            "B": tiers["B"],
+            "BC": tiers["BC"],
+            "C": tiers["C"],
+            "D": tiers["D"],
+        }
+        ranking_data.append(race_ranking)
+
+    ranking_json = _json.dumps(ranking_data, ensure_ascii=False)
+
+    return (
+        f'<div class="ranking-card">'
+        f'<div class="ranking-header">Ranking</div>'
+        f'<div class="table-wrap">'
+        f'<table class="ranking-table">'
+        f'<thead><tr>'
+        f'<th class="rank-th-race">Lopp</th>'
+        f'<th class="rank-th rank-th-a">A</th>'
+        f'<th class="rank-th rank-th-b">B</th>'
+        f'<th class="rank-th rank-th-bc">BC</th>'
+        f'<th class="rank-th rank-th-c">C</th>'
+        f'<th class="rank-th rank-th-d">D</th>'
+        f'</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table>'
+        f'</div>'
+        f'<div id="ranking-data" style="display:none" data-ranking=\'{ranking_json}\'></div>'
+        f'</div>'
+    )
+
+
 def generate_dashboard_html(
     game_round: GameRound,
     available_dates: list[tuple[str, bool]] | None = None,
@@ -1762,6 +1859,7 @@ def generate_dashboard_html(
     # Generera sektioner
     race_htmls = {r.race_number: _race_table_html(r) for r in game_round.races}
     summary = _summary_html(game_round)
+    ranking = _ranking_html(game_round)
     system_section = _system_html(game_round)
     stats_section = _stats_html(backlog_data)
     backlog_section = _backlog_html(game_round, backlog_data)
@@ -1807,9 +1905,9 @@ def generate_dashboard_html(
             f'stroke-dasharray="{circumference:.1f}" stroke-dashoffset="{offset:.1f}" '
             f'stroke-linecap="round" transform="rotate(-90 70 70)"/>'
             f'<text x="70" y="65" text-anchor="middle" font-size="36" font-weight="800" '
-            f'fill="#1e293b" font-family="\'DM Mono\',monospace">{score}</text>'
+            f'fill="#1e293b" font-family="\'JetBrains Mono\',monospace">{score}</text>'
             f'<text x="70" y="85" text-anchor="middle" font-size="10" font-weight="600" '
-            f'fill="#6b7280" font-family="\'DM Sans\',sans-serif" letter-spacing="0.08em">SPELVÄRDE</text>'
+            f'fill="#6b7280" font-family="\'Inter\',sans-serif" letter-spacing="0.08em">SPELVÄRDE</text>'
             f'</svg>'
             f'<div class="hero-score-text" style="color:{sv["color"]}">{_esc(sv["text"])}</div>'
             f'<div class="hero-score-advice">{_esc(sv["advice"])}</div>'
@@ -1864,64 +1962,67 @@ def generate_dashboard_html(
 <title>Kungens Trav — {_esc(game_round.game_type)} {game_round.round_date}</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
 ::selection{{background:rgba(59,130,246,0.2)}}
-body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;
-background:#f5f6f8;color:#1e293b;line-height:1.6;-webkit-font-smoothing:antialiased}}
+body{{font-family:'Inter',system-ui,-apple-system,sans-serif;
+background:#f5f6f8;color:#1e293b;line-height:1.6;-webkit-font-smoothing:antialiased;font-size:14px}}
 
 /* ── Top Navbar ── */
 .top-navbar{{height:56px;background:#ffffff;border-bottom:1px solid #e5e7eb;
 display:flex;align-items:center;justify-content:space-between;padding:0 24px;
 position:fixed;top:0;left:0;right:0;z-index:200}}
-.nav-brand{{font-size:17px;font-weight:800;color:#1e293b;letter-spacing:-0.02em;
+.nav-brand{{font-size:17px;font-weight:800;color:#1e293b;letter-spacing:-0.03em;
 display:flex;align-items:center;gap:8px;flex-shrink:0}}
 .nav-brand span{{color:#f59e0b}}
-.nav-tabs{{display:flex;gap:4px;background:#f1f5f9;border-radius:10px;padding:3px}}
-.nav-tab{{padding:6px 18px;border-radius:8px;border:none;background:transparent;
+.nav-tabs{{display:flex;gap:0;position:relative}}
+.nav-tab{{padding:8px 20px;border:none;background:transparent;
 cursor:pointer;font-size:13px;font-weight:500;color:#64748b;
-font-family:inherit;transition:all 0.15s;white-space:nowrap}}
+font-family:inherit;transition:all 0.2s;white-space:nowrap;
+position:relative;border-radius:0}}
 .nav-tab:hover{{color:#1e293b}}
-.nav-tab.active{{background:#ffffff;color:#1e293b;font-weight:600;
-box-shadow:0 1px 3px rgba(0,0,0,0.08)}}
-.nav-right{{display:flex;align-items:center;gap:12px}}
-.round-select{{padding:6px 12px;border-radius:10px;border:1px solid #e5e7eb;
+.nav-tab.active{{color:#1e293b;font-weight:600}}
+.nav-tab.active::after{{content:'';position:absolute;bottom:-1px;left:8px;right:8px;
+height:2px;background:#f59e0b;border-radius:2px}}
+.nav-right{{display:flex;align-items:center;gap:14px}}
+.nav-clock{{font-family:'JetBrains Mono',monospace;font-size:12px;color:#94a3b8;font-weight:400}}
+.round-select{{padding:7px 14px;border-radius:10px;border:1px solid #e5e7eb;
 background:#ffffff;color:#1e293b;font-size:13px;cursor:pointer;outline:none;
-font-family:inherit;transition:border-color .2s}}
-.round-select:hover{{border-color:#cbd5e1}}
+font-family:inherit;transition:border-color .2s,box-shadow .2s}}
+.round-select:hover{{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
 
 /* ── App layout ── */
 .app-layout{{display:flex;padding-top:56px;min-height:100vh}}
 
 /* ── Left Sidebar ── */
-.sidebar{{width:220px;background:#ffffff;border-right:1px solid #e5e7eb;
+.sidebar{{width:220px;background:#f9fafb;border-right:1px solid #e5e7eb;
 position:fixed;left:0;top:56px;bottom:0;z-index:100;
 display:flex;flex-direction:column;overflow-y:auto}}
-.sb-info{{padding:16px;border-bottom:1px solid #e5e7eb}}
-.sb-info-type{{font-size:13px;font-weight:700;color:#3b82f6}}
-.sb-info-meta{{font-size:12px;color:#6b7280;margin-top:2px}}
-.sb-nav{{padding:8px 12px;flex:1;overflow-y:auto}}
+.sb-info{{padding:16px;border-bottom:1px solid #e5e7eb;background:#ffffff}}
+.sb-info-type{{font-size:13px;font-weight:700;color:#1e293b}}
+.sb-info-meta{{font-size:11px;color:#6b7280;margin-top:2px}}
+.sb-nav{{padding:8px 0;flex:1;overflow-y:auto}}
 .nav-item{{width:100%;display:flex;align-items:center;gap:10px;
-padding:9px 12px;background:transparent;border:none;border-radius:8px;
+padding:9px 16px;background:transparent;border:none;border-left:3px solid transparent;border-radius:0;
 cursor:pointer;color:#64748b;font-size:13px;font-weight:500;
 font-family:inherit;transition:all 0.15s;text-align:left}}
-.nav-item:hover{{background:#f8fafc}}
-.nav-item.active{{background:rgba(59,130,246,0.08);color:#3b82f6;font-weight:600}}
+.nav-item:hover{{background:rgba(0,0,0,0.02);color:#1e293b}}
+.nav-item.active{{background:rgba(245,158,11,0.04);color:#1e293b;font-weight:600;border-left-color:#f59e0b}}
 .nav-icon{{width:18px;text-align:center;flex-shrink:0}}
-.nav-divider{{height:1px;background:#e5e7eb;margin:10px 0}}
+.nav-divider{{height:1px;background:#e5e7eb;margin:10px 12px}}
 .nav-label{{font-size:10px;font-weight:600;color:#94a3b8;
-letter-spacing:0.08em;padding:6px 12px;text-transform:uppercase}}
+letter-spacing:0.08em;padding:6px 16px;text-transform:uppercase}}
 .div-item{{width:100%;display:flex;align-items:center;gap:8px;
-padding:7px 12px;background:transparent;border:none;border-radius:6px;
+padding:7px 16px;background:transparent;border:none;border-left:3px solid transparent;border-radius:0;
 cursor:pointer;color:#64748b;font-size:12px;font-weight:400;
 font-family:inherit;transition:all 0.15s;text-align:left;margin-bottom:1px}}
-.div-item:hover{{background:#f8fafc}}
-.div-item.active{{background:rgba(59,130,246,0.08);color:#1e293b}}
+.div-item:hover{{background:rgba(0,0,0,0.02)}}
+.div-item.active{{background:rgba(245,158,11,0.04);color:#1e293b;border-left-color:#f59e0b}}
 .div-num{{width:22px;height:22px;border-radius:6px;font-size:11px;font-weight:700;
 display:inline-flex;align-items:center;justify-content:center;
-background:#f1f5f9;color:#64748b;flex-shrink:0}}
-.div-item.active .div-num{{background:rgba(59,130,246,0.15);color:#3b82f6}}
-.div-dot{{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:0.8}}
+background:#eef0f3;color:#64748b;flex-shrink:0;font-family:'JetBrains Mono',monospace}}
+.div-item.active .div-num{{background:rgba(245,158,11,0.12);color:#b45309}}
+.div-dot{{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-left:auto}}
 
 /* Agent sidebar */
 .agent-sidebar{{display:none}}
@@ -1960,58 +2061,64 @@ cursor:pointer;color:#64748b;z-index:301;transition:all .2s;box-shadow:0 1px 3px
 .drawer-close:hover{{color:#1e293b;background:#f8fafc}}
 
 /* ── Cards ── */
-.summary-card,.race-card{{background:#ffffff;border-radius:14px;padding:1.8rem;
-margin-bottom:1.5rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);
+.summary-card,.race-card{{background:#ffffff;border-radius:12px;padding:24px;
+margin-bottom:24px;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
 transition:all .2s ease}}
-.race-card:hover{{background:#fafbfc}}
+.race-card:hover{{box-shadow:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04)}}
 .race-header{{display:flex;justify-content:space-between;align-items:baseline;
 flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}}
-.race-header h2{{font-size:1.25rem;color:#1e293b;font-weight:700;letter-spacing:-0.01em}}
-.race-meta{{color:#6b7280;font-size:.85rem}}
-.summary-card h2{{font-size:1.25rem;color:#1e293b;margin-bottom:1rem;font-weight:700;letter-spacing:-0.01em}}
-.table-wrap{{overflow-x:auto}}
+.race-header h2{{font-size:1.15rem;color:#1e293b;font-weight:700;letter-spacing:-0.02em}}
+.race-meta{{color:#6b7280;font-size:.82rem}}
+.summary-card h2{{font-size:1.15rem;color:#1e293b;margin-bottom:1rem;font-weight:700;letter-spacing:-0.02em}}
+.table-wrap{{overflow-x:auto;border-radius:8px}}
 table{{width:100%;border-collapse:collapse;font-size:.84rem}}
 thead{{z-index:5}}
-th{{background:#f8fafc;color:#64748b;text-transform:uppercase;font-size:.68rem;font-weight:600;
-letter-spacing:.06em;padding:.7rem .6rem;text-align:left;white-space:nowrap;border-bottom:1px solid #e5e7eb}}
-td{{padding:.65rem .6rem;border-bottom:1px solid #f1f5f9;color:#1e293b}}
-tr:hover td{{background:#f8fafc}}
-.pos{{font-weight:800;color:#f59e0b;width:2rem;text-align:center;font-variant-numeric:tabular-nums}}
+th{{background:#f1f5f9;color:#64748b;text-transform:uppercase;font-size:.65rem;font-weight:600;
+letter-spacing:.07em;padding:12px 16px;text-align:left;white-space:nowrap;border-bottom:1px solid #e5e7eb}}
+td{{padding:12px 16px;border-bottom:1px solid #f1f5f9;color:#1e293b}}
+tbody tr:nth-child(even) td{{background:#f9fafb}}
+tbody tr:hover td{{background:#f1f5f9}}
+.pos{{font-weight:800;color:#f59e0b;width:2rem;text-align:center;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .horse-name{{font-weight:600;white-space:nowrap;color:#1e293b}}
-.score{{font-size:1rem;font-variant-numeric:tabular-nums}}
+.score{{font-size:1rem;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .score strong{{color:#f59e0b}}
-.bet{{color:#6b7280}}
+.bet{{color:#6b7280;font-family:'JetBrains Mono',monospace;font-size:.82rem}}
 .driver{{color:#6b7280;font-size:.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.rec-badge{{padding:.25rem .7rem;border-radius:10px;font-size:.75rem;font-weight:700;white-space:nowrap}}
-.value-badge{{background:#f59e0b;color:#0f1117;padding:.1rem .45rem;border-radius:8px;
-font-size:.65rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
-box-shadow:0 1px 4px rgba(245,166,35,0.3)}}
-.value-picks{{background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.15);border-radius:10px;
+.rec-badge{{padding:.2rem .65rem;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap;
+letter-spacing:.01em}}
+.value-badge{{background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;padding:.15rem .5rem;border-radius:20px;
+font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
+text-transform:uppercase;letter-spacing:.04em}}
+.value-picks{{background:rgba(245,166,35,0.04);border:1px solid rgba(245,166,35,0.12);border-radius:10px;
 padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#b45309}}
-.factor-cell{{position:relative;width:55px;min-width:55px}}
-.factor-bar{{position:absolute;left:0;top:0;bottom:0;background:#f59e0b;opacity:.1;border-radius:3px}}
-.factor-val{{position:relative;z-index:1;font-size:.8rem;color:#6b7280}}
+.factor-cell{{position:relative;width:44px;min-width:44px;padding:12px 4px !important}}
+.factor-bar{{position:absolute;left:4px;bottom:6px;height:3px;background:#f59e0b;opacity:.25;
+border-radius:2px;top:auto;transition:width .3s ease}}
+.factor-val{{position:relative;z-index:1;font-size:.75rem;color:#64748b;
+font-family:'JetBrains Mono',monospace;text-align:center;display:block}}
 .race-link{{color:#f59e0b;text-decoration:none;font-weight:600}}
 .race-link:hover{{color:#d4911e;text-decoration:underline}}
 
 /* Expandable rows */
 .horse-row.clickable{{cursor:pointer}}
-.horse-row.clickable:hover td{{background:#f8fafc;transition:background .15s}}
-.toggle-icon{{display:inline-block;font-size:.65rem;transition:transform .2s;color:#94a3b8;margin-right:.3rem}}
-.horse-row.expanded .toggle-icon{{transform:rotate(90deg)}}
-.detail-row{{background:#f8fafc}}
+.horse-row.clickable:hover td{{background:#f1f5f9;transition:background .15s}}
+.toggle-icon{{display:inline-block;font-size:.6rem;transition:transform .2s;color:#94a3b8;margin-right:.3rem}}
+.horse-row.expanded .toggle-icon{{transform:rotate(90deg);color:#f59e0b}}
+.detail-row{{background:#fafbfc}}
 .detail-row.hidden{{display:none}}
 .detail-row td{{padding:0}}
-.detail-content{{padding:.9rem 1.2rem 1.2rem 2.5rem;border-left:3px solid #f59e0b}}
+.detail-content{{padding:1rem 1.5rem 1.5rem 2.5rem;border-left:3px solid #f59e0b}}
 .career-stats{{display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:.6rem;font-size:.82rem}}
 .career-item{{color:#6b7280}}
-.career-item strong{{color:#1e293b}}
+.career-item strong{{color:#1e293b;font-family:'JetBrains Mono',monospace;font-size:.82rem}}
 .starts-table{{width:100%;font-size:.8rem}}
-.starts-table th{{background:#f8fafc;font-size:.65rem;padding:.4rem .4rem}}
-.starts-table td{{padding:.35rem .4rem;border-bottom:1px solid #f1f5f9}}
-.starts-table tr:hover td{{background:#f1f5f9}}
+.starts-table th{{background:#f1f5f9;font-size:.62rem;padding:8px 10px;letter-spacing:.05em}}
+.starts-table td{{padding:6px 10px;border-bottom:1px solid #f1f5f9}}
+.starts-table tr:hover td{{background:#eef0f3}}
 .start-date{{color:#6b7280;white-space:nowrap;font-size:.75rem}}
-.km-time{{font-family:monospace;font-weight:600}}
+.km-time{{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:.82rem}}
 .plac-badge{{font-weight:700}}
 .no-starts{{color:#94a3b8;font-style:italic;font-size:.85rem}}
 
@@ -2057,18 +2164,20 @@ letter-spacing:.04em;white-space:nowrap}}
 .result-icon{{margin-left:.2rem;font-size:.75rem}}
 
 /* Accuracy card */
-.accuracy-card{{background:#ffffff;border-radius:16px;padding:1.8rem;
-margin-bottom:1.5rem;border-left:4px solid #22c55e;border:1px solid #e5e7eb;
-box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
-.accuracy-card h2{{color:#1e293b;margin-bottom:1rem;font-size:1.25rem;font-weight:700}}
-.accuracy-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}}
-.accuracy-stat{{text-align:center;background:#f8fafc;border-radius:12px;padding:1.2rem;border:1px solid #e5e7eb}}
-.accuracy-stat .big-num{{font-size:2rem;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums}}
-.accuracy-stat .label{{font-size:.72rem;text-transform:uppercase;color:#6b7280;
+.accuracy-card{{background:#ffffff;border-radius:12px;padding:24px;
+margin-bottom:24px;border-left:4px solid #22c55e;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
+.accuracy-card h2{{color:#1e293b;margin-bottom:1rem;font-size:1.15rem;font-weight:700;letter-spacing:-0.01em}}
+.accuracy-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}}
+.accuracy-stat{{text-align:center;background:#f9fafb;border-radius:10px;padding:1.2rem;border:1px solid #e5e7eb}}
+.accuracy-stat .big-num{{font-size:1.8rem;font-weight:800;color:#f59e0b;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
+.accuracy-stat .label{{font-size:.68rem;text-transform:uppercase;color:#6b7280;
 letter-spacing:.05em;margin-top:.3rem;font-weight:600}}
-.accuracy-stat .sub{{font-size:.7rem;color:#94a3b8;margin-top:.2rem}}
-.accuracy-surprises{{margin-top:1rem;padding:.8rem;background:rgba(245,166,35,0.06);border-radius:10px;
-font-size:.85rem;color:#b45309;border:1px solid rgba(245,166,35,0.12)}}
+.accuracy-stat .sub{{font-size:.68rem;color:#94a3b8;margin-top:.2rem;
+font-family:'JetBrains Mono',monospace}}
+.accuracy-surprises{{margin-top:1rem;padding:.8rem 1rem;background:rgba(245,166,35,0.04);border-radius:10px;
+font-size:.85rem;color:#b45309;border:1px solid rgba(245,166,35,0.1)}}
 
 /* Hit/miss badges */
 .hit-badge{{background:rgba(34,197,94,0.1);color:#16a34a;padding:.2rem .5rem;border-radius:8px;
@@ -2102,8 +2211,8 @@ border-radius:8px;padding:.5rem .8rem;margin-top:.4rem;font-size:.82rem;color:#b
 .upset-desc{{color:#94a3b8;font-size:.75rem;font-weight:400}}
 
 /* Heatmap risk bar */
-.heatmap-wrapper{{background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;
-padding:1rem 1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.heatmap-wrapper{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
+padding:16px 20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .heatmap-title{{font-weight:700;color:#1e293b;font-size:.95rem;margin-bottom:.8rem}}
 .heatmap-bar{{display:flex;gap:4px;height:48px;align-items:flex-end}}
 .heatmap-seg{{flex:1;border-radius:6px 6px 0 0;min-height:8px;cursor:pointer;
@@ -2114,10 +2223,10 @@ transition:all .2s;position:relative}}
 .heatmap-summary{{color:#6b7280;font-size:.82rem;margin-top:.5rem}}
 
 /* Hero section (spelvärde) — grid layout */
-.hero-grid{{display:grid;grid-template-columns:280px 1fr;gap:1.5rem;margin-bottom:1.5rem}}
-.hero-score-card{{background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;
+.hero-grid{{display:grid;grid-template-columns:260px 1fr;gap:24px;margin-bottom:24px}}
+.hero-score-card{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
 padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center;
-box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .hero-score-label{{font-size:.7rem;text-transform:uppercase;color:#6b7280;letter-spacing:.06em;
 font-weight:600;margin-top:.8rem}}
 .hero-score-text{{font-size:1rem;font-weight:700;margin-top:.3rem}}
@@ -2129,7 +2238,7 @@ font-weight:600;margin-top:.8rem}}
 .hero-kpi.green{{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.12)}}
 .hero-kpi.yellow{{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.12)}}
 .hero-kpi.purple{{background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.12)}}
-.hero-kpi-val{{font-size:1.3rem;font-weight:800;font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}}
+.hero-kpi-val{{font-size:1.3rem;font-weight:800;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .hero-kpi.blue .hero-kpi-val{{color:#3b82f6}}
 .hero-kpi.green .hero-kpi-val{{color:#22c55e}}
 .hero-kpi.yellow .hero-kpi-val{{color:#d97706}}
@@ -2137,29 +2246,62 @@ font-weight:600;margin-top:.8rem}}
 .hero-kpi-lbl{{font-size:.62rem;text-transform:uppercase;color:#6b7280;letter-spacing:.05em;
 font-weight:600;margin-top:.2rem}}
 
-/* Division list (row-based overview) */
-.division-list{{display:flex;flex-direction:column;gap:6px;margin-bottom:1.5rem}}
-.division-row{{background:#ffffff;border-radius:10px;padding:14px 18px;cursor:pointer;display:grid;
-grid-template-columns:36px 1fr 80px 100px 1fr 60px 28px;align-items:center;gap:14px;
-border-left:3px solid transparent;transition:all .15s;border:1px solid #e5e7eb;
-box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
-.division-row:hover{{background:#f8fafc}}
-.division-row .div-num-lg{{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:#94a3b8}}
-.division-row .pick-info strong{{color:#1e293b;font-size:.88rem}}
-.division-row .pick-info .driver-name{{color:#94a3b8;font-size:.75rem;margin-top:2px}}
-.division-row .score-val{{font-family:'DM Mono',monospace;font-size:1.05rem;font-weight:700;color:#f59e0b}}
-.division-row .streck-bar{{flex:1;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden}}
-.division-row .streck-bar div{{height:100%;background:#f59e0b;border-radius:2px;transition:width .5s ease}}
-.division-row .gard-text{{font-size:.78rem;color:#6b7280}}
-.division-row .risk-pct{{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:600}}
-.division-row .arrow-icon{{color:#94a3b8;font-size:.9rem}}
+/* Overview race grid (card-based) */
+.overview-race-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:24px}}
+.overview-race-card{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
+padding:20px;cursor:pointer;transition:all .2s;
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
+.overview-race-card:hover{{border-color:#cbd5e1;box-shadow:0 4px 16px rgba(0,0,0,0.08);transform:translateY(-2px)}}
+.orc-top{{display:flex;align-items:center;gap:8px;margin-bottom:8px}}
+.orc-num{{font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:800;color:#f59e0b;min-width:28px}}
+.orc-label{{font-size:.72rem;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em}}
+.orc-risk{{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:700;
+padding:2px 8px;border-radius:20px}}
+.orc-meta{{font-size:.75rem;color:#6b7280;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f1f5f9}}
+.orc-pick{{margin-bottom:10px}}
+.orc-pick-main{{display:flex;align-items:center;gap:6px;flex-wrap:wrap}}
+.orc-pick-main strong{{font-size:.88rem;color:#1e293b}}
+.orc-driver{{font-size:.75rem;color:#94a3b8;margin-top:2px}}
+.orc-stats{{display:flex;gap:16px;margin-bottom:8px}}
+.orc-stat{{text-align:center}}
+.orc-stat-val{{display:block;font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:#f59e0b}}
+.orc-stat-lbl{{display:block;font-size:.6rem;text-transform:uppercase;color:#94a3b8;letter-spacing:.05em;font-weight:600}}
+.orc-gard{{font-size:.75rem;color:#6b7280;padding-top:8px;border-top:1px solid #f1f5f9}}
+
+/* Ranking table */
+.ranking-card{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;padding:20px;
+margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
+.ranking-header{{font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:12px;letter-spacing:-0.01em}}
+.ranking-table{{width:100%;border-collapse:collapse}}
+.ranking-table th{{padding:8px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;
+letter-spacing:.07em;text-align:center;border-bottom:2px solid #e5e7eb}}
+.rank-th-race{{text-align:left !important;color:#64748b}}
+.rank-th-a{{color:#92400e;background:rgba(254,243,199,0.5)}}
+.rank-th-b{{color:#1e40af;background:rgba(219,234,254,0.5)}}
+.rank-th-bc{{color:#6b21a8;background:rgba(243,232,255,0.5)}}
+.rank-th-c{{color:#475569;background:rgba(241,245,249,0.5)}}
+.rank-th-d{{color:#991b1b;background:rgba(254,226,226,0.4)}}
+.ranking-table td{{padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;vertical-align:middle}}
+.ranking-table tbody tr:nth-child(even) td{{background:#f9fafb}}
+.rank-race{{font-weight:600;color:#1e293b;text-align:left !important;font-size:.82rem;
+font-family:'JetBrains Mono',monospace;white-space:nowrap}}
+.rank-cell{{min-width:60px}}
+.rank-empty{{color:#cbd5e1}}
+.rank-pill{{display:inline-flex;align-items:center;justify-content:center;
+min-width:24px;height:22px;padding:0 6px;border-radius:20px;font-size:.72rem;
+font-weight:600;margin:1px 2px;font-family:'JetBrains Mono',monospace}}
+.rank-pill.rank-a{{background:#fef3c7;color:#92400e}}
+.rank-pill.rank-b{{background:#dbeafe;color:#1e40af}}
+.rank-pill.rank-bc{{background:#f3e8ff;color:#6b21a8}}
+.rank-pill.rank-c{{background:#f1f5f9;color:#475569}}
+.rank-pill.rank-d{{background:#fee2e2;color:#991b1b}}
 
 /* Track record banner */
 .track-banner{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
-padding:1rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;
-flex-wrap:wrap;gap:1rem;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;
+flex-wrap:wrap;gap:1rem;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .track-stat{{text-align:center;min-width:80px}}
-.track-stat-val{{font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:#22c55e}}
+.track-stat-val{{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:#22c55e}}
 .track-stat-lbl{{font-size:.65rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 
 /* Legacy summary card (kept for compatibility) */
@@ -2202,15 +2344,17 @@ border-left:4px solid var(--sv-color,#f59e0b);box-shadow:0 1px 3px rgba(0,0,0,0.
 
 /* System section */
 .system-section h2{{margin-bottom:1rem;color:#1e293b}}
-.system-card{{background:#ffffff;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
-border-left:4px solid #f59e0b;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.system-card{{background:#ffffff;border-radius:12px;padding:20px 24px;margin-bottom:16px;
+border-left:4px solid #f59e0b;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .system-card.skipped{{border-left-color:#cbd5e1;opacity:.5}}
 .system-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem}}
 .system-header h3{{font-size:1rem;color:#1e293b;margin:0;font-weight:700}}
 .system-meta{{color:#94a3b8;font-size:.78rem;font-style:italic}}
 .system-stats{{display:flex;gap:1.5rem;margin-bottom:.8rem;flex-wrap:wrap}}
 .sys-stat{{text-align:center}}
-.sys-val{{display:block;font-size:1.2rem;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}}
+.sys-val{{display:block;font-size:1.2rem;font-weight:700;color:#f59e0b;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .sys-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 .system-table th{{font-size:.68rem;padding:.4rem .5rem}}
 .system-table td{{padding:.4rem .5rem;font-size:.82rem}}
@@ -2239,9 +2383,10 @@ animation:pulse-live 2s ease-in-out infinite}}
 .backlog-section h2{{margin-bottom:1rem;color:#1e293b}}
 .backlog-summary{{display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:1rem;
 background:#ffffff;border-radius:12px;padding:1.2rem;border:1px solid #e5e7eb;
-box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .bl-stat{{text-align:center;min-width:80px}}
-.bl-val{{display:block;font-size:1.3rem;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}}
+.bl-val{{display:block;font-size:1.3rem;font-weight:700;color:#f59e0b;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .bl-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 .backlog-table th{{font-size:.68rem;padding:.4rem .5rem}}
 .backlog-table td{{padding:.4rem .5rem;font-size:.82rem}}
@@ -2270,69 +2415,103 @@ border:1px solid #e5e7eb;cursor:pointer;font-size:.8rem;font-weight:600;transiti
 
 /* Statistik-sektion */
 .stats-section h2{{margin-bottom:1rem;color:#1e293b}}
-.stats-block{{background:#ffffff;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
-border-left:4px solid #f59e0b;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.stats-block{{background:#ffffff;border-radius:12px;padding:20px 24px;margin-bottom:16px;
+border-left:4px solid #f59e0b;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)}}
 .stats-block h3{{font-size:.95rem;color:#1e293b;margin-bottom:.8rem;font-weight:700}}
 .stats-table{{width:100%;border-collapse:collapse;font-size:.82rem}}
-.stats-table th{{background:#f8fafc;color:#64748b;text-transform:uppercase;font-size:.68rem;
-letter-spacing:.05em;padding:.5rem .5rem;text-align:left;white-space:nowrap;font-weight:600}}
-.stats-table td{{padding:.45rem .5rem;border-bottom:1px solid #f1f5f9}}
-.stats-table tr:hover td{{background:#f8fafc}}
+.stats-table th{{background:#f1f5f9;color:#64748b;text-transform:uppercase;font-size:.65rem;
+letter-spacing:.06em;padding:10px 12px;text-align:left;white-space:nowrap;font-weight:600;border-bottom:1px solid #e5e7eb}}
+.stats-table td{{padding:10px 12px;border-bottom:1px solid #f1f5f9}}
+.stats-table tbody tr:nth-child(even) td{{background:#f9fafb}}
+.stats-table tr:hover td{{background:#f1f5f9}}
 
 /* ── Agent Chat View ── */
 .agent-layout{{display:flex;flex-direction:column;height:calc(100vh - 56px - 48px);max-width:800px;margin:0 auto}}
-.agent-header{{padding:1.5rem 0 1rem;text-align:center}}
-.agent-header h2{{font-size:1.5rem;font-weight:700;color:#1e293b;margin-bottom:.3rem}}
-.agent-header p{{font-size:.9rem;color:#6b7280}}
-.chat-suggestions{{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:1rem}}
-.chat-suggest-btn{{padding:.45rem 1rem;border-radius:10px;border:1px solid #e5e7eb;
+.agent-header{{padding:2rem 0 1.2rem;text-align:center}}
+.agent-header h2{{font-size:1.5rem;font-weight:800;color:#1e293b;margin-bottom:.4rem;letter-spacing:-0.02em}}
+.agent-header p{{font-size:.88rem;color:#6b7280}}
+.chat-suggestions{{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:1.2rem}}
+.chat-suggest-btn{{padding:8px 16px;border-radius:20px;border:1px solid #e5e7eb;
 background:#ffffff;color:#64748b;font-size:.82rem;cursor:pointer;transition:all .2s;
 font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
-.chat-suggest-btn:hover{{border-color:#f59e0b;color:#b45309;background:#fffbeb}}
-.chat-messages{{flex:1;overflow-y:auto;padding:.5rem 0;margin-bottom:1rem}}
-.chat-msg{{padding:.8rem 1rem;border-radius:12px;margin-bottom:.5rem;max-width:85%;
-line-height:1.6;font-size:.9rem;white-space:pre-wrap;word-wrap:break-word}}
-.chat-msg.user{{background:rgba(59,130,246,0.08);color:#1e293b;margin-left:auto;border:1px solid rgba(59,130,246,0.12)}}
-.chat-msg.ai{{background:#ffffff;color:#1e293b;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
+.chat-suggest-btn:hover{{border-color:#f59e0b;color:#b45309;background:#fffbeb;
+box-shadow:0 2px 8px rgba(245,166,35,0.1)}}
+.chat-messages{{flex:1;overflow-y:auto;padding:.5rem 0;margin-bottom:1rem;display:flex;flex-direction:column;gap:12px}}
+.chat-msg{{padding:12px 16px;border-radius:16px;max-width:82%;
+line-height:1.7;font-size:.88rem;word-wrap:break-word;position:relative}}
+.chat-msg .chat-ts{{display:block;font-size:.62rem;color:#94a3b8;margin-top:6px;font-weight:400}}
+.chat-msg.user{{background:#3b82f6;color:#ffffff;margin-left:auto;
+border-bottom-right-radius:4px;box-shadow:0 1px 4px rgba(59,130,246,0.2)}}
+.chat-msg.user .chat-ts{{color:rgba(255,255,255,0.6)}}
+.chat-msg.ai{{background:#ffffff;color:#1e293b;border:1px solid #e5e7eb;
+border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
 .chat-msg.ai strong{{color:#b45309}}
-.chat-input-bar{{display:flex;gap:.5rem;padding:12px 0;border-top:1px solid #e5e7eb}}
-.chat-input-bar input{{flex:1;padding:.7rem 1rem;border-radius:10px;border:1px solid #e5e7eb;
-background:#ffffff;color:#1e293b;font-size:.9rem;outline:none;font-family:inherit;
+.chat-msg.ai code{{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.82rem}}
+.chat-msg.ai pre{{background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;overflow-x:auto;
+font-family:'JetBrains Mono',monospace;font-size:.78rem;margin:8px 0;line-height:1.5}}
+.chat-msg.ai ul,.chat-msg.ai ol{{padding-left:1.2rem;margin:6px 0}}
+.chat-msg.ai li{{margin-bottom:4px}}
+.chat-msg.streaming::after{{content:'';display:inline-block;width:2px;height:14px;background:#f59e0b;
+margin-left:2px;vertical-align:text-bottom;animation:blink-cursor .8s infinite}}
+@keyframes blink-cursor{{0%,100%{{opacity:1}}50%{{opacity:0}}}}
+.typing-indicator{{display:flex;gap:4px;padding:12px 16px;align-items:center}}
+.typing-dot{{width:6px;height:6px;border-radius:50%;background:#94a3b8;
+animation:typing-bounce 1.4s ease-in-out infinite}}
+.typing-dot:nth-child(2){{animation-delay:.2s}}
+.typing-dot:nth-child(3){{animation-delay:.4s}}
+@keyframes typing-bounce{{0%,60%,100%{{transform:translateY(0)}}30%{{transform:translateY(-6px)}}}}
+.chat-input-bar{{display:flex;gap:8px;padding:14px 0;border-top:1px solid #e5e7eb}}
+.chat-input-bar input{{flex:1;padding:12px 16px;border-radius:24px;border:1px solid #e5e7eb;
+background:#ffffff;color:#1e293b;font-size:.88rem;outline:none;font-family:inherit;
 transition:border-color .2s,box-shadow .2s}}
 .chat-input-bar input:focus{{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,166,35,0.1)}}
-.chat-input-bar button{{padding:.7rem 1.2rem;border-radius:10px;border:none;background:#f59e0b;
-color:#0f1117;font-weight:600;cursor:pointer;font-size:.9rem;white-space:nowrap;transition:all .2s;
-font-family:inherit}}
-.chat-input-bar button:hover{{background:#d97706;box-shadow:0 2px 8px rgba(245,166,35,0.2)}}
-.chat-input-bar button:disabled{{opacity:.5;cursor:not-allowed}}
-.chat-loading{{display:inline-block;color:#6b7280;font-size:.85rem}}
-.chat-loading::after{{content:'';animation:chatdots 1.5s steps(4,end) infinite}}
-@keyframes chatdots{{0%{{content:''}}25%{{content:'.'}}50%{{content:'..'}}75%{{content:'...'}}}}
+.chat-input-bar input::placeholder{{color:#94a3b8}}
+.chat-input-bar button{{width:44px;height:44px;border-radius:50%;border:none;
+background:#f59e0b;color:#ffffff;font-weight:700;cursor:pointer;font-size:1.1rem;
+transition:all .2s;font-family:inherit;display:flex;align-items:center;justify-content:center;
+flex-shrink:0}}
+.chat-input-bar button:hover{{background:#d97706;box-shadow:0 2px 8px rgba(245,166,35,0.3);transform:scale(1.05)}}
+.chat-input-bar button:disabled{{opacity:.4;cursor:not-allowed;transform:none}}
 
 /* Backlog lazy-load */
 .bl-older{{display:none}}
 .bl-show-all .bl-older{{display:table-row}}
 
+/* Hamburger menu button */
+.hamburger-btn{{display:none;background:none;border:none;cursor:pointer;padding:6px;color:#1e293b}}
+.hamburger-btn svg{{display:block}}
+.sidebar-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99;
+backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}}
+
 /* ── Responsive ── */
 @media(max-width:768px){{
   .top-navbar{{padding:0 12px}}
+  .hamburger-btn{{display:block}}
   .nav-tabs{{display:none}}
-  .sidebar{{display:none}}
+  .sidebar{{transform:translateX(-100%);transition:transform .3s ease;z-index:150;
+  background:#f9fafb;box-shadow:4px 0 20px rgba(0,0,0,0.1)}}
+  .sidebar.mobile-open{{transform:translateX(0)}}
+  .sidebar-overlay.open{{display:block}}
   .main-area{{margin-left:0 !important}}
   .content{{padding:16px}}
   .system-drawer{{padding:1rem}}
-  .round-select{{max-width:180px;font-size:.8rem}}
-  .summary-card,.race-card{{padding:1.3rem;border-radius:14px}}
+  .round-select{{max-width:160px;font-size:.78rem}}
+  .summary-card,.race-card{{padding:16px;border-radius:12px}}
   .hero-grid{{grid-template-columns:1fr}}
   .hero-kpis{{grid-template-columns:repeat(2,1fr)}}
-  .division-row{{grid-template-columns:28px 1fr 60px 80px 28px}}
-  .division-row .gard-text,.division-row .risk-pct{{display:none}}
+  .overview-race-grid{{grid-template-columns:1fr}}
+  .ranking-table{{font-size:.75rem}}
+  .rank-pill{{min-width:20px;height:20px;font-size:.65rem;padding:0 4px}}
   table{{font-size:.75rem}}
+  th,td{{padding:8px 8px}}
   .driver{{display:none}}
   .detail-content{{padding-left:1rem}}
   .factor-cell{{display:none}}
   .heatmap-wrapper{{overflow-x:auto}}
   .agent-layout{{height:auto;min-height:calc(100vh - 56px - 48px)}}
+  .chat-msg{{max-width:90%}}
+  .nav-clock{{display:none}}
 }}
 </style>
 </head>
@@ -2340,6 +2519,11 @@ font-family:inherit}}
 
 <!-- ── Top Navbar ── -->
 <nav class="top-navbar">
+  <button class="hamburger-btn" onclick="toggleMobileSidebar()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 12h18M3 6h18M3 18h18"/>
+    </svg>
+  </button>
   <div class="nav-brand">Kungens <span>Trav</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
@@ -2348,9 +2532,11 @@ font-family:inherit}}
     {'<button class="nav-tab" data-view="backlog" onclick="showView(&#39;backlog&#39;)">Backlog</button>' if backlog_section else ''}
   </div>
   <div class="nav-right">
+    <span class="nav-clock" id="nav-clock"></span>
     {round_dropdown}
   </div>
 </nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
 
 <div class="app-layout">
 
@@ -2395,6 +2581,7 @@ font-family:inherit}}
   <section id="s-summary" class="dashboard-section active">
     {risk_bar}
     {sv_bar}
+    {ranking}
     {accuracy}
     {summary}
   </section>
@@ -2417,7 +2604,7 @@ font-family:inherit}}
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-bar">
       <input id="chat-input" placeholder="Ställ en fråga om omgången...">
-      <button id="chat-send" onclick="sendChat()">Skicka</button>
+      <button id="chat-send" onclick="sendChat()" title="Skicka">&#8593;</button>
     </div>
   </div>
 </div>
@@ -2639,77 +2826,199 @@ function updateBlSummary(rounds,full,partial,cost,payout){{
   if(el('bl-netto')){{el('bl-netto').textContent=(netto>=0?'+':'')+fmt(netto)+' kr';el('bl-netto').style.color=clr;}}
 }}
 
-// ── AI Chat ──
+// ── Mobile sidebar ──
+function toggleMobileSidebar(){{
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  if(sb)sb.classList.toggle('mobile-open');
+  if(ov)ov.classList.toggle('open');
+}}
+
+// ── Clock ──
+(function(){{
+  const clockEl=document.getElementById('nav-clock');
+  if(!clockEl)return;
+  function tick(){{
+    const now=new Date();
+    clockEl.textContent=now.toLocaleTimeString('sv-SE',{{hour:'2-digit',minute:'2-digit'}});
+  }}
+  tick();
+  setInterval(tick,30000);
+}})();
+
+// ── AI Chat (SSE streaming) ──
 let chatMsgs=[];
+let chatAbort=null;
 function resetChat(){{
+  if(chatAbort){{chatAbort.abort();chatAbort=null;}}
   chatMsgs=[];
   renderChat();
   const sug=document.getElementById('agent-suggestions');
   if(sug) sug.style.display='flex';
+  try{{
+    const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'');
+    const rk=pathParts.replace(/^\\/+/,'');
+    fetch('/api/chat/session/'+encodeURIComponent(rk),{{method:'DELETE'}});
+  }}catch(e){{}}
 }}
 function askSuggestion(text){{
   document.getElementById('chat-input').value=text;
   sendChat();
+}}
+async function loadChatSession(){{
+  try{{
+    const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'');
+    const rk=pathParts.replace(/^\\/+/,'');
+    const resp=await fetch('/api/chat/session/'+encodeURIComponent(rk));
+    const data=await resp.json();
+    if(data.messages&&data.messages.length>0){{
+      chatMsgs=data.messages;
+      renderChat();
+      const sug=document.getElementById('agent-suggestions');
+      if(sug) sug.style.display='none';
+    }}
+  }}catch(e){{}}
 }}
 document.addEventListener('DOMContentLoaded',()=>{{
   const ci=document.getElementById('chat-input');
   if(ci)ci.addEventListener('keydown',e=>{{
     if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendChat();}}
   }});
-  // Hide agent sidebar initially
   const sbAgent=document.getElementById('sidebar-agent');
   if(sbAgent) sbAgent.style.display='none';
+  loadChatSession();
 }});
 async function sendChat(){{
   const input=document.getElementById('chat-input');
   const msg=input.value.trim();
   if(!msg)return;
   input.value='';
-  // Hide suggestions after first message
   const sug=document.getElementById('agent-suggestions');
   if(sug) sug.style.display='none';
-  chatMsgs.push({{role:'user',content:msg}});
+  const now=new Date();
+  const ts=now.toLocaleTimeString('sv-SE',{{hour:'2-digit',minute:'2-digit'}});
+  chatMsgs.push({{role:'user',content:msg,ts:ts}});
   renderChat();
   const btn=document.getElementById('chat-send');
-  btn.disabled=true;btn.textContent='\\u23F3';
-  const loadDiv=document.createElement('div');
-  loadDiv.className='chat-msg ai';
-  loadDiv.id='chat-loading';
-  loadDiv.innerHTML='<span class="chat-loading">Analyserar</span>';
-  document.getElementById('chat-messages').appendChild(loadDiv);
-  document.getElementById('chat-messages').scrollTop=999999;
+  btn.disabled=true;
+  const chatContainer=document.getElementById('chat-messages');
+
+  // Typing indicator
+  const typingDiv=document.createElement('div');
+  typingDiv.className='chat-msg ai';
+  typingDiv.id='chat-typing';
+  typingDiv.innerHTML='<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+  chatContainer.appendChild(typingDiv);
+  chatContainer.scrollTop=chatContainer.scrollHeight;
+
+  // Collect ranking data for context
+  let rankingCtx='';
+  const rankEl=document.getElementById('ranking-data');
+  if(rankEl)rankingCtx=rankEl.getAttribute('data-ranking')||'';
+
   try{{
     const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'');
     const rk=pathParts.replace(/^\\/+/,'');
     const resp=await fetch('/api/chat',{{
       method:'POST',
       headers:{{'Content-Type':'application/json'}},
-      body:JSON.stringify({{messages:chatMsgs,round_key:rk}})
+      body:JSON.stringify({{messages:chatMsgs.filter(m=>m.role),round_key:rk,ranking:rankingCtx}})
     }});
-    const data=await resp.json();
-    if(data.error){{
-      chatMsgs.push({{role:'assistant',content:'Fel: '+data.error}});
+
+    // Remove typing indicator
+    const ti=document.getElementById('chat-typing');
+    if(ti)ti.remove();
+
+    const contentType=resp.headers.get('content-type')||'';
+
+    if(contentType.includes('text/event-stream')){{
+      // SSE streaming response
+      const aiDiv=document.createElement('div');
+      aiDiv.className='chat-msg ai streaming';
+      aiDiv.id='chat-stream';
+      chatContainer.appendChild(aiDiv);
+      let fullText='';
+
+      const reader=resp.body.getReader();
+      const decoder=new TextDecoder();
+      let buffer='';
+
+      while(true){{
+        const {{done,value}}=await reader.read();
+        if(done)break;
+        buffer+=decoder.decode(value,{{stream:true}});
+        const lines=buffer.split('\\n');
+        buffer=lines.pop()||'';
+        for(const line of lines){{
+          if(line.startsWith('data: ')){{
+            const payload=line.slice(6).trim();
+            if(payload==='[DONE]')continue;
+            try{{
+              const obj=JSON.parse(payload);
+              if(obj.delta){{
+                fullText+=obj.delta;
+                aiDiv.innerHTML=formatChatMsg(fullText);
+                chatContainer.scrollTop=chatContainer.scrollHeight;
+              }}
+              if(obj.error){{
+                fullText+='\\nFel: '+obj.error;
+                aiDiv.innerHTML=formatChatMsg(fullText);
+              }}
+            }}catch(pe){{}}
+          }}
+        }}
+      }}
+      aiDiv.classList.remove('streaming');
+      const rts=new Date().toLocaleTimeString('sv-SE',{{hour:'2-digit',minute:'2-digit'}});
+      aiDiv.innerHTML=formatChatMsg(fullText)+'<span class="chat-ts">'+rts+'</span>';
+      chatMsgs.push({{role:'assistant',content:fullText,ts:rts}});
     }}else{{
-      chatMsgs.push({{role:'assistant',content:data.response}});
+      // Fallback: JSON response
+      const data=await resp.json();
+      const rts=new Date().toLocaleTimeString('sv-SE',{{hour:'2-digit',minute:'2-digit'}});
+      if(data.error){{
+        chatMsgs.push({{role:'assistant',content:'Fel: '+data.error,ts:rts}});
+      }}else{{
+        chatMsgs.push({{role:'assistant',content:data.response,ts:rts}});
+      }}
+      renderChat();
     }}
   }}catch(e){{
-    chatMsgs.push({{role:'assistant',content:'Kunde inte nå AI-tjänsten: '+e.message}});
+    const ti2=document.getElementById('chat-typing');
+    if(ti2)ti2.remove();
+    const rts=new Date().toLocaleTimeString('sv-SE',{{hour:'2-digit',minute:'2-digit'}});
+    chatMsgs.push({{role:'assistant',content:'Kunde inte nå AI-tjänsten: '+e.message,ts:rts}});
+    renderChat();
   }}
-  btn.disabled=false;btn.textContent='Skicka';
-  renderChat();
+  btn.disabled=false;
+  chatContainer.scrollTop=chatContainer.scrollHeight;
 }}
 function renderChat(){{
   const c=document.getElementById('chat-messages');
   c.innerHTML=chatMsgs.map(m=>{{
     const cls=m.role==='user'?'user':'ai';
-    return '<div class="chat-msg '+cls+'">'+formatChatMsg(m.content)+'</div>';
+    const tsHtml=m.ts?'<span class="chat-ts">'+m.ts+'</span>':'';
+    return '<div class="chat-msg '+cls+'">'+formatChatMsg(m.content)+tsHtml+'</div>';
   }}).join('');
   c.scrollTop=c.scrollHeight;
 }}
 function formatChatMsg(text){{
   let s=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Code blocks
+  s=s.replace(/```([\\s\\S]*?)```/g,function(m,code){{return '<pre>'+code.trim()+'</pre>';}});
+  // Inline code
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // Bold
   s=s.replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>');
+  // Italic
   s=s.replace(/\\*(.+?)\\*/g,'<em>$1</em>');
+  // Unordered lists
+  s=s.replace(/^[\\-\\*] (.+)$/gm,'<li>$1</li>');
+  s=s.replace(/(<li>.*<\\/li>)/gs,function(m){{return '<ul>'+m+'</ul>';}});
+  // Ordered lists
+  s=s.replace(/^\\d+\\. (.+)$/gm,'<li>$1</li>');
+  // Line breaks
+  s=s.replace(/\\n/g,'<br>');
   return s;
 }}
 
@@ -2734,7 +3043,7 @@ document.querySelectorAll('.horse-row.clickable').forEach(row=>{{
   const navRight = document.querySelector('.nav-right');
   if(!navRight) return;
   const timer = document.createElement('span');
-  timer.style.cssText = 'font-family:"DM Mono",monospace;font-size:0.75rem;color:#94a3b8;margin-right:8px';
+  timer.style.cssText = 'font-family:"JetBrains Mono",monospace;font-size:0.75rem;color:#94a3b8;margin-right:8px';
   navRight.insertBefore(timer, navRight.firstChild);
   const refreshBtn = document.createElement('button');
   refreshBtn.textContent = '↻ Uppdatera';

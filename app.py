@@ -213,6 +213,20 @@ async def api_chat(request: Request):
     round_key = data.get("round_key", "")
 
     game_round = _round_cache.get(round_key)
+    if not game_round and round_key:
+        parts = round_key.split("/")
+        if len(parts) == 2:
+            try:
+                from trav_agent.data.atg_client import ATGClient
+                from trav_agent.analysis.composite import CompositeAnalyzer
+                client = ATGClient()
+                gr = await client.fetch_full_round(parts[0], date.fromisoformat(parts[1]))
+                if gr:
+                    CompositeAnalyzer().analyze_round(gr)
+                    _round_cache[round_key] = gr
+                    game_round = gr
+            except Exception as e:
+                logger.warning(f"Failed to fetch round for chat: {e}")
     backlog_data = await _load_backlog()
 
     try:

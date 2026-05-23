@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -221,6 +223,57 @@ def clear_manual_tips() -> None:
 
 # ── Aggregator ──────────────────────────────────────────────────────────────
 
+def _load_tips_cache_file(game_type: str, date_str: str) -> dict[str, str]:
+    """Load tips from local JSON cache file (e.g. tips_cache/V85_2026-05-23.json)."""
+    cache_dir = Path(__file__).parent.parent.parent / "tips_cache"
+    cache_file = cache_dir / f"{game_type}_{date_str}.json"
+    if not cache_file.exists():
+        return {}
+
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(f"Failed to read tips cache {cache_file}: {e}")
+        return {}
+
+    results: dict[str, str] = {}
+    sources = data.get("sources", {})
+    track = data.get("track", "")
+
+    for src_key, src_data in sources.items():
+        author = src_data.get("author", src_key)
+        lines = [f"[Källa: {author}]"]
+        if src_data.get("url"):
+            lines.append(f"URL: {src_data['url']}")
+        if src_data.get("summary"):
+            lines.append(f"Sammanfattning: {src_data['summary']}")
+
+        picks = src_data.get("picks", {})
+        if picks:
+            lines.append("\nVal per avdelning:")
+            for race, pick in sorted(picks.items()):
+                lines.append(f"  {race}: {pick}")
+
+        rankings = src_data.get("rankings", {})
+        if rankings:
+            lines.append("\nRanking:")
+            for race, ranking in sorted(rankings.items()):
+                if isinstance(ranking, dict):
+                    parts = [f"{tier}: {horses}" for tier, horses in ranking.items()]
+                    lines.append(f"  {race}: {', '.join(parts)}")
+                else:
+                    lines.append(f"  {race}: {ranking}")
+
+        if src_data.get("best_spike"):
+            lines.append(f"\nBästa spik: {src_data['best_spike']}")
+        if src_data.get("best_drag"):
+            lines.append(f"Bästa drag: {src_data['best_drag']}")
+
+        results[src_key] = "\n".join(lines)
+
+    return results
+
+
 async def scrape_tips(game_type: str, date: str) -> dict:
     """Aggregate tips from all available sources.
 
@@ -233,12 +286,17 @@ async def scrape_tips(game_type: str, date: str) -> dict:
     """
     results: dict[str, str] = {}
 
-    # Automated scrapers
-    travcash_tips = await scrape_travcash(game_type, date)
-    if travcash_tips:
-        results["travcash"] = travcash_tips
+    # 1. Load from local JSON cache file first
+    cached = _load_tips_cache_file(game_type, date)
+    results.update(cached)
 
-    # Manual tips
+    # 2. Automated scrapers (only if not already in cache)
+    if "travcash" not in results:
+        travcash_tips = await scrape_travcash(game_type, date)
+        if travcash_tips:
+            results["travcash"] = travcash_tips
+
+    # 3. Manual tips
     for source, text in _manual_tips.items():
         if text:
             results[source] = f"[Källa: {source} (manuellt)]\n\n{text}"

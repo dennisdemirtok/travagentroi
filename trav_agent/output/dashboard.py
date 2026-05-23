@@ -2917,10 +2917,22 @@ border-top:1px solid #2e3138}
   </div>
 </section>
 
-<section class="upcoming" style="padding:4rem 2rem;max-width:900px;margin:0 auto">
-  <h2 style="text-align:center;font-size:1.8rem;font-weight:800;margin-bottom:.5rem">Kommande omg&aring;ngar</h2>
-  <p style="text-align:center;color:#6b7280;margin-bottom:2rem">Klicka f&ouml;r att se fullst&auml;ndig AI-analys</p>
-  <div id="upcoming-list" style="display:flex;flex-direction:column;gap:.75rem;align-items:center">
+<style>
+.upcoming{padding:4rem 2rem;max-width:900px;margin:0 auto}
+.upcoming h2{text-align:center;font-size:1.8rem;font-weight:800;margin-bottom:.5rem}
+.upcoming .sub{text-align:center;color:#6b7280;margin-bottom:2rem}
+#upcoming-list{display:flex;flex-direction:column;gap:.75rem;align-items:center}
+.game-link{display:flex;align-items:center;gap:1rem;width:100%;max-width:500px;padding:1rem 1.5rem;background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:12px;text-decoration:none;color:#e2e8f0;transition:all .2s;cursor:pointer}
+.game-link:hover{border-color:#f59e0b;transform:translateY(-1px)}
+.game-link .badge{background:rgba(245,166,35,0.15);color:#f59e0b;padding:.3rem .8rem;border-radius:8px;font-weight:700;font-size:.9rem;min-width:50px;text-align:center}
+.game-link .date{flex:1}
+.game-link .arrow{color:#4b5563}
+</style>
+
+<section class="upcoming">
+  <h2>Kommande omg&aring;ngar</h2>
+  <p class="sub">Klicka f&ouml;r att se fullst&auml;ndig AI-analys</p>
+  <div id="upcoming-list">
     <p style="color:#4b5563">Laddar...</p>
   </div>
 </section>
@@ -2932,35 +2944,24 @@ border-top:1px solid #2e3138}
 <script>
 (async()=>{
   const el=document.getElementById('upcoming-list');
+  const keep=new Set(['V75','V85','V86','V64','GS75']);
   try{
     const r=await fetch('/api/upcoming');
     const d=await r.json();
-    if(!d.upcoming||d.upcoming.length===0){
-      el.innerHTML='<p style="color:#6b7280">Inga kommande omg&aring;ngar hittade.</p>';
-      return;
-    }
-    const days=['Sön','Mån','Tis','Ons','Tor','Fre','Lör'];
-    el.innerHTML=d.upcoming.map(u=>{
+    if(!d.upcoming||d.upcoming.length===0){el.innerHTML='<p style="color:#6b7280">Inga kommande omg\\u00e5ngar hittade.</p>';return;}
+    const days=['S\\u00f6n','M\\u00e5n','Tis','Ons','Tor','Fre','L\\u00f6r'];
+    let html='';
+    for(const u of d.upcoming){
       const dt=new Date(u.date+'T12:00:00');
       const day=days[dt.getDay()];
       const dateStr=dt.toLocaleDateString('sv-SE',{day:'numeric',month:'short'});
-      return u.games.map(g=>
-        `<a href="/dashboard/${g}/${u.date}" style="display:flex;align-items:center;gap:1rem;
-          width:100%;max-width:500px;padding:1rem 1.5rem;background:#151820;
-          border:1px solid rgba(255,255,255,0.06);border-radius:12px;
-          text-decoration:none;color:#e2e8f0;transition:all .2s"
-          onmouseover="this.style.borderColor='#f59e0b';this.style.transform='translateY(-1px)'"
-          onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='none'">
-          <span style="background:rgba(245,166,35,0.15);color:#f59e0b;padding:.3rem .8rem;
-            border-radius:8px;font-weight:700;font-size:.9rem;min-width:50px;text-align:center">${g}</span>
-          <span style="flex:1">${day} ${dateStr}</span>
-          <span style="color:#4b5563">&rarr;</span>
-        </a>`
-      ).join('');
-    }).join('');
-  }catch(e){
-    el.innerHTML='<p style="color:#ef4444">Kunde inte ladda omg&aring;ngar.</p>';
-  }
+      for(const g of u.games){
+        if(!keep.has(g.toUpperCase()))continue;
+        html+=`<a class="game-link" href="/dashboard/${g}/${u.date}"><span class="badge">${g}</span><span class="date">${day} ${dateStr}</span><span class="arrow">\\u2192</span></a>`;
+      }
+    }
+    el.innerHTML=html||'<p style="color:#6b7280">Inga omg\\u00e5ngar hittade.</p>';
+  }catch(e){el.innerHTML='<p style="color:#ef4444">Kunde inte ladda.</p>';}
 })();
 </script>
 

@@ -112,35 +112,35 @@ def get_todays_game_types() -> list[str]:
 class FactorWeights:
     """Vikter för varje analysfaktor. Summerar till 1.0.
 
-    Version 5: Optimerade utan data-leakage.
-    Beräknade med neutraliserade closing odds och temporalt filtrerade
-    karriärstatistik (recompute_career_from_starts). 1902 lopp
-    (2024-01 till 2026-04), alla speltyper.
+    Version 6: 10 faktorer, optimerade med random search + hill climbing.
+    Tre nya faktorer baserade på datamining av 14,292+ lopp:
+    - driver_class: Kuskens vinstprocent (1.89x lift för elitcuskar)
+    - age: Hästens ålder (peak vid 4 år, 1.37x lift)
+    - equipment: Barfot/sulkybyte (1.13x lift)
 
-    Resultat vs v4: top2 +1.5%, top3 +2.4%
+    Resultat vs v5 (7 faktorer):
+    - top1: 28.9% (+2.2pp)
+    - top2: 48.2% (+2.1pp)
+    - top3: 61.1% (+2.5pp)
 
-    Viktprinciper (validerade av optimizer):
-    - Tid (km_time) = starkaste enskilda signal (0.32)
-    - Kategori = distans/metod-matchning, oväntat stark (0.25)
-    - Prize/klass & startspår = jämna bidrag (0.15 var)
-    - Form = överraskande låg utan marknadssignal (0.03)
-    - Kusk/bana = svaga utan extern data (0.05 var)
+    Optimerat på 1,902 lopp (2024-01 till 2026-04) utan data-leakage
+    (neutraliserade closing odds + temporal karriärfiltrering).
 
-    Market weight = 0: Modellen förlitar sig helt på egna faktorer.
-    Closing odds (streckprocent) ger ~30% prediktiv kraft men är
-    inte tillgänglig i tillräcklig kvalitet pre-race för att vara
-    pålitlig i live-drift.
-
-    Interaktionstermer BORTTAGNA — de förstärkte brus.
+    Market weight = 0: Ren modell utan marknadsinblandning.
     """
 
-    time_analysis: float = 0.32
-    form_curve: float = 0.03
-    prize_index: float = 0.15
-    category_profile: float = 0.25
-    post_position: float = 0.15
-    driver_trainer: float = 0.05
-    track_profile: float = 0.05
+    time_analysis: float = 0.242
+    form_curve: float = 0.010
+    prize_index: float = 0.121
+    category_profile: float = 0.212
+    post_position: float = 0.129
+    driver_trainer: float = 0.010
+    track_profile: float = 0.024
+
+    # v6: Nya faktorer (datamining-baserade, optimerade)
+    driver_class: float = 0.122  # Kuskens vinstprocent — 1.89x lift
+    equipment: float = 0.012     # Barfot/sulky/sko-byte — 1.13x lift
+    age: float = 0.118           # Åldersfaktor — 1.37x lift vid 4 år
 
     # Interaktionstermer borttagna (förstärkte brus)
     interaction_track_post: float = 0.0
@@ -156,6 +156,9 @@ class FactorWeights:
             "category_profile": self.category_profile,
             "driver_trainer": self.driver_trainer,
             "post_position": self.post_position,
+            "driver_class": self.driver_class,
+            "equipment": self.equipment,
+            "age": self.age,
         }
 
     def interactions(self) -> list[tuple[str, str, float]]:

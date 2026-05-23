@@ -19,8 +19,11 @@ from typing import Optional
 from ..config import AnalysisConfig, DEFAULT_CONFIG
 from ..data.models import GameRound, Race, RaceEntry
 from .base import AnalysisFactor
+from .age_factor import AgeFactor
 from .category_profile import CategoryProfile
+from .driver_class import DriverClass
 from .driver_trainer import DriverTrainer
+from .equipment import Equipment
 from .form_curve import FormCurve
 from .post_position import PostPosition
 from .prize_index import PrizeIndex
@@ -43,6 +46,10 @@ class CompositeAnalyzer:
             CategoryProfile(),
             DriverTrainer(),
             PostPosition(),
+            # v6: Nya faktorer baserade på datamining av 14k+ lopp
+            DriverClass(),
+            Equipment(),
+            AgeFactor(),
         ]
 
     def analyze_race(self, race: Race) -> list[RaceEntry]:

@@ -499,16 +499,81 @@ class ATGClient:
                     bet_pct = bd / 10000.0  # 1120 → 0.1120 (11.20%)
                     break
 
+        # Driver statistics — parse win percentage and starts from most recent year
+        driver_win_pct = 0.0
+        driver_starts_year = 0
+        driver_data = data.get("driver", {})
+        if isinstance(driver_data, dict):
+            driver_stats = driver_data.get("statistics", {})
+            years_data = driver_stats.get("years", {})
+            if years_data:
+                # Pick the most recent year
+                latest_year = max(years_data.keys())
+                year_stats = years_data[latest_year]
+                if isinstance(year_stats, dict):
+                    driver_starts_year = year_stats.get("starts", 0)
+                    # winPercentage is per mille (1540 = 15.40% = 0.154)
+                    win_pct_raw = year_stats.get("winPercentage", 0)
+                    if win_pct_raw:
+                        driver_win_pct = win_pct_raw / 10000.0
+
+        # Shoes — parse structured shoe data
+        shoe_front_off = False
+        shoe_back_off = False
+        shoe_changed = False
+        shoes_data = data.get("shoes")
+        shoes_str = ""
+        if isinstance(shoes_data, dict):
+            front = shoes_data.get("front", {})
+            back = shoes_data.get("back", {})
+            if isinstance(front, dict):
+                shoe_front_off = not front.get("hasShoe", True)
+                if front.get("changed", False):
+                    shoe_changed = True
+            if isinstance(back, dict):
+                shoe_back_off = not back.get("hasShoe", True)
+                if back.get("changed", False):
+                    shoe_changed = True
+            # Build a human-readable string for backward compat
+            parts = []
+            if shoe_front_off and shoe_back_off:
+                parts.append("utan alla")
+            elif shoe_front_off:
+                parts.append("utan fram")
+            elif shoe_back_off:
+                parts.append("utan bak")
+            else:
+                parts.append("alla")
+            shoes_str = ", ".join(parts)
+        elif isinstance(shoes_data, str):
+            shoes_str = shoes_data
+        else:
+            shoes_str = str(shoes_data) if shoes_data else ""
+
+        # Sulky — check if sulky type was changed since last start
+        sulky_changed = False
+        sulky_data = data.get("sulky", {})
+        if isinstance(sulky_data, dict):
+            sulky_type = sulky_data.get("type", {})
+            if isinstance(sulky_type, dict):
+                sulky_changed = sulky_type.get("changed", False)
+
         return RaceEntry(
             horse=horse,
             post_position=data.get("number", 0),
             distance=data.get("distance", 0),
-            driver_name=data.get("driver", {}).get("name", "") if isinstance(data.get("driver"), dict) else "",
-            driver_id=data.get("driver", {}).get("id") if isinstance(data.get("driver"), dict) else None,
-            shoes=data.get("shoes", ""),
+            driver_name=driver_data.get("name", "") if isinstance(driver_data, dict) else "",
+            driver_id=driver_data.get("id") if isinstance(driver_data, dict) else None,
+            shoes=shoes_str,
             scratched=data.get("scratched", False),
             odds=odds_val,
             bet_percentage=bet_pct,
+            driver_win_pct=driver_win_pct,
+            driver_starts_year=driver_starts_year,
+            shoe_front_off=shoe_front_off,
+            shoe_back_off=shoe_back_off,
+            shoe_changed=shoe_changed,
+            sulky_changed=sulky_changed,
         )
 
     def _parse_past_start(self, data: dict) -> PastStart:

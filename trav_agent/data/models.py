@@ -200,6 +200,16 @@ class RaceEntry(BaseModel):
     shoes: str = ""  # skoinfo: "alla", "utan bak" etc.
     scratched: bool = False  # struken
 
+    # Driver statistics (from ATG API driver.statistics)
+    driver_win_pct: float = 0.0  # Driver's overall win percentage (0-1)
+    driver_starts_year: int = 0  # Driver's starts this year
+
+    # Equipment details (from ATG API horse.shoes + sulky)
+    shoe_front_off: bool = False  # Barefoot front (no front shoes)
+    shoe_back_off: bool = False  # Barefoot back (no back shoes)
+    shoe_changed: bool = False  # Shoes changed since last start
+    sulky_changed: bool = False  # Sulky type changed since last start
+
     # Speldata
     odds: Optional[float] = None  # aktuella odds
     bet_percentage: Optional[float] = None  # streckprocent i V-spelet

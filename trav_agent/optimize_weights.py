@@ -41,6 +41,10 @@ FACTOR_NAMES = [
     "post_position",
     "driver_trainer",
     "track_profile",
+    # v6: Nya datamining-baserade faktorer
+    "driver_class",
+    "equipment",
+    "age",
 ]
 
 
@@ -301,110 +305,106 @@ def grid_search(
     step: float = 0.05,
     market_weights: list[float] | None = None,
 ) -> list[OptResult]:
-    """Grid search over weight space.
+    """Smart search over 10-factor weight space.
 
-    Uses a coarse grid (step=0.05) with 7 factors.
-    To keep it tractable, we fix low-impact factors (driver, track)
-    and search the top 5 factors more aggressively.
+    With 10 factors, full grid search is intractable.
+    Strategy: random search (10,000 samples) + hill climbing refinement.
+
+    Phase 1: Random search with Dirichlet sampling (natural for weights summing to 1)
+    Phase 2: Hill climbing from top-10 configurations
     """
     if market_weights is None:
-        market_weights = [0.0, 0.05, 0.10, 0.15, 0.20, 0.30]
+        market_weights = [0.0]  # No market weight (neutralized in backtest)
 
     results: list[OptResult] = []
     best_score = 0.0
+    rng = np.random.default_rng(42)
 
-    # Phase 1: Search main factors (time, form, prize, category, post)
-    # Fix driver=0.05, track=0.05 initially
-    print("\n=== Phase 1: Main factor search ===", flush=True)
+    # ── Phase 1: Random search with informed priors ──
+    print("\n=== Phase 1: Random search (10,000 samples) ===", flush=True)
 
-    # Generate weight combinations that sum to ~0.90 (leaving 0.10 for driver+track)
-    main_factors = ["time_analysis", "form_curve", "prize_index", "category_profile", "post_position"]
+    # Dirichlet concentration parameters — higher = factor gets more weight
+    # Based on edge finder lift values
+    alpha = np.array([
+        3.0,   # time_analysis — strong signal
+        0.3,   # form_curve — weak without market
+        1.5,   # prize_index — decent
+        2.5,   # category_profile — strong
+        1.5,   # post_position — decent
+        0.3,   # driver_trainer (old, combo-based) — weak
+        0.3,   # track_profile — weak
+        3.0,   # driver_class — STRONGEST new signal (1.89x)
+        1.0,   # equipment — moderate (1.13x)
+        1.5,   # age — decent (1.37x)
+    ])
+
     combos_tested = 0
-
-    # Use wider steps for 5-dimensional search
-    weight_options = np.arange(0.05, 0.45, step)
-
     for mw in market_weights:
-        for t in weight_options:
-            for f in weight_options:
-                for p in weight_options:
-                    remainder = 0.90 - t - f - p
-                    if remainder < 0.10:
-                        continue
-                    # Split remainder between category and post
-                    for cat in np.arange(0.05, min(remainder, 0.35), step):
-                        post = remainder - cat
-                        if post < 0.03 or post > 0.25:
-                            continue
+        for _ in range(10000):
+            # Sample from Dirichlet — naturally sums to 1
+            raw_weights = rng.dirichlet(alpha)
+            # Enforce minimum weight of 0.01 per factor
+            raw_weights = np.maximum(raw_weights, 0.01)
+            raw_weights /= raw_weights.sum()
 
-                        weights = {
-                            "time_analysis": round(float(t), 3),
-                            "form_curve": round(float(f), 3),
-                            "prize_index": round(float(p), 3),
-                            "category_profile": round(float(cat), 3),
-                            "post_position": round(float(post), 3),
-                            "driver_trainer": 0.05,
-                            "track_profile": 0.05,
-                        }
+            weights = {
+                name: round(float(w), 4)
+                for name, w in zip(FACTOR_NAMES, raw_weights)
+            }
 
-                        result = evaluate_weights(races, weights, mw)
-                        results.append(result)
-                        combos_tested += 1
+            result = evaluate_weights(races, weights, mw)
+            results.append(result)
+            combos_tested += 1
+
+            if result.score > best_score:
+                best_score = result.score
+                print(
+                    f"  New best (#{combos_tested}): "
+                    f"top1={result.top1_rate:.1%} "
+                    f"top2={result.top2_rate:.1%} "
+                    f"top3={result.top3_rate:.1%} "
+                    f"score={result.score:.4f}",
+                    flush=True,
+                )
+
+    print(f"  Phase 1: tested {combos_tested} combinations", flush=True)
+
+    # ── Phase 2: Hill climbing from top-10 ──
+    print("\n=== Phase 2: Hill climbing refinement ===", flush=True)
+    top10 = sorted(results, key=lambda r: r.score, reverse=True)[:10]
+
+    refined_results: list[OptResult] = []
+    fine_steps = [0.03, 0.02, 0.01]
+
+    for base in top10:
+        bw = base.weights
+        for fine_step in fine_steps:
+            for f1 in FACTOR_NAMES:
+                for delta in [-fine_step, fine_step]:
+                    w2 = dict(bw)
+                    w2[f1] = max(0.01, w2[f1] + delta)
+                    # Compensate: adjust largest other factor
+                    others = [f for f in FACTOR_NAMES if f != f1]
+                    biggest = max(others, key=lambda f: w2[f])
+                    w2[biggest] = max(0.01, w2[biggest] - delta)
+                    # Renormalize
+                    total = sum(w2.values())
+                    w2 = {k: round(v / total, 4) for k, v in w2.items()}
+
+                    for mw in market_weights:
+                        result = evaluate_weights(races, w2, mw)
+                        refined_results.append(result)
 
                         if result.score > best_score:
                             best_score = result.score
                             print(
-                                f"  New best (#{combos_tested}): "
+                                f"  Refined: "
                                 f"top1={result.top1_rate:.1%} "
                                 f"top2={result.top2_rate:.1%} "
                                 f"top3={result.top3_rate:.1%} "
-                                f"mw={mw:.2f} "
-                                f"w={weights}",
+                                f"score={result.score:.4f}",
                                 flush=True,
                             )
-
-    print(f"  Phase 1: tested {combos_tested} combinations", flush=True)
-
-    # Phase 2: Refine top-5 configs with fine-grained perturbations
-    print("\n=== Phase 2: Refinement ===", flush=True)
-    top5 = sorted(results, key=lambda r: r.score, reverse=True)[:5]
-
-    refined_results: list[OptResult] = []
-    fine_step = 0.02
-
-    for base in top5:
-        bw = base.weights
-        # Try nearby market weights
-        for mw in [base.market_weight - 0.05, base.market_weight, base.market_weight + 0.05]:
-            if mw < 0 or mw > 0.50:
-                continue
-            # Try shifting weight between each pair of factors
-            for i, f1 in enumerate(FACTOR_NAMES):
-                for delta in [-fine_step, fine_step]:
-                    w2 = dict(bw)
-                    w2[f1] = max(0.02, w2[f1] + delta)
-                    # Compensate by adjusting largest other factor
-                    others = [f for f in FACTOR_NAMES if f != f1]
-                    biggest = max(others, key=lambda f: w2[f])
-                    w2[biggest] = max(0.02, w2[biggest] - delta)
-                    # Renormalize
-                    total = sum(w2.values())
-                    w2 = {k: round(v / total, 3) for k, v in w2.items()}
-
-                    result = evaluate_weights(races, w2, mw)
-                    refined_results.append(result)
-
-                    if result.score > best_score:
-                        best_score = result.score
-                        print(
-                            f"  Refined: "
-                            f"top1={result.top1_rate:.1%} "
-                            f"top2={result.top2_rate:.1%} "
-                            f"top3={result.top3_rate:.1%} "
-                            f"mw={mw:.2f} "
-                            f"w={w2}",
-                            flush=True,
-                        )
 
     results.extend(refined_results)
     print(f"  Phase 2: tested {len(refined_results)} additional combinations", flush=True)
@@ -436,21 +436,22 @@ def print_results(results: list[OptResult], top_n: int = 20) -> None:
               f"score={current_result.score:.4f} "
               f"avgRank={current_result.avg_picks_needed:.2f}")
 
-    print(f"\n{'#':>3} {'top1':>6} {'top2':>6} {'top3':>6} {'score':>7} {'avgR':>5} "
-          f"{'mw':>4} │ {'time':>5} {'form':>5} {'prize':>5} {'cat':>5} {'post':>5} {'drv':>5} {'trk':>5}")
-    print("-" * 100)
+    header = f"\n{'#':>3} {'top1':>6} {'top2':>6} {'top3':>6} {'score':>7} {'avgR':>5}"
+    for name in FACTOR_NAMES:
+        short = name[:5]
+        header += f" {short:>5}"
+    print(header)
+    print("-" * (45 + 6 * len(FACTOR_NAMES)))
 
     for i, r in enumerate(sorted_results[:top_n], 1):
         w = r.weights
-        print(
+        line = (
             f"{i:>3} {r.top1_rate:>5.1%} {r.top2_rate:>5.1%} {r.top3_rate:>5.1%} "
-            f"{r.score:>7.4f} {r.avg_picks_needed:>5.2f} "
-            f"{r.market_weight:>4.2f} │ "
-            f"{w.get('time_analysis', 0):>5.2f} {w.get('form_curve', 0):>5.2f} "
-            f"{w.get('prize_index', 0):>5.2f} {w.get('category_profile', 0):>5.2f} "
-            f"{w.get('post_position', 0):>5.2f} {w.get('driver_trainer', 0):>5.2f} "
-            f"{w.get('track_profile', 0):>5.2f}"
+            f"{r.score:>7.4f} {r.avg_picks_needed:>5.2f}"
         )
+        for name in FACTOR_NAMES:
+            line += f" {w.get(name, 0):>5.2f}"
+        print(line)
 
     # Per-factor analysis: how much does each factor matter?
     print("\n\n=== FACTOR IMPORTANCE (isolated top-1 accuracy) ===\n")
@@ -548,10 +549,10 @@ async def main():
 
     # Step 5: Best config suggestion
     best = sorted(results, key=lambda r: r.score, reverse=True)[0]
-    print("\n\n=== RECOMMENDED CONFIG ===\n")
+    print("\n\n=== RECOMMENDED CONFIG (v6) ===\n")
     print("class FactorWeights:")
     for name in FACTOR_NAMES:
-        print(f"    {name}: float = {best.weights.get(name, 0.05):.3f}")
+        print(f"    {name}: float = {best.weights.get(name, 0.05):.4f}")
     print(f"\nsuper_score_model_weight: float = {1.0 - best.market_weight:.2f}")
     print(f"\nExpected: top1={best.top1_rate:.1%}  top2={best.top2_rate:.1%}  top3={best.top3_rate:.1%}")
 

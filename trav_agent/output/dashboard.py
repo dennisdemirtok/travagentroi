@@ -18,22 +18,22 @@ def _esc(s: str) -> str:
 
 def _rec_color(rec: str) -> str:
     return {
-        "spik": "#1a1600",
-        "2-val": "#0c1a30",
-        "3-val": "#1e0c30",
-        "gardering": "#1e2028",
-        "strykning": "#2a0a0a",
-    }.get(rec, "#e2e8f0")
+        "spik": "#92400e",
+        "2-val": "#1e3a5f",
+        "3-val": "#581c87",
+        "gardering": "#334155",
+        "strykning": "#991b1b",
+    }.get(rec, "#64748b")
 
 
 def _rec_bg(rec: str) -> str:
     return {
-        "spik": "#f59e0b",
-        "2-val": "#3b82f6",
-        "3-val": "#a855f7",
-        "gardering": "#64748b",
-        "strykning": "#ef4444",
-    }.get(rec, "rgba(255,255,255,0.06)")
+        "spik": "rgba(245,158,11,0.15)",
+        "2-val": "rgba(59,130,246,0.12)",
+        "3-val": "rgba(168,85,247,0.12)",
+        "gardering": "rgba(100,116,139,0.1)",
+        "strykning": "rgba(239,68,68,0.12)",
+    }.get(rec, "rgba(0,0,0,0.04)")
 
 
 def _plac_color(plac) -> str:
@@ -1769,57 +1769,25 @@ def generate_dashboard_html(
     risk_bar = _risk_summary_bar(game_round)
 
     current_key = f"{game_round.game_type}/{game_round.round_date}"
-    dropdown = _round_dropdown_html(current_key, norm_rounds)
-    sidebar = _sidebar_html(
-        game_round,
-        has_system=bool(system_section),
-        has_backlog=bool(backlog_section),
-        has_stats=bool(stats_section),
-    )
 
-    # Wrap each race in its own section (premium gating on races 3-8)
-    _premium_cta = (
-        '<div class="premium-cta">'
-        '<h3>Premium-analys</h3>'
-        '<p>Lås upp detaljerade analyser för alla avdelningar</p>'
-        '<button class="premium-cta-btn">Uppgradera</button>'
-        '</div>'
-    )
+    # Round dropdown for top navbar
+    round_dropdown = ""
+    if norm_rounds and len(norm_rounds) >= 2:
+        round_options = []
+        for key, gt, d_str, is_finished, track in sorted(norm_rounds, key=lambda r: r[2], reverse=True):
+            sel = " selected" if key == current_key else ""
+            status = "✓" if is_finished else "⏳"
+            track_str = f" {track}" if track else ""
+            round_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
+        round_dropdown = '<select class="round-select" onchange="changeRound(this)">' + "".join(round_options) + '</select>'
+
+    # Race sections (all visible — no premium gating)
     race_sections_parts = []
     for n, h in race_htmls.items():
-        if not premium and n >= 3:
-            race_sections_parts.append(
-                f'<section id="s-race-{n}" class="dashboard-section">'
-                f'<div class="premium-locked">{h}{_premium_cta}</div></section>'
-            )
-        else:
-            race_sections_parts.append(
-                f'<section id="s-race-{n}" class="dashboard-section">{h}</section>'
-            )
+        race_sections_parts.append(
+            f'<section id="s-race-{n}" class="dashboard-section">{h}</section>'
+        )
     race_sections = "".join(race_sections_parts)
-
-    # AI-chatt sektion
-    chat_section = (
-        '<div class="chat-section">'
-        '<div class="chat-header" onclick="toggleChat()">'
-        '<h2>AI Analys</h2>'
-        '<button class="chat-toggle" id="chat-toggle-icon">&#9654;</button>'
-        '</div>'
-        '<div class="chat-body" id="chat-body">'
-        '<div class="chat-suggestions">'
-        '<button class="chat-suggest-btn" onclick="askSuggestion(\'Sammanfatta omgången och ge dina tankar\')">Sammanfatta</button>'
-        '<button class="chat-suggest-btn" onclick="askSuggestion(\'Vilka lopp har högst skrällrisk och varför?\')">Skrällrisker</button>'
-        '<button class="chat-suggest-btn" onclick="askSuggestion(\'Ge mig dina bästa spikar med motivering\')">Spikar</button>'
-        '<button class="chat-suggest-btn" onclick="askSuggestion(\'Finns det value-hästar som sticker ut?\')">Value</button>'
-        '</div>'
-        '<div class="chat-messages" id="chat-messages"></div>'
-        '<div class="chat-input-row">'
-        '<input class="chat-input" id="chat-input" placeholder="Fråga om omgången...">'
-        '<button class="chat-send" id="chat-send" onclick="sendChat()">Skicka</button>'
-        '</div>'
-        '</div>'
-        '</div>'
-    )
 
     # Spelvärde — Hero section with SVG ring (grid layout)
     sv = _calculate_spelvarde(game_round)
@@ -1829,25 +1797,23 @@ def generate_dashboard_html(
         offset = circumference * (1 - score / 100)
         sv_bar = (
             f'<div class="hero-grid">'
-            # Left: Score card with ring
             f'<div class="hero-score-card">'
             f'<svg width="140" height="140" viewBox="0 0 140 140">'
             f'<defs><linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
             f'<stop offset="0%" stop-color="#4ade80"/><stop offset="100%" stop-color="#22c55e"/>'
             f'</linearGradient></defs>'
-            f'<circle cx="70" cy="70" r="60" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>'
+            f'<circle cx="70" cy="70" r="60" fill="none" stroke="#e5e7eb" stroke-width="8"/>'
             f'<circle cx="70" cy="70" r="60" fill="none" stroke="url(#scoreGrad)" stroke-width="8" '
             f'stroke-dasharray="{circumference:.1f}" stroke-dashoffset="{offset:.1f}" '
             f'stroke-linecap="round" transform="rotate(-90 70 70)"/>'
             f'<text x="70" y="65" text-anchor="middle" font-size="36" font-weight="800" '
-            f'fill="#e2e8f0" font-family="\'DM Mono\',monospace">{score}</text>'
+            f'fill="#1e293b" font-family="\'DM Mono\',monospace">{score}</text>'
             f'<text x="70" y="85" text-anchor="middle" font-size="10" font-weight="600" '
-            f'fill="#4b5563" font-family="\'DM Sans\',sans-serif" letter-spacing="0.08em">SPELVÄRDE</text>'
+            f'fill="#6b7280" font-family="\'DM Sans\',sans-serif" letter-spacing="0.08em">SPELVÄRDE</text>'
             f'</svg>'
             f'<div class="hero-score-text" style="color:{sv["color"]}">{_esc(sv["text"])}</div>'
             f'<div class="hero-score-advice">{_esc(sv["advice"])}</div>'
             f'</div>'
-            # Right: KPIs + heatmap
             f'<div class="hero-right">'
             f'<div class="hero-kpis">'
             f'<div class="hero-kpi blue"><div class="hero-kpi-val">{sv["details"]["streck"]}</div><div class="hero-kpi-lbl">Streck</div></div>'
@@ -1861,19 +1827,34 @@ def generate_dashboard_html(
     else:
         sv_bar = ""
 
-    if system_section and not premium:
-        system_btn = '<button onclick="openDrawer()" class="system-btn" style="opacity:.5;cursor:not-allowed" disabled>System 🔒</button>'
-    elif system_section:
-        system_btn = '<button onclick="openDrawer()" class="system-btn">System</button>'
-    else:
-        system_btn = ""
+    # Sidebar nav items for dashboard view
+    gt = _esc(game_round.game_type)
+    div_items_html = []
+    for race in game_round.races:
+        risk_cls = "high" if race.upset_risk >= 50 else ("medium" if race.upset_risk >= 25 else "low")
+        risk_color = "#ef4444" if risk_cls == "high" else ("#eab308" if risk_cls == "medium" else "#22c55e")
+        div_items_html.append(
+            f'<button class="div-item" data-div="{race.race_number}" '
+            f'onclick="showDivision({race.race_number})">'
+            f'<span class="div-num">{race.race_number}</span>'
+            f'<span>{gt}-{race.race_number}</span>'
+            f'<span class="div-dot" style="background:{risk_color}"></span>'
+            f'</button>'
+        )
+    sidebar_div_items = "".join(div_items_html)
 
-    # Division tabs for top-bar
-    div_tabs = '<div class="div-tabs">' + "".join(
-        f'<button class="div-tab" data-section="race-{r.race_number}" '
-        f'onclick="showDivision({r.race_number})">{r.race_number}</button>'
-        for r in game_round.races
-    ) + '</div>'
+    system_drawer_btn = ""
+    if system_section:
+        system_drawer_btn = (
+            '<button class="nav-item" data-section="system" onclick="openDrawer()">'
+            '<span class="nav-icon">'
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>'
+            '</span><span>System</span></button>'
+        )
+
+    track_name = _esc(game_round.track_name or "")
+    date_str = str(game_round.round_date) if game_round.round_date else ""
 
     return f"""<!DOCTYPE html>
 <html lang="sv">
@@ -1885,129 +1866,118 @@ def generate_dashboard_html(
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
-::selection{{background:rgba(59,130,246,0.3)}}
+::selection{{background:rgba(59,130,246,0.2)}}
 body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;
-background:#0c0e14;color:#c9d1d9;line-height:1.6;-webkit-font-smoothing:antialiased}}
+background:#f5f6f8;color:#1e293b;line-height:1.6;-webkit-font-smoothing:antialiased}}
 
-/* ── Sidebar ── */
-.sidebar{{width:220px;min-height:100vh;background:#111318;
-border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;
-position:fixed;left:0;top:0;bottom:0;z-index:100;transition:width 0.25s ease}}
-.sidebar.collapsed{{width:64px}}
-.sidebar.collapsed .sb-text{{display:none}}
-.sb-brand{{padding:20px;border-bottom:1px solid rgba(255,255,255,0.06);
-display:flex;align-items:center;gap:10px;cursor:pointer}}
-.sb-icon{{width:36px;height:36px;border-radius:10px;
-background:linear-gradient(135deg,#f59e0b,#d97706);
-display:flex;align-items:center;justify-content:center;flex-shrink:0;
-font-size:16px;color:#000;font-weight:700}}
-.sb-title{{font-size:15px;font-weight:700;color:#f0f0f0;letter-spacing:-0.01em;line-height:1.2}}
-.sb-sub{{font-size:11px;color:#6b7280;font-weight:500}}
-.sb-race{{background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);
-border-radius:10px;padding:12px 14px;margin:16px;cursor:pointer}}
-.sb-race-type{{font-size:13px;font-weight:700;color:#60a5fa}}
-.sb-race-meta{{font-size:12px;color:#6b7280;margin-top:4px}}
-.sb-race-oms{{margin-top:6px;font-size:11px;color:#6b7280}}
-.sb-race-oms span{{color:#4ade80;font-weight:600}}
-.sb-nav{{padding:0 12px;flex:1;overflow-y:auto}}
+/* ── Top Navbar ── */
+.top-navbar{{height:56px;background:#ffffff;border-bottom:1px solid #e5e7eb;
+display:flex;align-items:center;justify-content:space-between;padding:0 24px;
+position:fixed;top:0;left:0;right:0;z-index:200}}
+.nav-brand{{font-size:17px;font-weight:800;color:#1e293b;letter-spacing:-0.02em;
+display:flex;align-items:center;gap:8px;flex-shrink:0}}
+.nav-brand span{{color:#f59e0b}}
+.nav-tabs{{display:flex;gap:4px;background:#f1f5f9;border-radius:10px;padding:3px}}
+.nav-tab{{padding:6px 18px;border-radius:8px;border:none;background:transparent;
+cursor:pointer;font-size:13px;font-weight:500;color:#64748b;
+font-family:inherit;transition:all 0.15s;white-space:nowrap}}
+.nav-tab:hover{{color:#1e293b}}
+.nav-tab.active{{background:#ffffff;color:#1e293b;font-weight:600;
+box-shadow:0 1px 3px rgba(0,0,0,0.08)}}
+.nav-right{{display:flex;align-items:center;gap:12px}}
+.round-select{{padding:6px 12px;border-radius:10px;border:1px solid #e5e7eb;
+background:#ffffff;color:#1e293b;font-size:13px;cursor:pointer;outline:none;
+font-family:inherit;transition:border-color .2s}}
+.round-select:hover{{border-color:#cbd5e1}}
+
+/* ── App layout ── */
+.app-layout{{display:flex;padding-top:56px;min-height:100vh}}
+
+/* ── Left Sidebar ── */
+.sidebar{{width:220px;background:#ffffff;border-right:1px solid #e5e7eb;
+position:fixed;left:0;top:56px;bottom:0;z-index:100;
+display:flex;flex-direction:column;overflow-y:auto}}
+.sb-info{{padding:16px;border-bottom:1px solid #e5e7eb}}
+.sb-info-type{{font-size:13px;font-weight:700;color:#3b82f6}}
+.sb-info-meta{{font-size:12px;color:#6b7280;margin-top:2px}}
+.sb-nav{{padding:8px 12px;flex:1;overflow-y:auto}}
 .nav-item{{width:100%;display:flex;align-items:center;gap:10px;
-padding:10px 12px;background:transparent;border:none;border-radius:8px;
-cursor:pointer;color:#6b7280;font-size:13px;font-weight:500;
+padding:9px 12px;background:transparent;border:none;border-radius:8px;
+cursor:pointer;color:#64748b;font-size:13px;font-weight:500;
 font-family:inherit;transition:all 0.15s;text-align:left}}
-.nav-item:hover{{background:rgba(255,255,255,0.04)}}
-.nav-item.active{{background:rgba(59,130,246,0.1);color:#60a5fa;font-weight:600}}
+.nav-item:hover{{background:#f8fafc}}
+.nav-item.active{{background:rgba(59,130,246,0.08);color:#3b82f6;font-weight:600}}
 .nav-icon{{width:18px;text-align:center;flex-shrink:0}}
-.nav-divider{{height:1px;background:rgba(255,255,255,0.06);margin:12px 0}}
-.nav-label{{font-size:10px;font-weight:600;color:#4b5563;
+.nav-divider{{height:1px;background:#e5e7eb;margin:10px 0}}
+.nav-label{{font-size:10px;font-weight:600;color:#94a3b8;
 letter-spacing:0.08em;padding:6px 12px;text-transform:uppercase}}
 .div-item{{width:100%;display:flex;align-items:center;gap:8px;
 padding:7px 12px;background:transparent;border:none;border-radius:6px;
-cursor:pointer;color:#6b7280;font-size:12px;font-weight:400;
+cursor:pointer;color:#64748b;font-size:12px;font-weight:400;
 font-family:inherit;transition:all 0.15s;text-align:left;margin-bottom:1px}}
-.div-item:hover{{background:rgba(255,255,255,0.03)}}
-.div-item.active{{background:rgba(59,130,246,0.1);color:#e2e8f0}}
+.div-item:hover{{background:#f8fafc}}
+.div-item.active{{background:rgba(59,130,246,0.08);color:#1e293b}}
 .div-num{{width:22px;height:22px;border-radius:6px;font-size:11px;font-weight:700;
 display:inline-flex;align-items:center;justify-content:center;
-background:rgba(255,255,255,0.04);color:#6b7280;flex-shrink:0}}
-.div-item.active .div-num{{background:rgba(59,130,246,0.2);color:#60a5fa}}
+background:#f1f5f9;color:#64748b;flex-shrink:0}}
+.div-item.active .div-num{{background:rgba(59,130,246,0.15);color:#3b82f6}}
 .div-dot{{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:0.8}}
-.sb-premium{{padding:16px;border-top:1px solid rgba(255,255,255,0.06)}}
-.sb-premium-card{{background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));
-border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px 14px}}
-.sb-premium-btn{{margin-top:10px;width:100%;padding:7px 0;
-background:linear-gradient(135deg,#f59e0b,#d97706);
-border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}}
 
-/* ── App layout ── */
-.app-layout{{display:flex;min-height:100vh}}
-.main-area{{flex:1;margin-left:220px;transition:margin-left 0.25s ease;
-display:flex;flex-direction:column;min-height:100vh}}
+/* Agent sidebar */
+.agent-sidebar{{display:none}}
+.agent-sidebar .agent-new-btn{{width:calc(100% - 24px);margin:12px 12px 8px;padding:9px;
+border-radius:8px;border:1px solid #e5e7eb;background:#ffffff;color:#1e293b;
+font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}}
+.agent-sidebar .agent-new-btn:hover{{background:#f8fafc;border-color:#cbd5e1}}
+.agent-sidebar .agent-chips{{padding:8px 12px;display:flex;flex-direction:column;gap:4px}}
+.agent-sidebar .agent-chip{{padding:8px 12px;border-radius:8px;border:none;
+background:#f8fafc;color:#64748b;font-size:12px;cursor:pointer;
+font-family:inherit;text-align:left;transition:all .15s}}
+.agent-sidebar .agent-chip:hover{{background:#f1f5f9;color:#1e293b}}
 
-/* ── Top bar ── */
-.top-bar{{height:52px;background:#111318;
-border-bottom:1px solid rgba(255,255,255,0.06);
-display:flex;align-items:center;justify-content:space-between;
-padding:0 28px;position:sticky;top:0;z-index:50;flex-shrink:0}}
-.top-bar-left{{display:flex;align-items:center;gap:16px}}
-.top-bar-right{{display:flex;align-items:center;gap:12px}}
-.top-stat{{color:#4b5563;font-size:.78rem;font-weight:500;white-space:nowrap;
-font-family:'DM Mono',monospace}}
-.round-select{{padding:.35rem .8rem;border-radius:8px;border:1px solid rgba(255,255,255,0.06);
-background:rgba(255,255,255,.04);color:#c9d1d9;font-size:.82rem;cursor:pointer;
-max-width:260px;outline:none;transition:border-color .2s;font-family:inherit}}
-.round-select:hover{{border-color:rgba(255,255,255,.15)}}
-.round-select option{{background:#151820;color:#c9d1d9}}
+/* ── Main content area ── */
+.main-area{{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:calc(100vh - 56px)}}
+.content{{overflow-y:auto;flex:1;padding:24px 28px;background:#f5f6f8}}
 
-/* Division tabs in top bar */
-.div-tabs{{display:flex;background:rgba(255,255,255,0.04);border-radius:8px;padding:3px;gap:2px}}
-.div-tab{{width:30px;height:28px;display:flex;align-items:center;justify-content:center;
-background:transparent;border:none;border-radius:6px;cursor:pointer;color:#6b7280;
-font-size:12px;font-weight:600;transition:all 0.15s;font-family:inherit}}
-.div-tab:hover{{color:#9ca3af}}
-.div-tab.active{{background:#3b82f6;color:#fff}}
+/* ── Views ── */
+.view{{display:none;max-width:1100px;margin:0 auto;width:100%}}
+.view.active{{display:block}}
 
-.system-btn{{padding:6px 16px;border-radius:6px;border:none;
-background:linear-gradient(135deg,#f59e0b,#d97706);
-color:#000;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;
-transition:all .25s;font-family:inherit}}
-.system-btn:hover{{filter:brightness(1.1);transform:translateY(-1px)}}
-
-/* ── Content ── */
-.content{{overflow-y:auto;flex:1;padding:24px 28px;background:#0c0e14}}
+/* Dashboard sections within dashboard view */
 .dashboard-section{{display:none;max-width:1100px;margin:0 auto}}
 .dashboard-section.active{{display:block}}
 
-/* System drawer — fullscreen modal */
-.system-drawer{{position:fixed;inset:0;background:#0c0e14;z-index:200;
+/* System drawer - fullscreen modal */
+.system-drawer{{position:fixed;inset:0;background:#f5f6f8;z-index:300;
 transform:translateY(100%);transition:transform .35s ease;overflow-y:auto;padding:2rem}}
 .system-drawer.open{{transform:translateY(0)}}
-.drawer-overlay{{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:199;display:none;
-backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}}
+.drawer-overlay{{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:299;display:none;
+backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}}
 .drawer-overlay.open{{display:block}}
-.drawer-close{{position:fixed;top:1.2rem;right:1.5rem;background:#151820;border:1px solid rgba(255,255,255,0.06);
+.drawer-close{{position:fixed;top:1.2rem;right:1.5rem;background:#ffffff;border:1px solid #e5e7eb;
 font-size:1.3rem;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;
-cursor:pointer;color:#6b7280;z-index:201;transition:all .2s}}
-.drawer-close:hover{{color:#e2e8f0;background:#1a1f2b}}
+cursor:pointer;color:#64748b;z-index:301;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.drawer-close:hover{{color:#1e293b;background:#f8fafc}}
 
-/* Cards */
-.summary-card,.race-card{{background:#151820;border-radius:14px;padding:1.8rem;
-margin-bottom:1.5rem;border:1px solid rgba(255,255,255,0.06);
+/* ── Cards ── */
+.summary-card,.race-card{{background:#ffffff;border-radius:14px;padding:1.8rem;
+margin-bottom:1.5rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);
 transition:all .2s ease}}
-.race-card:hover{{background:#1a1f2b}}
+.race-card:hover{{background:#fafbfc}}
 .race-header{{display:flex;justify-content:space-between;align-items:baseline;
 flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}}
-.race-header h2{{font-size:1.25rem;color:#e2e8f0;font-weight:700;letter-spacing:-0.01em}}
+.race-header h2{{font-size:1.25rem;color:#1e293b;font-weight:700;letter-spacing:-0.01em}}
 .race-meta{{color:#6b7280;font-size:.85rem}}
-.summary-card h2{{font-size:1.25rem;color:#e2e8f0;margin-bottom:1rem;font-weight:700;letter-spacing:-0.01em}}
+.summary-card h2{{font-size:1.25rem;color:#1e293b;margin-bottom:1rem;font-weight:700;letter-spacing:-0.01em}}
 .table-wrap{{overflow-x:auto}}
 table{{width:100%;border-collapse:collapse;font-size:.84rem}}
 thead{{z-index:5}}
-th{{background:#111318;color:#4b5563;text-transform:uppercase;font-size:.68rem;font-weight:600;
-letter-spacing:.06em;padding:.7rem .6rem;text-align:left;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.06)}}
-td{{padding:.65rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e2e8f0}}
-tr:hover td{{background:rgba(255,255,255,0.02)}}
+th{{background:#f8fafc;color:#64748b;text-transform:uppercase;font-size:.68rem;font-weight:600;
+letter-spacing:.06em;padding:.7rem .6rem;text-align:left;white-space:nowrap;border-bottom:1px solid #e5e7eb}}
+td{{padding:.65rem .6rem;border-bottom:1px solid #f1f5f9;color:#1e293b}}
+tr:hover td{{background:#f8fafc}}
 .pos{{font-weight:800;color:#f59e0b;width:2rem;text-align:center;font-variant-numeric:tabular-nums}}
-.horse-name{{font-weight:600;white-space:nowrap;color:#e2e8f0}}
+.horse-name{{font-weight:600;white-space:nowrap;color:#1e293b}}
 .score{{font-size:1rem;font-variant-numeric:tabular-nums}}
 .score strong{{color:#f59e0b}}
 .bet{{color:#6b7280}}
@@ -2017,57 +1987,57 @@ tr:hover td{{background:rgba(255,255,255,0.02)}}
 font-size:.65rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
 box-shadow:0 1px 4px rgba(245,166,35,0.3)}}
 .value-picks{{background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.15);border-radius:10px;
-padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#f59e0b}}
+padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#b45309}}
 .factor-cell{{position:relative;width:55px;min-width:55px}}
-.factor-bar{{position:absolute;left:0;top:0;bottom:0;background:#f59e0b;opacity:.12;border-radius:3px}}
+.factor-bar{{position:absolute;left:0;top:0;bottom:0;background:#f59e0b;opacity:.1;border-radius:3px}}
 .factor-val{{position:relative;z-index:1;font-size:.8rem;color:#6b7280}}
 .race-link{{color:#f59e0b;text-decoration:none;font-weight:600}}
 .race-link:hover{{color:#d4911e;text-decoration:underline}}
 
 /* Expandable rows */
 .horse-row.clickable{{cursor:pointer}}
-.horse-row.clickable:hover td{{background:rgba(255,255,255,0.02);transition:background .15s}}
-.toggle-icon{{display:inline-block;font-size:.65rem;transition:transform .2s;color:#4b5563;margin-right:.3rem}}
+.horse-row.clickable:hover td{{background:#f8fafc;transition:background .15s}}
+.toggle-icon{{display:inline-block;font-size:.65rem;transition:transform .2s;color:#94a3b8;margin-right:.3rem}}
 .horse-row.expanded .toggle-icon{{transform:rotate(90deg)}}
-.detail-row{{background:#111318}}
+.detail-row{{background:#f8fafc}}
 .detail-row.hidden{{display:none}}
 .detail-row td{{padding:0}}
 .detail-content{{padding:.9rem 1.2rem 1.2rem 2.5rem;border-left:3px solid #f59e0b}}
 .career-stats{{display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:.6rem;font-size:.82rem}}
 .career-item{{color:#6b7280}}
-.career-item strong{{color:#e2e8f0}}
+.career-item strong{{color:#1e293b}}
 .starts-table{{width:100%;font-size:.8rem}}
-.starts-table th{{background:#111318;font-size:.65rem;padding:.4rem .4rem}}
-.starts-table td{{padding:.35rem .4rem;border-bottom:1px solid rgba(255,255,255,0.04)}}
-.starts-table tr:hover td{{background:rgba(255,255,255,0.02)}}
+.starts-table th{{background:#f8fafc;font-size:.65rem;padding:.4rem .4rem}}
+.starts-table td{{padding:.35rem .4rem;border-bottom:1px solid #f1f5f9}}
+.starts-table tr:hover td{{background:#f1f5f9}}
 .start-date{{color:#6b7280;white-space:nowrap;font-size:.75rem}}
 .km-time{{font-family:monospace;font-weight:600}}
 .plac-badge{{font-weight:700}}
-.no-starts{{color:#4b5563;font-style:italic;font-size:.85rem}}
+.no-starts{{color:#94a3b8;font-style:italic;font-size:.85rem}}
 
 /* Trend */
 .trend-cell{{white-space:nowrap;min-width:50px}}
 .trend{{font-weight:600;font-size:.82rem}}
 .trend-up{{color:#22c55e}}
 .trend-down{{color:#ef4444}}
-.trend.neutral{{color:#4b5563}}
+.trend.neutral{{color:#94a3b8}}
 
 /* Sparkline */
 .sparkline{{width:48px;height:20px;vertical-align:middle;margin-left:.3rem}}
 
 /* Spårtrappa badge */
-.stair-badge{{background:rgba(124,58,237,0.15);color:#a78bfa;padding:.15rem .6rem;border-radius:10px;
-font-size:.75rem;font-weight:600;margin-left:.5rem;vertical-align:middle;border:1px solid rgba(124,58,237,0.2)}}
+.stair-badge{{background:rgba(124,58,237,0.1);color:#7c3aed;padding:.15rem .6rem;border-radius:10px;
+font-size:.75rem;font-weight:600;margin-left:.5rem;vertical-align:middle;border:1px solid rgba(124,58,237,0.15)}}
 .race-name-label{{color:#6b7280;font-size:.78rem;margin-top:.2rem;font-style:italic}}
 
 /* Race classification */
 .race-class-badge{{padding:.2rem .6rem;border-radius:8px;font-size:.72rem;font-weight:700;margin-left:.5rem}}
-.race-class-badge.spiklopp{{background:rgba(34,197,94,0.12);color:#22c55e}}
-.race-class-badge.oppet{{background:rgba(234,179,8,0.12);color:#eab308}}
-.race-class-badge.skrallopp{{background:rgba(239,68,68,0.12);color:#ef4444}}
+.race-class-badge.spiklopp{{background:rgba(34,197,94,0.1);color:#16a34a}}
+.race-class-badge.oppet{{background:rgba(234,179,8,0.1);color:#ca8a04}}
+.race-class-badge.skrallopp{{background:rgba(239,68,68,0.1);color:#dc2626}}
 
 /* Time highlights */
-.time-highlight{{color:#f59e0b;font-family:monospace}}
+.time-highlight{{color:#b45309;font-family:monospace}}
 .time-estimate{{color:#d97706;font-family:monospace;font-style:italic}}
 
 /* Time range box */
@@ -2075,7 +2045,7 @@ font-size:.75rem;font-weight:600;margin-left:.5rem;vertical-align:middle;border:
 display:inline-block;font-size:.82rem;border-left:3px solid #f59e0b}}
 .time-range-box.estimated{{border-left-color:#d97706}}
 .time-label{{color:#6b7280;margin-right:.3rem}}
-.time-meta{{color:#4b5563;font-size:.72rem;font-style:italic;margin-left:.3rem}}
+.time-meta{{color:#94a3b8;font-size:.72rem;font-style:italic;margin-left:.3rem}}
 
 /* GT tag */
 .gt-tag{{padding:.1rem .45rem;border-radius:8px;font-size:.7rem;font-weight:700;
@@ -2087,167 +2057,169 @@ letter-spacing:.04em;white-space:nowrap}}
 .result-icon{{margin-left:.2rem;font-size:.75rem}}
 
 /* Accuracy card */
-.accuracy-card{{background:#151820;border-radius:16px;padding:1.8rem;
-margin-bottom:1.5rem;border-left:4px solid #22c55e;border:1px solid rgba(255,255,255,0.06);
-box-shadow:0 2px 8px rgba(0,0,0,0.3)}}
-.accuracy-card h2{{color:#e2e8f0;margin-bottom:1rem;font-size:1.25rem;font-weight:700}}
+.accuracy-card{{background:#ffffff;border-radius:16px;padding:1.8rem;
+margin-bottom:1.5rem;border-left:4px solid #22c55e;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.accuracy-card h2{{color:#1e293b;margin-bottom:1rem;font-size:1.25rem;font-weight:700}}
 .accuracy-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}}
-.accuracy-stat{{text-align:center;background:#111318;border-radius:12px;padding:1.2rem;border:1px solid rgba(255,255,255,0.06)}}
+.accuracy-stat{{text-align:center;background:#f8fafc;border-radius:12px;padding:1.2rem;border:1px solid #e5e7eb}}
 .accuracy-stat .big-num{{font-size:2rem;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums}}
-.accuracy-stat .label{{font-size:.72rem;text-transform:uppercase;color:#4b5563;
+.accuracy-stat .label{{font-size:.72rem;text-transform:uppercase;color:#6b7280;
 letter-spacing:.05em;margin-top:.3rem;font-weight:600}}
-.accuracy-stat .sub{{font-size:.7rem;color:#4b5563;margin-top:.2rem}}
+.accuracy-stat .sub{{font-size:.7rem;color:#94a3b8;margin-top:.2rem}}
 .accuracy-surprises{{margin-top:1rem;padding:.8rem;background:rgba(245,166,35,0.06);border-radius:10px;
-font-size:.85rem;color:#f59e0b;border:1px solid rgba(245,166,35,0.12)}}
+font-size:.85rem;color:#b45309;border:1px solid rgba(245,166,35,0.12)}}
 
 /* Hit/miss badges */
-.hit-badge{{background:rgba(34,197,94,0.15);color:#22c55e;padding:.2rem .5rem;border-radius:8px;
-font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(34,197,94,0.2)}}
-.miss-badge{{background:rgba(239,68,68,0.15);color:#ef4444;padding:.2rem .5rem;border-radius:8px;
-font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(239,68,68,0.2)}}
-.partial-badge{{background:rgba(234,179,8,0.15);color:#eab308;padding:.2rem .5rem;border-radius:8px;
-font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(234,179,8,0.2)}}
+.hit-badge{{background:rgba(34,197,94,0.1);color:#16a34a;padding:.2rem .5rem;border-radius:8px;
+font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(34,197,94,0.15)}}
+.miss-badge{{background:rgba(239,68,68,0.1);color:#dc2626;padding:.2rem .5rem;border-radius:8px;
+font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(239,68,68,0.15)}}
+.partial-badge{{background:rgba(234,179,8,0.1);color:#ca8a04;padding:.2rem .5rem;border-radius:8px;
+font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(234,179,8,0.15)}}
 
 /* Skrällrisk */
 .upset-badge{{padding:.25rem .7rem;border-radius:10px;font-size:.8rem;font-weight:700;white-space:nowrap}}
-.upset-badge.high{{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.2)}}
-.upset-badge.medium{{background:rgba(234,179,8,0.15);color:#eab308;border:1px solid rgba(234,179,8,0.2)}}
+.upset-badge.high{{background:rgba(239,68,68,0.1);color:#dc2626;border:1px solid rgba(239,68,68,0.15)}}
+.upset-badge.medium{{background:rgba(234,179,8,0.1);color:#ca8a04;border:1px solid rgba(234,179,8,0.15)}}
 .upset-badge.pulse{{animation:pulse-glow 2s ease-in-out infinite}}
-@keyframes pulse-glow{{0%,100%{{box-shadow:0 0 0 0 rgba(239,68,68,0.4)}}50%{{box-shadow:0 0 12px 4px rgba(239,68,68,0.2)}}}}
+@keyframes pulse-glow{{0%,100%{{box-shadow:0 0 0 0 rgba(239,68,68,0.3)}}50%{{box-shadow:0 0 12px 4px rgba(239,68,68,0.15)}}}}
 .upset-low{{color:#22c55e;font-size:.8rem;font-weight:600}}
 
 /* Race card risk borders */
-.race-card.upset-high{{border-left:4px solid #ef4444;box-shadow:0 2px 8px rgba(0,0,0,0.3),0 0 12px rgba(239,68,68,0.08)}}
-.race-card.upset-medium{{border-left:4px solid #eab308;box-shadow:0 2px 8px rgba(0,0,0,0.3),0 0 12px rgba(234,179,8,0.06)}}
+.race-card.upset-high{{border-left:4px solid #ef4444;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 8px rgba(239,68,68,0.06)}}
+.race-card.upset-medium{{border-left:4px solid #eab308;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 8px rgba(234,179,8,0.05)}}
 
 /* Garderingsrekommendation */
 .upset-advice{{font-size:.82rem;font-weight:600;margin-top:.4rem;padding:.3rem .6rem;border-radius:6px}}
-.upset-advice.high{{color:#ef4444;background:rgba(239,68,68,0.1)}}
-.upset-advice.medium{{color:#eab308;background:rgba(234,179,8,0.08)}}
-.upset-advice.low{{color:#22c55e;background:rgba(34,197,94,0.08)}}
+.upset-advice.high{{color:#dc2626;background:rgba(239,68,68,0.08)}}
+.upset-advice.medium{{color:#ca8a04;background:rgba(234,179,8,0.06)}}
+.upset-advice.low{{color:#16a34a;background:rgba(34,197,94,0.06)}}
 
 /* Skrällkandidater */
-.upset-candidates{{background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.15);
-border-radius:8px;padding:.5rem .8rem;margin-top:.4rem;font-size:.82rem;color:#f59e0b;font-weight:500}}
-.upset-desc{{color:#4b5563;font-size:.75rem;font-weight:400}}
+.upset-candidates{{background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.12);
+border-radius:8px;padding:.5rem .8rem;margin-top:.4rem;font-size:.82rem;color:#b45309;font-weight:500}}
+.upset-desc{{color:#94a3b8;font-size:.75rem;font-weight:400}}
 
 /* Heatmap risk bar */
-.heatmap-wrapper{{background:#151820;border-radius:14px;border:1px solid rgba(255,255,255,0.06);
-padding:1rem 1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.3)}}
-.heatmap-title{{font-weight:700;color:#e2e8f0;font-size:.95rem;margin-bottom:.8rem}}
+.heatmap-wrapper{{background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;
+padding:1rem 1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.heatmap-title{{font-weight:700;color:#1e293b;font-size:.95rem;margin-bottom:.8rem}}
 .heatmap-bar{{display:flex;gap:4px;height:48px;align-items:flex-end}}
 .heatmap-seg{{flex:1;border-radius:6px 6px 0 0;min-height:8px;cursor:pointer;
 transition:all .2s;position:relative}}
 .heatmap-seg:hover{{opacity:.8;transform:scaleY(1.08)}}
 .heatmap-labels{{display:flex;gap:4px;margin-top:6px}}
-.heatmap-lbl{{flex:1;text-align:center;font-size:.65rem;color:#4b5563;font-weight:600}}
+.heatmap-lbl{{flex:1;text-align:center;font-size:.65rem;color:#6b7280;font-weight:600}}
 .heatmap-summary{{color:#6b7280;font-size:.82rem;margin-top:.5rem}}
 
 /* Hero section (spelvärde) — grid layout */
 .hero-grid{{display:grid;grid-template-columns:280px 1fr;gap:1.5rem;margin-bottom:1.5rem}}
-.hero-score-card{{background:#151820;border-radius:16px;border:1px solid rgba(255,255,255,0.06);
+.hero-score-card{{background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;
 padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center;
-box-shadow:0 2px 8px rgba(0,0,0,0.3)}}
-.hero-score-label{{font-size:.7rem;text-transform:uppercase;color:#4b5563;letter-spacing:.06em;
+box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.hero-score-label{{font-size:.7rem;text-transform:uppercase;color:#6b7280;letter-spacing:.06em;
 font-weight:600;margin-top:.8rem}}
 .hero-score-text{{font-size:1rem;font-weight:700;margin-top:.3rem}}
 .hero-score-advice{{font-size:.82rem;color:#6b7280;margin-top:.2rem;text-align:center}}
 .hero-right{{display:flex;flex-direction:column;gap:1rem}}
 .hero-kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem}}
 .hero-kpi{{text-align:center;border-radius:12px;padding:.9rem .5rem}}
-.hero-kpi.blue{{background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.15)}}
-.hero-kpi.green{{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.15)}}
-.hero-kpi.yellow{{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15)}}
-.hero-kpi.purple{{background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.15)}}
+.hero-kpi.blue{{background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.12)}}
+.hero-kpi.green{{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.12)}}
+.hero-kpi.yellow{{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.12)}}
+.hero-kpi.purple{{background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.12)}}
 .hero-kpi-val{{font-size:1.3rem;font-weight:800;font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}}
-.hero-kpi.blue .hero-kpi-val{{color:#60a5fa}}
-.hero-kpi.green .hero-kpi-val{{color:#4ade80}}
-.hero-kpi.yellow .hero-kpi-val{{color:#fbbf24}}
-.hero-kpi.purple .hero-kpi-val{{color:#a78bfa}}
-.hero-kpi-lbl{{font-size:.62rem;text-transform:uppercase;color:#4b5563;letter-spacing:.05em;
+.hero-kpi.blue .hero-kpi-val{{color:#3b82f6}}
+.hero-kpi.green .hero-kpi-val{{color:#22c55e}}
+.hero-kpi.yellow .hero-kpi-val{{color:#d97706}}
+.hero-kpi.purple .hero-kpi-val{{color:#7c3aed}}
+.hero-kpi-lbl{{font-size:.62rem;text-transform:uppercase;color:#6b7280;letter-spacing:.05em;
 font-weight:600;margin-top:.2rem}}
 
 /* Division list (row-based overview) */
 .division-list{{display:flex;flex-direction:column;gap:6px;margin-bottom:1.5rem}}
-.division-row{{background:#151820;border-radius:10px;padding:14px 18px;cursor:pointer;display:grid;
+.division-row{{background:#ffffff;border-radius:10px;padding:14px 18px;cursor:pointer;display:grid;
 grid-template-columns:36px 1fr 80px 100px 1fr 60px 28px;align-items:center;gap:14px;
-border-left:3px solid transparent;transition:all .15s;border:1px solid rgba(255,255,255,0.06)}}
-.division-row:hover{{background:#1a1f2b}}
-.division-row .div-num-lg{{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:#4b5563}}
-.division-row .pick-info strong{{color:#e2e8f0;font-size:.88rem}}
-.division-row .pick-info .driver-name{{color:#4b5563;font-size:.75rem;margin-top:2px}}
+border-left:3px solid transparent;transition:all .15s;border:1px solid #e5e7eb;
+box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
+.division-row:hover{{background:#f8fafc}}
+.division-row .div-num-lg{{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:#94a3b8}}
+.division-row .pick-info strong{{color:#1e293b;font-size:.88rem}}
+.division-row .pick-info .driver-name{{color:#94a3b8;font-size:.75rem;margin-top:2px}}
 .division-row .score-val{{font-family:'DM Mono',monospace;font-size:1.05rem;font-weight:700;color:#f59e0b}}
-.division-row .streck-bar{{flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}}
+.division-row .streck-bar{{flex:1;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden}}
 .division-row .streck-bar div{{height:100%;background:#f59e0b;border-radius:2px;transition:width .5s ease}}
 .division-row .gard-text{{font-size:.78rem;color:#6b7280}}
 .division-row .risk-pct{{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:600}}
-.division-row .arrow-icon{{color:#4b5563;font-size:.9rem}}
+.division-row .arrow-icon{{color:#94a3b8;font-size:.9rem}}
 
 /* Track record banner */
-.track-banner{{background:#151820;border-radius:12px;border:1px solid rgba(255,255,255,0.06);
+.track-banner{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
 padding:1rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;
-flex-wrap:wrap;gap:1rem}}
+flex-wrap:wrap;gap:1rem;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
 .track-stat{{text-align:center;min-width:80px}}
-.track-stat-val{{font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:#4ade80}}
-.track-stat-lbl{{font-size:.65rem;text-transform:uppercase;color:#4b5563;letter-spacing:.04em;font-weight:600}}
+.track-stat-val{{font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:#22c55e}}
+.track-stat-lbl{{font-size:.65rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 
 /* Legacy summary card (kept for compatibility) */
 .summary-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:1.5rem}}
-.race-summary-card{{background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:14px;
-padding:1.2rem;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}}
-.race-summary-card:hover{{border-color:#3a3d45;box-shadow:0 4px 16px rgba(0,0,0,0.4);transform:translateY(-2px)}}
+.race-summary-card{{background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;
+padding:1.2rem;cursor:pointer;transition:all .25s;position:relative;overflow:hidden;
+box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.race-summary-card:hover{{border-color:#cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.08);transform:translateY(-2px)}}
 .rsc-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem}}
 .rsc-num{{font-size:1.5rem;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums}}
 .rsc-risk{{width:8px;height:8px;border-radius:50%}}
-.rsc-risk.high{{background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,0.4)}}
-.rsc-risk.medium{{background:#eab308;box-shadow:0 0 6px rgba(234,179,8,0.3)}}
+.rsc-risk.high{{background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,0.3)}}
+.rsc-risk.medium{{background:#eab308;box-shadow:0 0 6px rgba(234,179,8,0.2)}}
 .rsc-risk.low{{background:#22c55e}}
 .rsc-pick{{margin-bottom:.5rem}}
-.rsc-pick strong{{color:#e2e8f0;font-size:.9rem}}
+.rsc-pick strong{{color:#1e293b;font-size:.9rem}}
 .rsc-score-row{{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}}
 .rsc-score-num{{font-size:1.1rem;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums}}
-.streck-bar{{flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}}
+.streck-bar{{flex:1;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden}}
 .streck-bar div{{height:100%;background:#f59e0b;border-radius:2px;transition:width .5s ease}}
-.streck-pct{{font-size:.72rem;color:#4b5563;font-weight:600;min-width:32px;text-align:right}}
-.rsc-gard{{font-size:.78rem;color:#4b5563;margin-bottom:.4rem}}
+.streck-pct{{font-size:.72rem;color:#6b7280;font-weight:600;min-width:32px;text-align:right}}
+.rsc-gard{{font-size:.78rem;color:#6b7280;margin-bottom:.4rem}}
 .rsc-result{{display:flex;align-items:center;gap:.5rem;margin-top:.4rem;padding-top:.4rem;
-border-top:1px solid #2e3138;font-size:.82rem}}
+border-top:1px solid #e5e7eb;font-size:.82rem}}
 .rsc-winner{{color:#6b7280}}
 
 /* Spelvärde bar (kept for compatibility) */
-.spelvarde-bar{{background:#151820;border-radius:14px;border:1px solid rgba(255,255,255,0.06);
+.spelvarde-bar{{background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;
 padding:1rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;
-border-left:4px solid var(--sv-color,#f59e0b);box-shadow:0 2px 8px rgba(0,0,0,0.3)}}
+border-left:4px solid var(--sv-color,#f59e0b);box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
 .sv-score-box{{display:flex;align-items:center;gap:.8rem}}
 .sv-score{{font-size:2.2rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}}
-.sv-label{{font-size:.72rem;text-transform:uppercase;color:#4b5563;letter-spacing:.05em;font-weight:600}}
+.sv-label{{font-size:.72rem;text-transform:uppercase;color:#6b7280;letter-spacing:.05em;font-weight:600}}
 .sv-text{{font-size:1rem;font-weight:700}}
 .sv-advice{{font-size:.88rem;margin-top:.2rem;color:#6b7280}}
 .sv-meta{{display:flex;gap:1.2rem;margin-left:auto;flex-wrap:wrap}}
 .sv-meta-item{{text-align:center;min-width:60px}}
-.sv-meta-val{{display:block;font-size:1.1rem;font-weight:700;color:#e2e8f0;font-variant-numeric:tabular-nums}}
-.sv-meta-lbl{{display:block;font-size:.65rem;text-transform:uppercase;color:#4b5563;letter-spacing:.04em;font-weight:600}}
+.sv-meta-val{{display:block;font-size:1.1rem;font-weight:700;color:#1e293b;font-variant-numeric:tabular-nums}}
+.sv-meta-lbl{{display:block;font-size:.65rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 
 /* System section */
-.system-section h2{{margin-bottom:1rem;color:#e2e8f0}}
-.system-card{{background:#151820;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
-border-left:4px solid #f59e0b;border:1px solid rgba(255,255,255,0.06)}}
-.system-card.skipped{{border-left-color:#3a3d45;opacity:.5}}
+.system-section h2{{margin-bottom:1rem;color:#1e293b}}
+.system-card{{background:#ffffff;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
+border-left:4px solid #f59e0b;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.system-card.skipped{{border-left-color:#cbd5e1;opacity:.5}}
 .system-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem}}
-.system-header h3{{font-size:1rem;color:#e2e8f0;margin:0;font-weight:700}}
-.system-meta{{color:#4b5563;font-size:.78rem;font-style:italic}}
+.system-header h3{{font-size:1rem;color:#1e293b;margin:0;font-weight:700}}
+.system-meta{{color:#94a3b8;font-size:.78rem;font-style:italic}}
 .system-stats{{display:flex;gap:1.5rem;margin-bottom:.8rem;flex-wrap:wrap}}
 .sys-stat{{text-align:center}}
 .sys-val{{display:block;font-size:1.2rem;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}}
-.sys-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#4b5563;letter-spacing:.04em;font-weight:600}}
+.sys-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 .system-table th{{font-size:.68rem;padding:.4rem .5rem}}
 .system-table td{{padding:.4rem .5rem;font-size:.82rem}}
 .system-picks strong{{color:#f59e0b}}
 .conf-badge{{padding:.15rem .5rem;border-radius:10px;font-size:.75rem;font-weight:600}}
-.conf-badge.high{{background:rgba(34,197,94,0.15);color:#22c55e}}
-.conf-badge.medium{{background:rgba(234,179,8,0.12);color:#eab308}}
-.conf-badge.low{{background:rgba(239,68,68,0.12);color:#ef4444}}
-.skip-reason{{color:#4b5563;font-style:italic;font-size:.85rem}}
+.conf-badge.high{{background:rgba(34,197,94,0.1);color:#16a34a}}
+.conf-badge.medium{{background:rgba(234,179,8,0.08);color:#ca8a04}}
+.conf-badge.low{{background:rgba(239,68,68,0.08);color:#dc2626}}
+.skip-reason{{color:#94a3b8;font-style:italic;font-size:.85rem}}
 .spik-badge{{background:#f59e0b;color:#0f1117;padding:.1rem .45rem;border-radius:8px;
 font-size:.65rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
 box-shadow:0 1px 4px rgba(245,166,35,0.3)}}
@@ -2256,83 +2228,83 @@ box-shadow:0 1px 4px rgba(245,166,35,0.3)}}
 /* LIVE backlog badges */
 .live-badge{{background:#ef4444;color:white;padding:.1rem .4rem;border-radius:8px;
 font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
-animation:pulse-live 2s ease-in-out infinite;box-shadow:0 0 12px rgba(239,68,68,0.5)}}
+animation:pulse-live 2s ease-in-out infinite;box-shadow:0 0 8px rgba(239,68,68,0.4)}}
 @keyframes pulse-live{{0%,100%{{opacity:1}}50%{{opacity:.6}}}}
-.live-result-badge{{background:rgba(234,179,8,0.12);color:#eab308;padding:.15rem .5rem;
+.live-result-badge{{background:rgba(234,179,8,0.08);color:#ca8a04;padding:.15rem .5rem;
 border-radius:8px;font-size:.75rem;font-weight:600;white-space:nowrap}}
-.live-result-badge.live-allright{{background:rgba(34,197,94,0.12);color:#22c55e;
+.live-result-badge.live-allright{{background:rgba(34,197,94,0.08);color:#16a34a;
 animation:pulse-live 2s ease-in-out infinite}}
 
 /* Backlog section */
-.backlog-section h2{{margin-bottom:1rem;color:#e2e8f0}}
+.backlog-section h2{{margin-bottom:1rem;color:#1e293b}}
 .backlog-summary{{display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:1rem;
-background:#151820;border-radius:12px;padding:1.2rem;border:1px solid rgba(255,255,255,0.06)}}
+background:#ffffff;border-radius:12px;padding:1.2rem;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
 .bl-stat{{text-align:center;min-width:80px}}
 .bl-val{{display:block;font-size:1.3rem;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}}
-.bl-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#4b5563;letter-spacing:.04em;font-weight:600}}
+.bl-lbl{{display:block;font-size:.68rem;text-transform:uppercase;color:#6b7280;letter-spacing:.04em;font-weight:600}}
 .backlog-table th{{font-size:.68rem;padding:.4rem .5rem}}
 .backlog-table td{{padding:.4rem .5rem;font-size:.82rem}}
 .bl-expandable{{cursor:pointer}}
-.bl-expandable:hover{{background:rgba(255,255,255,0.02)}}
-.bl-expand-icon{{display:inline-block;transition:transform .2s;color:#4b5563}}
+.bl-expandable:hover{{background:#f8fafc}}
+.bl-expand-icon{{display:inline-block;transition:transform .2s;color:#94a3b8}}
 .bl-expand-icon.open{{transform:rotate(90deg)}}
-.bl-detail-table{{width:100%;border-collapse:collapse;background:#111318}}
-.bl-race-row td{{padding:.25rem .5rem;border-top:1px solid rgba(255,255,255,0.04);font-size:.78rem}}
-.bl-detail-container td{{background:#111318}}
+.bl-detail-table{{width:100%;border-collapse:collapse;background:#f8fafc}}
+.bl-race-row td{{padding:.25rem .5rem;border-top:1px solid #f1f5f9;font-size:.78rem}}
+.bl-detail-container td{{background:#f8fafc}}
 
 /* Strategi-filter knappar */
 .strat-filter{{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}}
-.strat-btn{{padding:.4rem 1rem;border-radius:10px;background:#151820;color:#6b7280;
-border:1px solid rgba(255,255,255,0.06);cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s;font-family:inherit}}
-.strat-btn:hover{{background:rgba(255,255,255,0.02);color:#e2e8f0}}
+.strat-btn{{padding:.4rem 1rem;border-radius:10px;background:#ffffff;color:#64748b;
+border:1px solid #e5e7eb;cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s;font-family:inherit}}
+.strat-btn:hover{{background:#f8fafc;color:#1e293b}}
 .strat-btn.active{{background:#f59e0b;color:#0f1117;border-color:#f59e0b}}
 .strat-tag{{padding:.15rem .5rem;border-radius:10px;font-size:.72rem;font-weight:700;white-space:nowrap}}
 
 /* Speltyp-filter knappar */
 .gt-filter-row{{margin-bottom:.8rem}}
-.gt-btn{{padding:.4rem 1rem;border-radius:10px;background:#151820;color:#6b7280;
-border:1px solid rgba(255,255,255,0.06);cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s;font-family:inherit}}
-.gt-btn:hover{{background:rgba(255,255,255,0.02);color:#e2e8f0}}
+.gt-btn{{padding:.4rem 1rem;border-radius:10px;background:#ffffff;color:#64748b;
+border:1px solid #e5e7eb;cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s;font-family:inherit}}
+.gt-btn:hover{{background:#f8fafc;color:#1e293b}}
 .gt-btn.active{{background:var(--gt-color,#f59e0b);color:#0f1117;border-color:var(--gt-color,#f59e0b)}}
 
 /* Statistik-sektion */
-.stats-section h2{{margin-bottom:1rem;color:#e2e8f0}}
-.stats-block{{background:#151820;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
-border-left:4px solid #f59e0b;border:1px solid rgba(255,255,255,0.06)}}
-.stats-block h3{{font-size:.95rem;color:#e2e8f0;margin-bottom:.8rem;font-weight:700}}
+.stats-section h2{{margin-bottom:1rem;color:#1e293b}}
+.stats-block{{background:#ffffff;border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;
+border-left:4px solid #f59e0b;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.stats-block h3{{font-size:.95rem;color:#1e293b;margin-bottom:.8rem;font-weight:700}}
 .stats-table{{width:100%;border-collapse:collapse;font-size:.82rem}}
-.stats-table th{{background:#111318;color:#4b5563;text-transform:uppercase;font-size:.68rem;
+.stats-table th{{background:#f8fafc;color:#64748b;text-transform:uppercase;font-size:.68rem;
 letter-spacing:.05em;padding:.5rem .5rem;text-align:left;white-space:nowrap;font-weight:600}}
-.stats-table td{{padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04)}}
-.stats-table tr:hover td{{background:rgba(255,255,255,0.02)}}
+.stats-table td{{padding:.45rem .5rem;border-bottom:1px solid #f1f5f9}}
+.stats-table tr:hover td{{background:#f8fafc}}
 
-/* AI-chatt */
-.chat-section{{background:#151820;border-radius:16px;padding:1.8rem;margin-bottom:1.5rem;
-border:1px solid rgba(255,255,255,0.06);box-shadow:0 2px 8px rgba(0,0,0,0.3)}}
-.chat-header{{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}}
-.chat-header h2{{font-size:1.25rem;color:#e2e8f0;margin:0;font-weight:700}}
-.chat-toggle{{background:none;border:none;color:#f59e0b;font-size:1.5rem;cursor:pointer;transition:transform .2s}}
-.chat-toggle.open{{transform:rotate(90deg)}}
-.chat-body{{display:none;margin-top:1rem}}
-.chat-body.open{{display:block}}
-.chat-messages{{max-height:500px;overflow-y:auto;padding:.5rem 0;margin-bottom:1rem}}
-.chat-msg{{padding:.7rem 1rem;border-radius:10px;margin-bottom:.5rem;max-width:90%;
+/* ── Agent Chat View ── */
+.agent-layout{{display:flex;flex-direction:column;height:calc(100vh - 56px - 48px);max-width:800px;margin:0 auto}}
+.agent-header{{padding:1.5rem 0 1rem;text-align:center}}
+.agent-header h2{{font-size:1.5rem;font-weight:700;color:#1e293b;margin-bottom:.3rem}}
+.agent-header p{{font-size:.9rem;color:#6b7280}}
+.chat-suggestions{{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:1rem}}
+.chat-suggest-btn{{padding:.45rem 1rem;border-radius:10px;border:1px solid #e5e7eb;
+background:#ffffff;color:#64748b;font-size:.82rem;cursor:pointer;transition:all .2s;
+font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
+.chat-suggest-btn:hover{{border-color:#f59e0b;color:#b45309;background:#fffbeb}}
+.chat-messages{{flex:1;overflow-y:auto;padding:.5rem 0;margin-bottom:1rem}}
+.chat-msg{{padding:.8rem 1rem;border-radius:12px;margin-bottom:.5rem;max-width:85%;
 line-height:1.6;font-size:.9rem;white-space:pre-wrap;word-wrap:break-word}}
-.chat-msg.user{{background:rgba(245,166,35,0.08);color:#e2e8f0;margin-left:auto}}
-.chat-msg.ai{{background:#111318;color:#e2e8f0;border:1px solid rgba(255,255,255,0.06)}}
-.chat-msg.ai strong{{color:#f59e0b}}
-.chat-input-row{{display:flex;gap:.5rem}}
-.chat-input{{flex:1;padding:.7rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.06);
-background:#111318;color:#e2e8f0;font-size:.9rem;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
-.chat-input:focus{{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,166,35,0.15)}}
-.chat-send{{padding:.7rem 1.2rem;border-radius:10px;border:none;background:#f59e0b;
-color:#0f1117;font-weight:600;cursor:pointer;font-size:.9rem;white-space:nowrap;transition:all .2s}}
-.chat-send:hover{{background:#d4911e;box-shadow:0 2px 8px rgba(245,166,35,0.3)}}
-.chat-send:disabled{{opacity:.5;cursor:not-allowed}}
-.chat-suggestions{{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}}
-.chat-suggest-btn{{padding:.3rem .8rem;border-radius:10px;border:1px solid rgba(255,255,255,0.06);
-background:transparent;color:#6b7280;font-size:.8rem;cursor:pointer;transition:all .2s}}
-.chat-suggest-btn:hover{{border-color:#f59e0b;color:#f59e0b}}
+.chat-msg.user{{background:rgba(59,130,246,0.08);color:#1e293b;margin-left:auto;border:1px solid rgba(59,130,246,0.12)}}
+.chat-msg.ai{{background:#ffffff;color:#1e293b;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
+.chat-msg.ai strong{{color:#b45309}}
+.chat-input-bar{{display:flex;gap:.5rem;padding:12px 0;border-top:1px solid #e5e7eb}}
+.chat-input-bar input{{flex:1;padding:.7rem 1rem;border-radius:10px;border:1px solid #e5e7eb;
+background:#ffffff;color:#1e293b;font-size:.9rem;outline:none;font-family:inherit;
+transition:border-color .2s,box-shadow .2s}}
+.chat-input-bar input:focus{{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,166,35,0.1)}}
+.chat-input-bar button{{padding:.7rem 1.2rem;border-radius:10px;border:none;background:#f59e0b;
+color:#0f1117;font-weight:600;cursor:pointer;font-size:.9rem;white-space:nowrap;transition:all .2s;
+font-family:inherit}}
+.chat-input-bar button:hover{{background:#d97706;box-shadow:0 2px 8px rgba(245,166,35,0.2)}}
+.chat-input-bar button:disabled{{opacity:.5;cursor:not-allowed}}
 .chat-loading{{display:inline-block;color:#6b7280;font-size:.85rem}}
 .chat-loading::after{{content:'';animation:chatdots 1.5s steps(4,end) infinite}}
 @keyframes chatdots{{0%{{content:''}}25%{{content:'.'}}50%{{content:'..'}}75%{{content:'...'}}}}
@@ -2341,26 +2313,15 @@ background:transparent;color:#6b7280;font-size:.8rem;cursor:pointer;transition:a
 .bl-older{{display:none}}
 .bl-show-all .bl-older{{display:table-row}}
 
-/* Premium gating */
-.premium-locked{{position:relative;overflow:hidden}}
-.premium-locked>*{{filter:blur(6px);pointer-events:none;user-select:none}}
-.premium-locked::after{{content:'';position:absolute;inset:0;background:rgba(15,17,23,0.5);
-backdrop-filter:blur(4px);z-index:10}}
-.premium-cta{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:11;
-text-align:center;padding:2rem;background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:16px;
-box-shadow:0 8px 32px rgba(0,0,0,0.5)}}
-.premium-cta h3{{color:#f59e0b;margin-bottom:.5rem;font-size:1.1rem}}
-.premium-cta p{{color:#6b7280;font-size:.85rem;margin-bottom:1rem}}
-.premium-cta-btn{{background:#f59e0b;color:#0f1117;border:none;padding:.6rem 1.5rem;
-border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem}}
-
+/* ── Responsive ── */
 @media(max-width:768px){{
+  .top-navbar{{padding:0 12px}}
+  .nav-tabs{{display:none}}
   .sidebar{{display:none}}
   .main-area{{margin-left:0 !important}}
-  .top-bar{{padding:0 16px;flex-wrap:wrap;gap:.5rem}}
   .content{{padding:16px}}
   .system-drawer{{padding:1rem}}
-  .round-select{{max-width:200px;font-size:.8rem}}
+  .round-select{{max-width:180px;font-size:.8rem}}
   .summary-card,.race-card{{padding:1.3rem;border-radius:14px}}
   .hero-grid{{grid-template-columns:1fr}}
   .hero-kpis{{grid-template-columns:repeat(2,1fr)}}
@@ -2370,76 +2331,164 @@ border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem}}
   .driver{{display:none}}
   .detail-content{{padding-left:1rem}}
   .factor-cell{{display:none}}
-  .chat-section{{margin-bottom:0}}
   .heatmap-wrapper{{overflow-x:auto}}
+  .agent-layout{{height:auto;min-height:calc(100vh - 56px - 48px)}}
 }}
 </style>
 </head>
 <body>
+
+<!-- ── Top Navbar ── -->
+<nav class="top-navbar">
+  <div class="nav-brand">Kungens <span>Trav</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="nav-tab" data-view="agent" onclick="showView('agent')">Agent</button>
+    {'<button class="nav-tab" data-view="stats" onclick="showView(&#39;stats&#39;)">Statistik</button>' if stats_section else ''}
+    {'<button class="nav-tab" data-view="backlog" onclick="showView(&#39;backlog&#39;)">Backlog</button>' if backlog_section else ''}
+  </div>
+  <div class="nav-right">
+    {round_dropdown}
+  </div>
+</nav>
+
 <div class="app-layout">
-{sidebar}
+
+<!-- ── Left Sidebar ── -->
+<aside class="sidebar" id="sidebar">
+  <!-- Dashboard sidebar content -->
+  <div id="sidebar-dashboard">
+    <div class="sb-info">
+      <div class="sb-info-type">{_esc(game_round.game_type)}</div>
+      <div class="sb-info-meta">{date_str} · {track_name}</div>
+    </div>
+    <div class="sb-nav">
+      <button class="nav-item active" data-section="summary" onclick="showSection('summary')">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+        </span><span>Översikt</span>
+      </button>
+      {system_drawer_btn}
+      <div class="nav-divider"></div>
+      <div class="nav-label">LOPP</div>
+      {sidebar_div_items}
+    </div>
+  </div>
+  <!-- Agent sidebar content -->
+  <div id="sidebar-agent" class="agent-sidebar">
+    <button class="agent-new-btn" onclick="resetChat()">+ Ny session</button>
+    <div class="agent-chips">
+      <button class="agent-chip" onclick="askSuggestion('Sammanfatta omgången')">Sammanfatta omgången</button>
+      <button class="agent-chip" onclick="askSuggestion('Vilka lopp har högst skällrisk?')">Skällrisker</button>
+      <button class="agent-chip" onclick="askSuggestion('Ge mig dina bästa spikar')">Spikar</button>
+      <button class="agent-chip" onclick="askSuggestion('Finns det value-hästar?')">Value-hästar</button>
+    </div>
+  </div>
+</aside>
+
 <div class="main-area" id="main-area">
-<header class="top-bar">
-  <div class="top-bar-left">
-    {div_tabs}
-    {dropdown}
-  </div>
-  <div class="top-bar-right">
-    <span class="top-stat" style="font-family:'DM Mono',monospace;color:#4b5563;font-size:.8rem">
-      {game_round.num_races} lopp · {_esc(game_round.track_name or '')}
-    </span>
-    {system_btn}
-  </div>
-</header>
 <main class="content">
-<section id="s-summary" class="dashboard-section active">
-{risk_bar}
-{sv_bar}
-{accuracy}
-{summary}
-{chat_section}
-</section>
-{race_sections}
-<section id="s-stats" class="dashboard-section">{'<div class="premium-locked">' + stats_section + _premium_cta + '</div>' if not premium and stats_section else stats_section}</section>
-<section id="s-backlog" class="dashboard-section">{backlog_section}</section>
+
+<!-- ═══ Dashboard View ═══ -->
+<div class="view active" id="view-dashboard">
+  <section id="s-summary" class="dashboard-section active">
+    {risk_bar}
+    {sv_bar}
+    {accuracy}
+    {summary}
+  </section>
+  {race_sections}
+</div>
+
+<!-- ═══ Agent View ═══ -->
+<div class="view" id="view-agent">
+  <div class="agent-layout">
+    <div class="agent-header">
+      <h2>AI Analys</h2>
+      <p>Fråga om omgången, strategier eller historisk statistik</p>
+    </div>
+    <div class="chat-suggestions" id="agent-suggestions">
+      <button class="chat-suggest-btn" onclick="askSuggestion('Sammanfatta omgången')">Sammanfatta</button>
+      <button class="chat-suggest-btn" onclick="askSuggestion('Vilka lopp har högst skällrisk?')">Skällrisker</button>
+      <button class="chat-suggest-btn" onclick="askSuggestion('Ge mig dina bästa spikar')">Spikar</button>
+      <button class="chat-suggest-btn" onclick="askSuggestion('Finns det value-hästar?')">Value</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-bar">
+      <input id="chat-input" placeholder="Ställ en fråga om omgången...">
+      <button id="chat-send" onclick="sendChat()">Skicka</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Stats View ═══ -->
+<div class="view" id="view-stats">
+  {stats_section}
+</div>
+
+<!-- ═══ Backlog View ═══ -->
+<div class="view" id="view-backlog">
+  {backlog_section}
+</div>
+
 </main>
 </div><!-- /main-area -->
+
+<!-- System drawer (modal) -->
 <div class="system-drawer" id="system-drawer">
-<button class="drawer-close" onclick="closeDrawer()">&times;</button>
-{system_section}
+  <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+  {system_section}
 </div>
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
-</div>
+
+</div><!-- /app-layout -->
+
 <script>
-// ── Section switching ──
+// ── View switching (top navbar tabs) ──
+function showView(name){{
+  // Toggle views
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const target=document.getElementById('view-'+name);
+  if(target) target.classList.add('active');
+  // Toggle nav tabs
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  const tab=document.querySelector('.nav-tab[data-view="'+name+'"]');
+  if(tab) tab.classList.add('active');
+  // Toggle sidebar content
+  const sbDash=document.getElementById('sidebar-dashboard');
+  const sbAgent=document.getElementById('sidebar-agent');
+  if(sbDash) sbDash.style.display=(name==='dashboard')?'':'none';
+  if(sbAgent) sbAgent.style.display=(name==='agent')?'block':'none';
+  // Focus chat input when switching to agent
+  if(name==='agent'){{
+    const ci=document.getElementById('chat-input');
+    if(ci) setTimeout(()=>ci.focus(),100);
+  }}
+}}
+
+// ── Section switching within dashboard view ──
 function showSection(id){{
-  document.querySelectorAll('.dashboard-section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.div-item').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.div-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#view-dashboard .dashboard-section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('#sidebar-dashboard .nav-item').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#sidebar-dashboard .div-item').forEach(b=>b.classList.remove('active'));
   const target=document.getElementById('s-'+id);
   if(target) target.classList.add('active');
-  const nav=document.querySelector('.nav-item[data-section="'+id+'"]');
+  const nav=document.querySelector('#sidebar-dashboard .nav-item[data-section="'+id+'"]');
   if(nav) nav.classList.add('active');
   document.querySelector('.content').scrollTop=0;
 }}
-// ── Division switching (syncs sidebar + top-bar tabs) ──
+
+// ── Division switching ──
 function showDivision(num){{
+  // Ensure we are in dashboard view
+  showView('dashboard');
   showSection('race-'+num);
-  document.querySelectorAll('.div-item').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.div-tab').forEach(b=>b.classList.remove('active'));
-  const di=document.querySelector('.div-item[data-div="'+num+'"]');
+  document.querySelectorAll('#sidebar-dashboard .div-item').forEach(b=>b.classList.remove('active'));
+  const di=document.querySelector('#sidebar-dashboard .div-item[data-div="'+num+'"]');
   if(di) di.classList.add('active');
-  const dt=document.querySelector('.div-tab[data-section="race-'+num+'"]');
-  if(dt) dt.classList.add('active');
 }}
-// ── Sidebar toggle ──
-function toggleSidebar(){{
-  const sb=document.getElementById('sidebar');
-  sb.classList.toggle('collapsed');
-  document.getElementById('main-area').style.marginLeft=
-    sb.classList.contains('collapsed')?'64px':'220px';
-}}
+
 // ── Drawer ──
 function openDrawer(){{
   document.getElementById('system-drawer').classList.add('open');
@@ -2451,11 +2500,13 @@ function closeDrawer(){{
   document.getElementById('drawer-overlay').classList.remove('open');
   document.body.style.overflow='';
 }}
+
 // ── Round dropdown ──
 function changeRound(sel){{
   window.location.href='/dashboard/'+sel.value;
 }}
-// Toggle visa alla äldre entries i backlog
+
+// ── Backlog helpers ──
 function toggleShowAll(){{
   const section=document.getElementById('backlog');
   const btn=document.getElementById('bl-show-all-btn');
@@ -2464,31 +2515,28 @@ function toggleShowAll(){{
   section.classList.toggle('bl-show-all');
   btn.textContent=section.classList.contains('bl-show-all')?'Dölj äldre':btn.dataset.origText;
 }}
-// Toggle backlog detail rows
 function toggleBlDetail(id){{
   const el=document.getElementById(id);
   if(!el)return;
   const isOpen=el.style.display!=='none';
   el.style.display=isOpen?'none':'table-row';
-  // Toggle expand icon
   const prevRow=el.previousElementSibling;
   if(prevRow){{
     const icon=prevRow.querySelector('.bl-expand-icon');
     if(icon)icon.classList.toggle('open',!isOpen);
   }}
 }}
-// ── Dubbelfiltrering: strategi × speltyp ──
+
+// ── Dubbelfiltrering: strategi x speltyp ──
 let activeStatsStrat='all', activeStatsGT='all';
 let activeBacklogStrat='all', activeBacklogGT='all';
 
-// Stats: strategi-filter
 function filterStats(strat){{
   activeStatsStrat=strat;
   document.querySelectorAll('.stats-section .strat-btn').forEach(b=>b.classList.remove('active'));
   event.target.classList.add('active');
   applyStatsFilter();
 }}
-// Stats: speltyp-filter
 function filterStatsGT(gt){{
   activeStatsGT=gt;
   document.querySelectorAll('.stats-section .gt-btn').forEach(b=>b.classList.remove('active'));
@@ -2501,28 +2549,23 @@ function applyStatsFilter(){{
     const matchG=activeStatsGT==='all'||!block.dataset.gt||block.dataset.gt===activeStatsGT;
     block.style.display=(matchS&&matchG)?'':'none';
   }});
-  // Filtrera rader inom speltyp-tabeller
   document.querySelectorAll('.stats-table tr[data-gt]').forEach(row=>{{
     const matchG=activeStatsGT==='all'||row.dataset.gt===activeStatsGT;
     row.style.display=matchG?'':'none';
   }});
 }}
-
-// Backlog: strategi-filter
 function filterBacklog(strat){{
   activeBacklogStrat=strat;
   document.querySelectorAll('.bl-filter .strat-btn').forEach(b=>b.classList.remove('active'));
   event.target.classList.add('active');
   applyBacklogFilter();
 }}
-// Backlog: speltyp-filter
 function filterBacklogGT(gt){{
   activeBacklogGT=gt;
   document.querySelectorAll('.bl-gt-filter .gt-btn').forEach(b=>b.classList.remove('active'));
   event.target.classList.add('active');
   applyBacklogFilter();
 }}
-// Backlog: senaste N månader
 function filterBacklogRecent(months){{
   const cutoff=new Date();
   cutoff.setMonth(cutoff.getMonth()-months);
@@ -2555,7 +2598,6 @@ function filterBacklogRecent(months){{
   }});
   updateBlSummary(rounds,full,partial,cost,payout);
 }}
-
 function applyBacklogFilter(){{
   let rounds=0,full=0,partial=0,cost=0,payout=0;
   document.querySelectorAll('.backlog-table tbody tr').forEach(row=>{{
@@ -2580,7 +2622,6 @@ function applyBacklogFilter(){{
   }});
   updateBlSummary(rounds,full,partial,cost,payout);
 }}
-
 function updateBlSummary(rounds,full,partial,cost,payout){{
   const netto=payout-cost;
   const roi=cost>0?(netto/cost*100):0;
@@ -2597,13 +2638,14 @@ function updateBlSummary(rounds,full,partial,cost,payout){{
   if(el('bl-roi')){{el('bl-roi').textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';el('bl-roi').style.color=clr;}}
   if(el('bl-netto')){{el('bl-netto').textContent=(netto>=0?'+':'')+fmt(netto)+' kr';el('bl-netto').style.color=clr;}}
 }}
-// ── AI-chatt ──
+
+// ── AI Chat ──
 let chatMsgs=[];
-function toggleChat(){{
-  const body=document.getElementById('chat-body');
-  const icon=document.getElementById('chat-toggle-icon');
-  body.classList.toggle('open');
-  icon.classList.toggle('open');
+function resetChat(){{
+  chatMsgs=[];
+  renderChat();
+  const sug=document.getElementById('agent-suggestions');
+  if(sug) sug.style.display='flex';
 }}
 function askSuggestion(text){{
   document.getElementById('chat-input').value=text;
@@ -2614,12 +2656,18 @@ document.addEventListener('DOMContentLoaded',()=>{{
   if(ci)ci.addEventListener('keydown',e=>{{
     if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendChat();}}
   }});
+  // Hide agent sidebar initially
+  const sbAgent=document.getElementById('sidebar-agent');
+  if(sbAgent) sbAgent.style.display='none';
 }});
 async function sendChat(){{
   const input=document.getElementById('chat-input');
   const msg=input.value.trim();
   if(!msg)return;
   input.value='';
+  // Hide suggestions after first message
+  const sug=document.getElementById('agent-suggestions');
+  if(sug) sug.style.display='none';
   chatMsgs.push({{role:'user',content:msg}});
   renderChat();
   const btn=document.getElementById('chat-send');
@@ -2631,7 +2679,8 @@ async function sendChat(){{
   document.getElementById('chat-messages').appendChild(loadDiv);
   document.getElementById('chat-messages').scrollTop=999999;
   try{{
-    const rk=window.location.pathname.replace(/^\\/+/,'');
+    const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'');
+    const rk=pathParts.replace(/^\\/+/,'');
     const resp=await fetch('/api/chat',{{
       method:'POST',
       headers:{{'Content-Type':'application/json'}},
@@ -2659,11 +2708,12 @@ function renderChat(){{
 }}
 function formatChatMsg(text){{
   let s=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-  s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  s=s.replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>');
+  s=s.replace(/\\*(.+?)\\*/g,'<em>$1</em>');
   return s;
 }}
-// Toggle expandable detail rows
+
+// ── Toggle expandable detail rows ──
 document.querySelectorAll('.horse-row.clickable').forEach(row=>{{
   row.addEventListener('click',()=>{{
     const horseNum=row.getAttribute('data-horse');
@@ -2675,28 +2725,25 @@ document.querySelectorAll('.horse-row.clickable').forEach(row=>{{
     }}
   }});
 }});
-// Auto-refresh odds var 10 min för live-omgångar — injiceras i top-bar
+
+// ── Auto-refresh for live rounds ──
 (function(){{
   const isLive = {'true' if not game_round.is_finished else 'false'};
   if(!isLive) return;
   const roundKey = '{game_round.game_type}/{game_round.round_date}';
-  const topRight = document.querySelector('.top-bar-right');
-  if(!topRight) return;
-  // Timer
+  const navRight = document.querySelector('.nav-right');
+  if(!navRight) return;
   const timer = document.createElement('span');
-  timer.style.cssText = 'font-family:"DM Mono",monospace;font-size:0.75rem;color:#4b5563';
-  topRight.insertBefore(timer, topRight.firstChild);
-  // Refresh button
+  timer.style.cssText = 'font-family:"DM Mono",monospace;font-size:0.75rem;color:#94a3b8;margin-right:8px';
+  navRight.insertBefore(timer, navRight.firstChild);
   const refreshBtn = document.createElement('button');
-  refreshBtn.textContent = '↻ Uppdatera odds';
-  refreshBtn.className = 'system-btn';
-  refreshBtn.style.cssText = 'padding:0.4rem 0.9rem;font-size:0.78rem';
-  topRight.appendChild(refreshBtn);
+  refreshBtn.textContent = '↻ Uppdatera';
+  refreshBtn.style.cssText = 'padding:5px 12px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;color:#1e293b;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  navRight.appendChild(refreshBtn);
   refreshBtn.addEventListener('click',()=>{{
     refreshBtn.textContent = '⏳ Uppdaterar...';
     fetch('/refresh/'+roundKey).then(()=>location.reload());
   }});
-  // Countdown
   let countdown = 600;
   setInterval(()=>{{
     countdown--;

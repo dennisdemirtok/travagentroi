@@ -207,6 +207,53 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_analysis_runs_type ON analysis_runs(run_type, run_date DESC);
 
+-- 11. BACKLOG-OMGÅNGAR
+CREATE TABLE IF NOT EXISTS backlog_rounds (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    round_date      DATE NOT NULL,
+    game_type       TEXT NOT NULL,
+    track           TEXT DEFAULT '',
+    strategy        TEXT NOT NULL,
+    cost            REAL DEFAULT 0,
+    rows_count      INTEGER DEFAULT 0,
+    num_correct     INTEGER DEFAULT 0,
+    num_races       INTEGER DEFAULT 0,
+    hit             BOOLEAN DEFAULT FALSE,
+    payout          REAL DEFAULT 0,
+    avg_confidence  REAL DEFAULT 0,
+    avg_upset       REAL DEFAULT 0,
+    is_live         BOOLEAN DEFAULT FALSE,
+    races_finished  INTEGER DEFAULT 0,
+    partial_correct INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(round_date, game_type, strategy)
+);
+CREATE INDEX IF NOT EXISTS idx_backlog_rounds_date ON backlog_rounds(round_date DESC);
+CREATE INDEX IF NOT EXISTS idx_backlog_rounds_strategy ON backlog_rounds(strategy);
+
+-- 12. BACKLOG-LOPP-PICKS
+CREATE TABLE IF NOT EXISTS backlog_race_picks (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    backlog_round_id    BIGINT NOT NULL REFERENCES backlog_rounds(id) ON DELETE CASCADE,
+    race_number         INTEGER NOT NULL,
+    distance            INTEGER DEFAULT 0,
+    start_method        TEXT DEFAULT '',
+    num_starters        INTEGER DEFAULT 0,
+    confidence          REAL DEFAULT 0,
+    upset_risk          REAL DEFAULT 0,
+    num_picks           INTEGER DEFAULT 0,
+    pick_list           JSONB DEFAULT '[]',
+    coverage            REAL DEFAULT 0,
+    winner              INTEGER,
+    winner_name         TEXT DEFAULT '',
+    winner_streck       REAL DEFAULT 0,
+    correct             BOOLEAN,
+    status              TEXT DEFAULT 'pending',
+    UNIQUE(backlog_round_id, race_number)
+);
+CREATE INDEX IF NOT EXISTS idx_backlog_race_picks_round ON backlog_race_picks(backlog_round_id);
+
 -- ============================================================
 -- Klar! Verifiera med: SELECT tablename FROM pg_tables WHERE schemaname = 'public';
 -- ============================================================

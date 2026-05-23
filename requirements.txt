@@ -6,3 +6,5 @@ pandas>=2.0
 numpy>=1.24
 fastapi>=0.115.0
 uvicorn>=0.34.0
+supabase>=2.0
+python-dotenv>=1.0

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
@@ -372,11 +373,13 @@ async def chat(
         round_context, backlog_context, tips_context, memory_context
     )
 
+    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20241022")
+
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             json={
-                "model": "claude-sonnet-4-6",
+                "model": model,
                 "max_tokens": 2048,
                 "system": system_prompt,
                 "messages": messages,
@@ -387,7 +390,8 @@ async def chat(
                 "anthropic-version": "2023-06-01",
             },
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            raise RuntimeError(f"Anthropic API {resp.status_code}: {resp.text}")
         result = resp.json()
         return result["content"][0]["text"]
 
@@ -414,12 +418,14 @@ async def chat_stream(
         round_context, backlog_context, tips_context, memory_context
     )
 
+    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20241022")
+
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream(
             "POST",
             "https://api.anthropic.com/v1/messages",
             json={
-                "model": "claude-sonnet-4-6",
+                "model": model,
                 "max_tokens": 2048,
                 "system": system_prompt,
                 "messages": messages,
@@ -431,7 +437,11 @@ async def chat_stream(
                 "anthropic-version": "2023-06-01",
             },
         ) as resp:
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                error_body = await resp.aread()
+                raise RuntimeError(
+                    f"Anthropic API {resp.status_code}: {error_body.decode()}"
+                )
 
             # Parse SSE events from the stream
             buffer = ""

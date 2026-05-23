@@ -1829,12 +1829,177 @@ def _ranking_html(game_round: GameRound) -> str:
     )
 
 
+def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None) -> str:
+    """Build consensus ranking table from model + all tipster sources."""
+    import json as _json
+    import re as _re
+    from collections import defaultdict
+
+    if not tips_raw:
+        return ""
+
+    sources = tips_raw.get("sources", {})
+    spetstrid = tips_raw.get("spetstrid", {})
+    if not sources:
+        return ""
+
+    TIER_POINTS = {"A": 4, "B": 3, "BC": 2, "C": 1, "D": 0}
+    SOURCE_WEIGHTS = {
+        "model": 3.0, "sharps_berglund": 2.5, "sharps_jensa": 2.0,
+        "expressen_edholm": 2.0, "travcash": 1.5,
+        "aftonbladet_mario": 1.0, "aftonbladet_robert": 1.0,
+        "aftonbladet_kim": 1.0, "aftonbladet_quist": 1.0,
+        "aftonbladet_nils": 1.0,
+    }
+    TIER_ORDER = ["A", "B", "BC", "C", "D"]
+    gt = _esc(game_round.game_type)
+
+    rows = []
+    for race in game_round.races:
+        race_key = f"{gt}-{race.race_number}"
+        horse_scores: dict[str, float] = defaultdict(float)
+        horse_weights: dict[str, float] = defaultdict(float)
+
+        sorted_entries = sorted(
+            race.active_entries, key=lambda e: e.super_score, reverse=True,
+        )
+        model_w = SOURCE_WEIGHTS["model"]
+        total_e = len(sorted_entries)
+        for i, entry in enumerate(sorted_entries):
+            num = str(entry.post_position)
+            pct = i / total_e if total_e else 0
+            if pct < 0.15:
+                tier = "A"
+            elif pct < 0.35:
+                tier = "B"
+            elif pct < 0.55:
+                tier = "BC"
+            elif pct < 0.80:
+                tier = "C"
+            else:
+                tier = "D"
+            horse_scores[num] += TIER_POINTS[tier] * model_w
+            horse_weights[num] += model_w
+
+        for src_key, src_data in sources.items():
+            weight = SOURCE_WEIGHTS.get(src_key, 0.8)
+            rankings = src_data.get("rankings", {})
+            race_ranking = rankings.get(race_key)
+            if race_ranking:
+                tier_map: dict[str, str] = {}
+                if isinstance(race_ranking, dict):
+                    for tier, horses_str in race_ranking.items():
+                        for num in _re.findall(r"\d+", str(horses_str)):
+                            tier_map[num] = tier
+                elif isinstance(race_ranking, str) and race_ranking != "Alla brett":
+                    nums = [n.strip() for n in race_ranking.split("-") if n.strip()]
+                    tot = len(nums)
+                    for j, num in enumerate(nums):
+                        p = j / tot if tot else 0
+                        if p < 0.15:
+                            tier_map[num] = "A"
+                        elif p < 0.35:
+                            tier_map[num] = "B"
+                        elif p < 0.55:
+                            tier_map[num] = "BC"
+                        elif p < 0.80:
+                            tier_map[num] = "C"
+                        else:
+                            tier_map[num] = "D"
+                for num, tier in tier_map.items():
+                    pts = TIER_POINTS.get(tier, 1)
+                    horse_scores[num] += pts * weight
+                    horse_weights[num] += weight
+
+            picks = src_data.get("picks", {})
+            race_picks = picks.get(race_key)
+            if race_picks and not rankings.get(race_key):
+                pick_str = str(race_picks)
+                if "SPIK" in pick_str.upper():
+                    nums = _re.findall(r"\d+", pick_str.split("(")[0])
+                    for num in nums[:1]:
+                        horse_scores[num] += TIER_POINTS["A"] * weight
+                        horse_weights[num] += weight
+                elif "Skräll" in pick_str:
+                    nums = _re.findall(r"\d+", pick_str.split("(")[0])
+                    for num in nums[:1]:
+                        horse_scores[num] += TIER_POINTS["B"] * weight
+                        horse_weights[num] += weight
+
+        if not horse_scores:
+            continue
+
+        avg = {n: horse_scores[n] / horse_weights[n] if horse_weights[n] > 0 else 0
+               for n in horse_scores}
+        sorted_h = sorted(avg.items(), key=lambda x: -x[1])
+        tot_h = len(sorted_h)
+
+        tiers: dict[str, list[str]] = {t: [] for t in TIER_ORDER}
+        for j, (num, _score) in enumerate(sorted_h):
+            p = j / tot_h if tot_h else 0
+            if p < 0.15:
+                tiers["A"].append(num)
+            elif p < 0.35:
+                tiers["B"].append(num)
+            elif p < 0.55:
+                tiers["BC"].append(num)
+            elif p < 0.80:
+                tiers["C"].append(num)
+            else:
+                tiers["D"].append(num)
+
+        cells = []
+        for tier in TIER_ORDER:
+            nums = tiers[tier]
+            if nums:
+                pills = "".join(
+                    f'<span class="rank-pill rank-{tier.lower()}">{n}</span>'
+                    for n in nums
+                )
+                cells.append(f'<td class="rank-cell">{pills}</td>')
+            else:
+                cells.append('<td class="rank-cell rank-empty">&mdash;</td>')
+
+        rows.append(
+            f'<tr>'
+            f'<td class="rank-race">{race_key}</td>'
+            f'{"".join(cells)}'
+            f'</tr>'
+        )
+
+    if not rows:
+        return ""
+
+    num_sources = len([s for s in sources if s != "expressen_tranarsnack"])
+    return (
+        f'<div class="ranking-card">'
+        f'<div class="ranking-header">Konsensus-ranking '
+        f'<span style="font-weight:400;font-size:.75rem;color:#64748b">'
+        f'(modell + {num_sources} experter)</span></div>'
+        f'<div class="table-wrap">'
+        f'<table class="ranking-table">'
+        f'<thead><tr>'
+        f'<th class="rank-th-race">Lopp</th>'
+        f'<th class="rank-th rank-th-a">A</th>'
+        f'<th class="rank-th rank-th-b">B</th>'
+        f'<th class="rank-th rank-th-bc">BC</th>'
+        f'<th class="rank-th rank-th-c">C</th>'
+        f'<th class="rank-th rank-th-d">D</th>'
+        f'</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table>'
+        f'</div>'
+        f'</div>'
+    )
+
+
 def generate_dashboard_html(
     game_round: GameRound,
     available_dates: list[tuple[str, bool]] | None = None,
     backlog_data: dict | list[dict] | None = None,
     available_rounds: list[tuple[str, str, str, bool]] | list[tuple[str, str, str, bool, str]] | None = None,
     premium: bool = True,
+    tips_raw: dict | None = None,
 ) -> str:
     """Generera en komplett HTML-dashboard for en analyserad spelomgang.
 
@@ -1860,6 +2025,7 @@ def generate_dashboard_html(
     race_htmls = {r.race_number: _race_table_html(r) for r in game_round.races}
     summary = _summary_html(game_round)
     ranking = _ranking_html(game_round)
+    consensus_ranking = _consensus_ranking_html(game_round, tips_raw)
     system_section = _system_html(game_round)
     stats_section = _stats_html(backlog_data)
     backlog_section = _backlog_html(game_round, backlog_data)
@@ -2452,6 +2618,12 @@ border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
 font-family:'JetBrains Mono',monospace;font-size:.78rem;margin:8px 0;line-height:1.5}}
 .chat-msg.ai ul,.chat-msg.ai ol{{padding-left:1.2rem;margin:6px 0}}
 .chat-msg.ai li{{margin-bottom:4px}}
+.chat-table{{width:100%;border-collapse:collapse;font-size:.82rem;margin:10px 0;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb}}
+.chat-table th{{background:#f1f5f9;color:#64748b;text-transform:uppercase;font-size:.68rem;
+letter-spacing:.06em;padding:8px 10px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb}}
+.chat-table td{{padding:8px 10px;border-bottom:1px solid #f1f5f9}}
+.chat-table tbody tr:nth-child(even) td{{background:#f9fafb}}
+.chat-table tbody tr:hover td{{background:#f1f5f9}}
 .chat-msg.streaming::after{{content:'';display:inline-block;width:2px;height:14px;background:#f59e0b;
 margin-left:2px;vertical-align:text-bottom;animation:blink-cursor .8s infinite}}
 @keyframes blink-cursor{{0%,100%{{opacity:1}}50%{{opacity:0}}}}
@@ -2582,6 +2754,7 @@ backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}}
     {risk_bar}
     {sv_bar}
     {ranking}
+    {consensus_ranking}
     {accuracy}
     {summary}
   </section>
@@ -3008,7 +3181,31 @@ function formatChatMsg(text){{
   s=s.replace(/```([\\s\\S]*?)```/g,function(m,code){{return '<pre>'+code.trim()+'</pre>';}});
   // Inline code
   s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // Markdown tables
+  s=s.replace(/(^\\|.+\\|\\n?)+/gm,function(block){{
+    const rows=block.trim().split('\\n').filter(r=>r.trim());
+    if(rows.length<2)return block;
+    let html='<table class="chat-table"><thead><tr>';
+    const hCells=rows[0].split('|').filter(c=>c.trim());
+    hCells.forEach(c=>{{html+='<th>'+c.trim()+'</th>';}});
+    html+='</tr></thead><tbody>';
+    const startRow=rows[1]&&/^[\\s|:-]+$/.test(rows[1])?2:1;
+    for(let i=startRow;i<rows.length;i++){{
+      const cells=rows[i].split('|').filter(c=>c.trim());
+      html+='<tr>';
+      cells.forEach(c=>{{
+        let cv=c.trim();
+        const tierMatch=cv.match(/^([A-D]|BC)$/);
+        if(tierMatch){{cv='<span class="rank-pill rank-'+tierMatch[1].toLowerCase()+'">'+cv+'</span>';}}
+        html+='<td>'+cv+'</td>';
+      }});
+      html+='</tr>';
+    }}
+    html+='</tbody></table>';
+    return html;
+  }});
   // Headers
+  s=s.replace(/^#### (.+)$/gm,'<h5 style="margin:.6em 0 .2em;font-size:.82rem;font-weight:700;color:#1e293b">$1</h5>');
   s=s.replace(/^### (.+)$/gm,'<h4 style="margin:.8em 0 .3em;font-size:.9rem;font-weight:700;color:#1e293b">$1</h4>');
   s=s.replace(/^## (.+)$/gm,'<h3 style="margin:1em 0 .4em;font-size:1rem;font-weight:700;color:#1e293b">$1</h3>');
   // Horizontal rule

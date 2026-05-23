@@ -185,10 +185,18 @@ async def dashboard(game_type: str, day: str):
     available_rounds = await _get_available_rounds(client)
     backlog_data = await _load_backlog()
 
+    tips_raw = None
+    try:
+        from trav_agent.data.tips_scraper import load_tips_cache_raw
+        tips_raw = load_tips_cache_raw(game_type, str(d))
+    except Exception:
+        pass
+
     html = generate_dashboard_html(
         game_round,
         available_rounds=available_rounds,
         backlog_data=backlog_data,
+        tips_raw=tips_raw,
     )
     return html
 

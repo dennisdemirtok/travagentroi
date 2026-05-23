@@ -112,29 +112,33 @@ def get_todays_game_types() -> list[str]:
 class FactorWeights:
     """Vikter för varje analysfaktor. Summerar till 1.0.
 
-    Version 4: Korrigerade vikter baserade på travhandicapping-teori.
-    Tidigare vikter (v3) var optimerade på läckt data (framtida starter
-    + slutgiltig streckprocent) vilket gav inverterade vikter där
-    post_position=0.30 och time_analysis=0.12. I verkligheten är
-    km-tid och formkurva de starkaste prediktorerna.
+    Version 5: Optimerade utan data-leakage.
+    Beräknade med neutraliserade closing odds och temporalt filtrerade
+    karriärstatistik (recompute_career_from_starts). 1902 lopp
+    (2024-01 till 2026-04), alla speltyper.
 
-    Viktprinciper:
-    - Tid (km_time) = objektiv prestation, starkaste enskilda signal
-    - Form = aktuell kapacitet, viktigare än historisk klass
-    - Prize/klass = motståndsnivå, stabil signal
-    - Kategori = distans/metod-matchning, relevant men ej dominerande
-    - Startspår = känd bias ~8-12% av utfallsvarians, ej 30%
-    - Kusk/bana = svag utan extern data, hålls låg
+    Resultat vs v4: top2 +1.5%, top3 +2.4%
 
-    Interaktionstermer BORTTAGNA — de förstärkte brus från
-    track_profile (0-3 starter per bana = extremt brusigt).
+    Viktprinciper (validerade av optimizer):
+    - Tid (km_time) = starkaste enskilda signal (0.32)
+    - Kategori = distans/metod-matchning, oväntat stark (0.25)
+    - Prize/klass & startspår = jämna bidrag (0.15 var)
+    - Form = överraskande låg utan marknadssignal (0.03)
+    - Kusk/bana = svaga utan extern data (0.05 var)
+
+    Market weight = 0: Modellen förlitar sig helt på egna faktorer.
+    Closing odds (streckprocent) ger ~30% prediktiv kraft men är
+    inte tillgänglig i tillräcklig kvalitet pre-race för att vara
+    pålitlig i live-drift.
+
+    Interaktionstermer BORTTAGNA — de förstärkte brus.
     """
 
-    time_analysis: float = 0.28
-    form_curve: float = 0.22
-    prize_index: float = 0.18
-    category_profile: float = 0.14
-    post_position: float = 0.08
+    time_analysis: float = 0.32
+    form_curve: float = 0.03
+    prize_index: float = 0.15
+    category_profile: float = 0.25
+    post_position: float = 0.15
     driver_trainer: float = 0.05
     track_profile: float = 0.05
 
@@ -188,7 +192,7 @@ class AnalysisConfig:
     # ska inte dominera. Tidigare 55/45 var overfit på slutgiltig streck.
     # Streck 1h före start är ganska stabil vs slutvärde, men 45% var
     # för mycket — modellen måste stå på egna ben.
-    super_score_model_weight: float = 0.85  # 0.0 = ren marknad, 1.0 = ren modell
+    super_score_model_weight: float = 1.0  # 0.0 = ren marknad, 1.0 = ren modell
 
     # Klassificeringströsklar (anpassade för mer modell-driven skala)
     spike_min_score: float = 75.0     # Minst poäng för "spik" (rank 1)

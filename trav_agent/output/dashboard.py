@@ -2171,6 +2171,10 @@ def generate_dashboard_html(
             round_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
         round_dropdown = '<select class="round-select" onchange="changeRound(this)">' + "".join(round_options) + '</select>'
 
+    # Prepare date_str and track_name early — needed by round_navigator
+    date_str = str(game_round.round_date) if game_round.round_date else ""
+    track_name = _esc(game_round.track_name or "")
+
     # Round navigator for sidebar — always show current round label
     prev_key = ""
     next_key = ""
@@ -2273,8 +2277,7 @@ def generate_dashboard_html(
             '</span><span>System</span></button>'
         )
 
-    track_name = _esc(game_round.track_name or "")
-    date_str = str(game_round.round_date) if game_round.round_date else ""
+    # track_name and date_str already assigned above (before round_navigator)
 
     return f"""<!DOCTYPE html>
 <html lang="sv">

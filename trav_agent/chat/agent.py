@@ -89,8 +89,9 @@ def build_consensus_ranking(game_round, tips_raw: Optional[dict] = None) -> str:
     lines.append("KONSENSUS-RANKING (modell + alla experter)")
     lines.append("=" * 50)
 
+    gt = game_round.game_type or "V85"
     for race in game_round.races:
-        race_key = f"V85-{race.race_number}"
+        race_key = f"{gt}-{race.race_number}"
 
         horse_scores: dict[str, float] = defaultdict(float)
         horse_weights: dict[str, float] = defaultdict(float)

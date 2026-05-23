@@ -2385,29 +2385,6 @@ font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all
 background:#f8fafc;color:#64748b;font-size:12px;cursor:pointer;
 font-family:inherit;text-align:left;transition:all .15s}}
 .agent-sidebar .agent-chip:hover{{background:#f1f5f9;color:#1e293b}}
-.agent-sessions{{padding:4px 8px;display:flex;flex-direction:column;gap:2px;max-height:280px;overflow-y:auto}}
-.session-item{{display:flex;flex-direction:column;padding:8px 10px;border-radius:8px;border:none;
-background:transparent;color:#64748b;font-size:12px;cursor:pointer;
-font-family:inherit;text-align:left;transition:all .15s;gap:2px}}
-.session-item:hover{{background:#f1f5f9;color:#1e293b}}
-.session-item.active{{background:#fffbeb;color:#92400e;border-left:3px solid #f59e0b}}
-.session-item-round{{font-weight:600;font-size:11px;color:#1e293b;display:flex;justify-content:space-between;align-items:center}}
-.session-item-round .session-count{{font-weight:400;font-size:10px;color:#94a3b8;
-background:#f1f5f9;padding:1px 5px;border-radius:4px}}
-.session-item.active .session-item-round{{color:#92400e}}
-.session-item-preview{{font-size:10.5px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-.session-item.active .session-item-preview{{color:#b45309}}
-.session-item-time{{font-size:10px;color:#cbd5e1}}
-.session-loading{{font-size:11px;color:#94a3b8;padding:12px;text-align:center}}
-.session-empty{{font-size:11px;color:#94a3b8;padding:12px;text-align:center;font-style:italic}}
-.session-refresh-btn{{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;
-padding:0 4px;font-family:inherit}}
-.session-refresh-btn:hover{{color:#64748b}}
-.session-item-actions{{display:none;align-items:center}}
-.session-item:hover .session-item-actions{{display:flex}}
-.session-del-btn{{background:none;border:none;cursor:pointer;color:#cbd5e1;font-size:13px;
-padding:0 2px;font-family:inherit}}
-.session-del-btn:hover{{color:#ef4444}}
 
 /* ── Main content area ── */
 .main-area{{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:calc(100vh - 56px)}}
@@ -3027,17 +3004,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   </div>
   <!-- Agent sidebar content -->
   <div id="sidebar-agent" class="agent-sidebar">
-    <button class="agent-new-btn" onclick="newChatSession()">+ Ny session</button>
-    <div class="nav-divider"></div>
-    <div class="nav-label" style="display:flex;justify-content:space-between;align-items:center">
-      <span>SESSIONER</span>
-      <button class="session-refresh-btn" onclick="loadSessionList()" title="Uppdatera">&#8635;</button>
-    </div>
-    <div class="agent-sessions" id="agent-sessions">
-      <div class="session-loading">Laddar sessioner...</div>
-    </div>
-    <div class="nav-divider"></div>
-    <div class="nav-label">SNABBFRÅGOR</div>
+    <button class="agent-new-btn" onclick="resetChat()">+ Ny session</button>
     <div class="agent-chips">
       <button class="agent-chip" onclick="askSuggestion('Sammanfatta omgången')">Sammanfatta omgången</button>
       <button class="agent-chip" onclick="askSuggestion('Vilka lopp har högst skällrisk?')">Skällrisker</button>
@@ -3327,7 +3294,6 @@ function toggleMobileSidebar(){{
 // ── AI Chat (SSE streaming) ──
 let chatMsgs=[];
 let chatAbort=null;
-let activeSessionKey=null;  // Track which session is active
 
 function getCurrentRoundKey(){{
   return window.location.pathname.replace(/^\\/dashboard\\//,'').replace(/^\\/+/,'');
@@ -3335,28 +3301,15 @@ function getCurrentRoundKey(){{
 
 function resetChat(){{
   if(chatAbort){{chatAbort.abort();chatAbort=null;}}
-  const rk=activeSessionKey||getCurrentRoundKey();
   chatMsgs=[];
   renderChat();
   const sug=document.getElementById('agent-suggestions');
   if(sug) sug.style.display='flex';
+  // Clear local storage for this round
+  try{{ sessionStorage.removeItem('chat_'+getCurrentRoundKey()); }}catch(e){{}}
   try{{
-    fetch('/api/chat/session/'+encodeURIComponent(rk),{{method:'DELETE'}});
+    fetch('/api/chat/session/'+encodeURIComponent(getCurrentRoundKey()),{{method:'DELETE'}});
   }}catch(e){{}}
-  activeSessionKey=getCurrentRoundKey();
-  loadSessionList();
-}}
-
-function newChatSession(){{
-  if(chatAbort){{chatAbort.abort();chatAbort=null;}}
-  chatMsgs=[];
-  activeSessionKey=getCurrentRoundKey();
-  renderChat();
-  const sug=document.getElementById('agent-suggestions');
-  if(sug) sug.style.display='flex';
-  highlightActiveSession();
-  const ci=document.getElementById('chat-input');
-  if(ci) setTimeout(()=>ci.focus(),100);
 }}
 
 function askSuggestion(text){{
@@ -3364,100 +3317,37 @@ function askSuggestion(text){{
   sendChat();
 }}
 
-async function loadChatSession(){{
-  const rk=getCurrentRoundKey();
-  activeSessionKey=rk;
+function saveChatLocal(){{
+  // Save to sessionStorage for this device
+  try{{ sessionStorage.setItem('chat_'+getCurrentRoundKey(), JSON.stringify(chatMsgs)); }}catch(e){{}}
+}}
+
+function loadChatSession(){{
+  // Load from sessionStorage first (instant, per device)
   try{{
-    const resp=await fetch('/api/chat/session/'+encodeURIComponent(rk));
-    const data=await resp.json();
-    if(data.messages&&data.messages.length>0){{
-      chatMsgs=data.messages;
-      renderChat();
-      const sug=document.getElementById('agent-suggestions');
-      if(sug) sug.style.display='none';
+    const stored=sessionStorage.getItem('chat_'+getCurrentRoundKey());
+    if(stored){{
+      chatMsgs=JSON.parse(stored);
+      if(chatMsgs.length>0){{
+        renderChat();
+        const sug=document.getElementById('agent-suggestions');
+        if(sug) sug.style.display='none';
+        return;
+      }}
     }}
   }}catch(e){{}}
-}}
-
-async function switchToSession(roundKey){{
-  if(chatAbort){{chatAbort.abort();chatAbort=null;}}
-  activeSessionKey=roundKey;
-  try{{
-    const resp=await fetch('/api/chat/session/'+encodeURIComponent(roundKey));
-    const data=await resp.json();
-    chatMsgs=data.messages||[];
-    renderChat();
-    const sug=document.getElementById('agent-suggestions');
-    if(sug) sug.style.display=chatMsgs.length>0?'none':'flex';
-    highlightActiveSession();
-  }}catch(e){{
-    chatMsgs=[];
-    renderChat();
-  }}
-  // Ensure agent view is shown
-  showView('agent');
-  const ci=document.getElementById('chat-input');
-  if(ci) setTimeout(()=>ci.focus(),100);
-}}
-
-async function deleteSession(roundKey, evt){{
-  evt.stopPropagation();
-  if(!confirm('Ta bort session för '+roundKey.replace('/',' ')+'?'))return;
-  try{{
-    await fetch('/api/chat/session/'+encodeURIComponent(roundKey),{{method:'DELETE'}});
-    if(activeSessionKey===roundKey){{
-      chatMsgs=[];
-      activeSessionKey=getCurrentRoundKey();
-      renderChat();
-      const sug=document.getElementById('agent-suggestions');
-      if(sug) sug.style.display='flex';
-    }}
-    loadSessionList();
-  }}catch(e){{}}
-}}
-
-async function loadSessionList(){{
-  const container=document.getElementById('agent-sessions');
-  if(!container)return;
-  try{{
-    const resp=await fetch('/api/chat/sessions');
-    const data=await resp.json();
-    const sessions=data.sessions||[];
-    if(sessions.length===0){{
-      container.innerHTML='<div class="session-empty">Inga sessioner ännu</div>';
-      return;
-    }}
-    container.innerHTML=sessions.map(s=>{{
-      const rk=s.round_key||'';
-      const parts=rk.split('/');
-      const gt=parts[0]||'';
-      const d=parts[1]||'';
-      const isActive=rk===activeSessionKey;
-      const preview=s.first_question||(gt+' '+d);
-      const msgCount=s.message_count||0;
-      const time=s.updated_at?s.updated_at.slice(0,16).replace('T',' '):'';
-      return '<button class="session-item'+(isActive?' active':'')+'" onclick="switchToSession(\''+rk+'\')">'
-        +'<div class="session-item-round">'
-        +'<span>'+gt+' '+d+'</span>'
-        +'<span class="session-count">'+msgCount+' msg</span>'
-        +'</div>'
-        +'<div class="session-item-preview">'+preview.replace(/</g,'&lt;').slice(0,60)+'</div>'
-        +'<div style="display:flex;justify-content:space-between;align-items:center">'
-        +'<span class="session-item-time">'+time+'</span>'
-        +'<button class="session-del-btn" onclick="deleteSession(\''+rk+'\',event)" title="Ta bort">&times;</button>'
-        +'</div>'
-        +'</button>';
-    }}).join('');
-  }}catch(e){{
-    container.innerHTML='<div class="session-empty">Kunde inte ladda sessioner</div>';
-  }}
-}}
-
-function highlightActiveSession(){{
-  document.querySelectorAll('.session-item').forEach(el=>{{
-    const rk=el.getAttribute('onclick')||'';
-    el.classList.toggle('active',rk.includes(activeSessionKey));
-  }});
+  // Fallback: load from server (picks up sessions from other devices)
+  fetch('/api/chat/session/'+encodeURIComponent(getCurrentRoundKey()))
+    .then(r=>r.json())
+    .then(data=>{{
+      if(data.messages&&data.messages.length>0){{
+        chatMsgs=data.messages;
+        renderChat();
+        const sug=document.getElementById('agent-suggestions');
+        if(sug) sug.style.display='none';
+        saveChatLocal();
+      }}
+    }}).catch(()=>{{}});
 }}
 
 document.addEventListener('DOMContentLoaded',()=>{{
@@ -3468,7 +3358,6 @@ document.addEventListener('DOMContentLoaded',()=>{{
   const sbAgent=document.getElementById('sidebar-agent');
   if(sbAgent) sbAgent.style.display='none';
   loadChatSession();
-  loadSessionList();
 }});
 async function sendChat(){{
   const input=document.getElementById('chat-input');
@@ -3499,7 +3388,7 @@ async function sendChat(){{
   if(rankEl)rankingCtx=rankEl.getAttribute('data-ranking')||'';
 
   try{{
-    const rk=activeSessionKey||getCurrentRoundKey();
+    const rk=getCurrentRoundKey();
     const resp=await fetch('/api/chat',{{
       method:'POST',
       headers:{{'Content-Type':'application/json'}},
@@ -3573,8 +3462,7 @@ async function sendChat(){{
   }}
   btn.disabled=false;
   chatContainer.scrollTop=chatContainer.scrollHeight;
-  // Refresh session list after each message exchange
-  loadSessionList();
+  saveChatLocal();
 }}
 function renderChat(){{
   const c=document.getElementById('chat-messages');

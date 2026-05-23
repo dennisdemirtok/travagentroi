@@ -3008,13 +3008,18 @@ function formatChatMsg(text){{
   s=s.replace(/```([\\s\\S]*?)```/g,function(m,code){{return '<pre>'+code.trim()+'</pre>';}});
   // Inline code
   s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // Headers
+  s=s.replace(/^### (.+)$/gm,'<h4 style="margin:.8em 0 .3em;font-size:.9rem;font-weight:700;color:#1e293b">$1</h4>');
+  s=s.replace(/^## (.+)$/gm,'<h3 style="margin:1em 0 .4em;font-size:1rem;font-weight:700;color:#1e293b">$1</h3>');
+  // Horizontal rule
+  s=s.replace(/^---+$/gm,'<hr style="border:none;border-top:1px solid #e5e7eb;margin:.8em 0">');
   // Bold
   s=s.replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>');
   // Italic
   s=s.replace(/\\*(.+?)\\*/g,'<em>$1</em>');
   // Unordered lists
   s=s.replace(/^[\\-\\*] (.+)$/gm,'<li>$1</li>');
-  s=s.replace(/(<li>.*<\\/li>)/gs,function(m){{return '<ul>'+m+'</ul>';}});
+  s=s.replace(/(<li>.*<\\/li>)/gs,function(m){{return '<ul style="margin:.3em 0;padding-left:1.2em">'+m+'</ul>';}});
   // Ordered lists
   s=s.replace(/^\\d+\\. (.+)$/gm,'<li>$1</li>');
   // Line breaks

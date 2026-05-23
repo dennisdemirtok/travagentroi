@@ -388,6 +388,167 @@ async def post_manual_tips(request: Request):
     return {"status": "stored", "source": source, "length": len(text)}
 
 
+# ── Image-based tips parsing ──────────────────────────────────────────────
+
+@app.post("/api/tips/parse-image")
+async def parse_tips_image(request: Request):
+    """Parse a tipster screenshot with Claude vision and return structured data."""
+    if not ANTHROPIC_API_KEY:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY saknas"}, status_code=500)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    image_b64 = data.get("image")
+    game_type = data.get("game_type", "V85").upper()
+    source_name = data.get("source_name", "")
+    media_type = data.get("media_type", "image/png")
+
+    if not image_b64:
+        return JSONResponse({"error": "'image' (base64) krävs"}, status_code=400)
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    gt = game_type
+
+    prompt = f"""Analysera denna bild från en travtipstjänst. Extrahera ALL data i strukturerad form.
+
+Bilden kan innehålla:
+1. **Avdelningar/Rankings** — A/B/BC/C/D-ranking per avdelning ({gt}-1, {gt}-2, osv). Siffror representerar hästarnas startnummer.
+2. **Hetaste infon** — Insider-tips per avdelning
+3. **Förändringar** — Utrustningsändringar, barfota, etc.
+
+Returnera ENBART ett JSON-objekt (inget annat text):
+{{
+  "source_name": "<tipstjänstens namn, t.ex. 'SpV Gävle'>",
+  "author": "<författare om synlig>",
+  "rankings": {{
+    "{gt}-1": {{"A": "3-11", "B": "8-10-6", "BC": "1-4-14", "C": "9-12-2", "D": ""}},
+    "{gt}-2": {{"A": "...", "B": "...", "BC": "...", "C": "...", "D": ""}},
+    ...
+  }},
+  "hot_info": {{
+    "{gt}-1": "Kort sammanfattning av het info för avdelning 1",
+    "{gt}-2": "...",
+    ...
+  }},
+  "changes": {{
+    "{gt}-1": "Sammanfattning av förändringar för avdelning 1",
+    "{gt}-2": "...",
+    ...
+  }}
+}}
+
+Viktigt:
+- Startnummer ska vara separerade med bindestreck (t.ex. "15-5-11")
+- Om B/C visas i bilden, mappa till "BC"
+- Om en tier saknas, sätt tom sträng ""
+- Om inget hett tips finns för en avdelning, utelämna den från hot_info
+- Om inga förändringar finns, utelämna från changes
+- Returnera BARA JSON, ingen annan text"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": image_b64,
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+
+        raw_text = response.content[0].text.strip()
+        # Strip markdown code fences if present
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("\n", 1)[1]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3].strip()
+
+        parsed = json.loads(raw_text)
+
+        # If user didn't provide source_name, use the one from the parsed data
+        if not source_name and parsed.get("source_name"):
+            source_name = parsed["source_name"]
+
+        return {
+            "status": "parsed",
+            "source_name": source_name or "custom_tipster",
+            "parsed": parsed,
+        }
+
+    except json.JSONDecodeError:
+        return JSONResponse(
+            {"error": "Kunde inte parsa AI-svaret som JSON", "raw": raw_text[:500]},
+            status_code=422,
+        )
+    except Exception as e:
+        logger.error(f"Image parse error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/tips/add-source")
+async def add_tips_source(request: Request):
+    """Add a parsed tipster source to the tips cache and refresh consensus."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    game_type = data.get("game_type", "").upper()
+    round_date = data.get("round_date", "")
+    source_name = data.get("source_name", "")
+    source_data = data.get("source_data", {})
+
+    if not game_type or not round_date or not source_name or not source_data:
+        return JSONResponse(
+            {"error": "game_type, round_date, source_name och source_data krävs"},
+            status_code=400,
+        )
+
+    from trav_agent.data.tips_scraper import add_source_to_cache
+    add_source_to_cache(game_type, round_date, source_name, source_data)
+
+    # Clear round cache to force regeneration with new consensus data
+    key = f"{game_type}/{round_date}"
+    _round_cache.pop(key, None)
+
+    # Clear tips cache
+    tips_key = f"{game_type}:{round_date}"
+    _tips_cache.pop(tips_key, None)
+
+    return {"status": "added", "source_name": source_name, "round_key": key}
+
+
+@app.delete("/api/tips/source/{game_type}/{day}/{source_name}")
+async def remove_tips_source(game_type: str, day: str, source_name: str):
+    """Remove a tipster source from the cache."""
+    game_type = game_type.upper()
+    from trav_agent.data.tips_scraper import remove_source_from_cache
+    removed = remove_source_from_cache(game_type, day, source_name)
+
+    if not removed:
+        raise HTTPException(404, "Källan hittades inte")
+
+    key = f"{game_type}/{day}"
+    _round_cache.pop(key, None)
+    _tips_cache.pop(f"{game_type}:{day}", None)
+
+    return {"status": "removed", "source_name": source_name}
+
+
 # ── Backlog API ──────────────────────────────────────────────────────────────
 
 @app.get("/api/backlog")

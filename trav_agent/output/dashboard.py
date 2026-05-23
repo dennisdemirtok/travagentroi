@@ -1936,10 +1936,18 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
         "aftonbladet_kim": 1.0, "aftonbladet_quist": 1.0,
         "aftonbladet_nils": 1.0,
     }
+    # Dynamic weights for user-added sources (default 1.5 — same tier as travcash)
+    for src_key in sources:
+        if src_key not in SOURCE_WEIGHTS and src_key != "expressen_tranarsnack":
+            SOURCE_WEIGHTS[src_key] = 1.5
     TIER_ORDER = ["A", "B", "BC", "C", "D"]
     gt = _esc(game_round.game_type)
 
     # -- Weight legend computation --
+    _known_keys = {"model", "travcash"}
+    _known_keys |= {k for k in SOURCE_WEIGHTS if k.startswith("sharps_")}
+    _known_keys |= {k for k in SOURCE_WEIGHTS if k.startswith("aftonbladet_")}
+    _known_keys.add("expressen_edholm")
     _w_model = SOURCE_WEIGHTS["model"]
     _w_sharps = sum(v for k, v in SOURCE_WEIGHTS.items() if k.startswith("sharps_"))
     _w_media = (
@@ -1947,7 +1955,9 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
         + SOURCE_WEIGHTS.get("expressen_edholm", 0)
     )
     _w_travcash = SOURCE_WEIGHTS.get("travcash", 0)
-    _w_total = _w_model + _w_sharps + _w_media + _w_travcash
+    _w_custom = sum(v for k, v in SOURCE_WEIGHTS.items() if k not in _known_keys)
+    _custom_names = [k for k in SOURCE_WEIGHTS if k not in _known_keys]
+    _w_total = _w_model + _w_sharps + _w_media + _w_travcash + _w_custom
 
     rows = []
     for race in game_round.races:
@@ -2110,21 +2120,44 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
             f'{label} <b>{pct}%</b></span>'
         )
 
+    _custom_pill = ""
+    if _w_custom > 0:
+        _clbl = ", ".join(n.replace("_", " ").title() for n in _custom_names)
+        _custom_pill = _wpill(_clbl, _w_custom, "#b45309", "rgba(254,215,170,0.6)")
+
     legend = (
         f'<div class="wt-legend">'
         + _wpill("Modell", _w_model, "#92400e", "rgba(254,243,199,0.6)")
         + _wpill("Sharps", _w_sharps, "#1e40af", "rgba(219,234,254,0.6)")
         + _wpill("Media", _w_media, "#6b21a8", "rgba(243,232,255,0.6)")
         + _wpill("Travcash", _w_travcash, "#065f46", "rgba(209,250,229,0.6)")
+        + _custom_pill
         + f'</div>'
     )
 
+    # -- List user-added custom sources for display --
+    custom_src_badges = ""
+    if _custom_names:
+        badges = "".join(
+            f'<span class="custom-src-badge" data-src="{_esc(n)}">'
+            f'{_esc(n.replace("_", " ").title())}'
+            f'<button class="custom-src-rm" onclick="removeCustomSource(\'{_esc(n)}\')" '
+            f'title="Ta bort">&times;</button></span>'
+            for n in _custom_names
+        )
+        custom_src_badges = f'<div class="custom-src-list">{badges}</div>'
+
     return (
         f'<div class="ranking-card">'
-        f'<div class="ranking-header">Konsensus-ranking '
+        f'<div class="ranking-header" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        f'Konsensus-ranking '
         f'<span style="font-weight:400;font-size:.75rem;color:#64748b">'
-        f'(modell + {num_sources} experter)</span></div>'
+        f'(modell + {num_sources} experter)</span>'
+        f'<button class="add-source-btn" onclick="openTipsUpload()" '
+        f'title="Lägg till tipskälla via bild">+ Källa</button>'
+        f'</div>'
         f'{legend}'
+        f'{custom_src_badges}'
         f'<div class="table-wrap">'
         f'<table class="ranking-table">'
         f'<thead><tr>'
@@ -2622,6 +2655,67 @@ font-size:.65rem;font-weight:500;letter-spacing:.01em}}
 .rank-agree-cell{{width:36px;text-align:center !important}}
 .rank-agree{{color:#16a34a;font-size:.85rem;font-weight:700}}
 .rank-disagree{{color:#d97706;font-size:.85rem}}
+
+/* Add source button & custom source badges */
+.add-source-btn{{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:8px;
+border:1px dashed #cbd5e1;background:#f8fafc;color:#64748b;font-size:.7rem;font-weight:600;
+cursor:pointer;transition:all .2s;font-family:inherit}}
+.add-source-btn:hover{{border-color:#f59e0b;color:#f59e0b;background:#fffbeb}}
+.custom-src-list{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}}
+.custom-src-badge{{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;
+font-size:.65rem;font-weight:500;background:rgba(254,215,170,0.5);color:#b45309;border:1px solid rgba(180,83,9,0.2)}}
+.custom-src-rm{{background:none;border:none;color:#b45309;cursor:pointer;font-size:.8rem;
+padding:0 2px;opacity:.6;font-family:inherit}}
+.custom-src-rm:hover{{opacity:1}}
+
+/* Tips upload modal */
+.tips-modal-overlay{{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.5);
+backdrop-filter:blur(4px);align-items:center;justify-content:center}}
+.tips-modal-overlay.open{{display:flex}}
+.tips-modal{{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);
+width:min(520px,90vw);max-height:85vh;overflow-y:auto;animation:modalIn .25s ease}}
+@keyframes modalIn{{from{{opacity:0;transform:scale(0.95)}}to{{opacity:1;transform:scale(1)}}}}
+.tips-modal-header{{display:flex;justify-content:space-between;align-items:center;
+padding:18px 24px;border-bottom:1px solid #e5e7eb}}
+.tips-modal-header h3{{font-size:1rem;font-weight:700;color:#1e293b}}
+.tips-modal-close{{background:none;border:none;font-size:1.3rem;color:#94a3b8;cursor:pointer;
+padding:4px 8px;border-radius:6px;font-family:inherit}}
+.tips-modal-close:hover{{background:#f1f5f9;color:#475569}}
+.tips-modal-body{{padding:20px 24px}}
+.tips-drop-zone{{border:2px dashed #cbd5e1;border-radius:12px;padding:32px 20px;text-align:center;
+cursor:pointer;transition:all .25s;background:#fafbfc;position:relative}}
+.tips-drop-zone:hover,.tips-drop-zone.dragover{{border-color:#f59e0b;background:#fffbeb}}
+.tips-drop-zone input{{position:absolute;inset:0;opacity:0;cursor:pointer}}
+.tips-drop-icon{{font-size:2rem;margin-bottom:8px}}
+.tips-drop-text{{font-size:.85rem;color:#64748b}}
+.tips-drop-text strong{{color:#1e293b}}
+.tips-preview-img{{max-width:100%;max-height:200px;border-radius:8px;margin:12px 0;
+box-shadow:0 2px 8px rgba(0,0,0,0.1)}}
+.tips-source-input{{width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;
+font-size:.85rem;font-family:inherit;margin:12px 0;outline:none;transition:border-color .2s}}
+.tips-source-input:focus{{border-color:#f59e0b}}
+.tips-parsing{{text-align:center;padding:20px;color:#64748b}}
+.tips-parsing .spinner{{display:inline-block;width:28px;height:28px;border:3px solid #e5e7eb;
+border-top-color:#f59e0b;border-radius:50%;animation:spin 0.8s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+.tips-preview-data{{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;
+padding:14px;margin:12px 0;max-height:300px;overflow-y:auto}}
+.tips-preview-data h4{{font-size:.8rem;font-weight:700;color:#1e293b;margin-bottom:8px}}
+.tips-preview-table{{width:100%;font-size:.75rem;border-collapse:collapse}}
+.tips-preview-table th{{text-align:left;padding:4px 8px;color:#6b7280;font-weight:600;
+border-bottom:1px solid #e5e7eb}}
+.tips-preview-table td{{padding:4px 8px;color:#334155;border-bottom:1px solid #f1f5f9}}
+.tips-modal-footer{{display:flex;gap:8px;justify-content:flex-end;padding:16px 24px;
+border-top:1px solid #e5e7eb}}
+.tips-btn{{padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;
+font-family:inherit;border:none;transition:all .2s}}
+.tips-btn-secondary{{background:#f1f5f9;color:#475569}}
+.tips-btn-secondary:hover{{background:#e2e8f0}}
+.tips-btn-primary{{background:#f59e0b;color:#fff}}
+.tips-btn-primary:hover{{background:#d97706}}
+.tips-btn-primary:disabled{{background:#e5e7eb;color:#94a3b8;cursor:not-allowed}}
+.tips-hot-info{{margin-top:8px;font-size:.72rem;color:#64748b;line-height:1.5}}
+.tips-hot-info strong{{color:#1e293b}}
 
 /* Track record banner */
 .track-banner{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
@@ -3445,7 +3539,226 @@ document.querySelectorAll('.horse-row.clickable').forEach(row=>{{
     }}
   }},1000);
 }})();
+
+// ── Tips Upload (image → AI parse → add source) ──
+let tipsImageB64=null;
+let tipsParsedData=null;
+let tipsMediaType='image/png';
+
+function openTipsUpload(){{
+  tipsImageB64=null;tipsParsedData=null;
+  document.getElementById('tips-step-upload').style.display='';
+  document.getElementById('tips-step-parsing').style.display='none';
+  document.getElementById('tips-step-preview').style.display='none';
+  document.getElementById('tips-step-done').style.display='none';
+  document.getElementById('tips-confirm-btn').disabled=true;
+  document.getElementById('tips-confirm-btn').style.display='';
+  document.getElementById('tips-modal-footer').style.display='flex';
+  document.getElementById('tips-source-name').value='';
+  document.getElementById('tips-file-input').value='';
+  document.getElementById('tips-modal').classList.add('open');
+}}
+function closeTipsUpload(){{
+  document.getElementById('tips-modal').classList.remove('open');
+}}
+
+function handleTipsFile(e){{
+  const file=e.target.files[0];
+  if(!file)return;
+  tipsMediaType=file.type||'image/png';
+  const reader=new FileReader();
+  reader.onload=function(ev){{
+    const dataUrl=ev.target.result;
+    tipsImageB64=dataUrl.split(',')[1];
+    // Show parsing step
+    document.getElementById('tips-step-upload').style.display='none';
+    document.getElementById('tips-step-parsing').style.display='';
+    document.getElementById('tips-preview-image').src=dataUrl;
+    // Start parsing
+    parseTipsImage(dataUrl);
+  }};
+  reader.readAsDataURL(file);
+}}
+
+// Drag & drop
+document.addEventListener('DOMContentLoaded',()=>{{
+  const dz=document.getElementById('tips-drop-zone');
+  if(!dz)return;
+  dz.addEventListener('dragover',e=>{{e.preventDefault();dz.classList.add('dragover');}});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+  dz.addEventListener('drop',e=>{{
+    e.preventDefault();dz.classList.remove('dragover');
+    const file=e.dataTransfer.files[0];
+    if(file&&file.type.startsWith('image/')){{
+      const input=document.getElementById('tips-file-input');
+      const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;
+      handleTipsFile({{target:input}});
+    }}
+  }});
+}});
+
+async function parseTipsImage(dataUrl){{
+  const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'').split('/');
+  const gameType=pathParts[0]||'V85';
+  const sourceName=document.getElementById('tips-source-name').value.trim()||'';
+  try{{
+    const resp=await fetch('/api/tips/parse-image',{{
+      method:'POST',
+      headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{
+        image:tipsImageB64,
+        game_type:gameType,
+        source_name:sourceName,
+        media_type:tipsMediaType
+      }})
+    }});
+    const data=await resp.json();
+    if(data.error){{
+      alert('Parsningsfel: '+data.error);
+      document.getElementById('tips-step-parsing').style.display='none';
+      document.getElementById('tips-step-upload').style.display='';
+      return;
+    }}
+    tipsParsedData=data.parsed;
+    // Show preview
+    document.getElementById('tips-step-parsing').style.display='none';
+    document.getElementById('tips-step-preview').style.display='';
+    document.getElementById('tips-preview-image2').src=dataUrl;
+    // Set source name
+    const sn=data.source_name||tipsParsedData.source_name||'custom_tipster';
+    if(!document.getElementById('tips-source-name').value){{
+      document.getElementById('tips-source-name').value=sn;
+    }}
+    // Render preview table
+    renderTipsPreview(tipsParsedData);
+    document.getElementById('tips-confirm-btn').disabled=false;
+  }}catch(e){{
+    alert('Nätverksfel: '+e.message);
+    document.getElementById('tips-step-parsing').style.display='none';
+    document.getElementById('tips-step-upload').style.display='';
+  }}
+}}
+
+function renderTipsPreview(data){{
+  const container=document.getElementById('tips-preview-data');
+  let html='<h4>Rankings</h4>';
+  if(data.rankings){{
+    html+='<table class="tips-preview-table"><thead><tr><th>Lopp</th><th>A</th><th>B</th><th>BC</th><th>C</th><th>D</th></tr></thead><tbody>';
+    for(const[race,tiers] of Object.entries(data.rankings)){{
+      html+='<tr><td><strong>'+race+'</strong></td>';
+      html+='<td>'+(tiers.A||'—')+'</td>';
+      html+='<td>'+(tiers.B||'—')+'</td>';
+      html+='<td>'+(tiers.BC||'—')+'</td>';
+      html+='<td>'+(tiers.C||'—')+'</td>';
+      html+='<td>'+(tiers.D||'—')+'</td></tr>';
+    }}
+    html+='</tbody></table>';
+  }}
+  if(data.hot_info){{
+    html+='<div class="tips-hot-info"><strong>Het info:</strong><br>';
+    for(const[race,info] of Object.entries(data.hot_info)){{
+      html+=race+': '+info+'<br>';
+    }}
+    html+='</div>';
+  }}
+  container.innerHTML=html;
+}}
+
+async function confirmTipsSource(){{
+  if(!tipsParsedData)return;
+  const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'').split('/');
+  const gameType=pathParts[0]||'V85';
+  const roundDate=pathParts[1]||'';
+  let sourceName=document.getElementById('tips-source-name').value.trim();
+  if(!sourceName)sourceName=tipsParsedData.source_name||'custom_tipster';
+  // Normalize to snake_case key
+  const sourceKey=sourceName.toLowerCase().replace(/[^a-z0-9åäö]+/g,'_').replace(/^_|_$/g,'');
+
+  const btn=document.getElementById('tips-confirm-btn');
+  btn.disabled=true;btn.textContent='Sparar...';
+
+  try{{
+    const resp=await fetch('/api/tips/add-source',{{
+      method:'POST',
+      headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{
+        game_type:gameType,
+        round_date:roundDate,
+        source_name:sourceKey,
+        source_data:tipsParsedData
+      }})
+    }});
+    const data=await resp.json();
+    if(data.error){{
+      alert('Fel: '+data.error);
+      btn.disabled=false;btn.textContent='Lägg till';
+      return;
+    }}
+    // Success
+    document.getElementById('tips-step-preview').style.display='none';
+    document.getElementById('tips-step-done').style.display='';
+    document.getElementById('tips-modal-footer').style.display='none';
+    // Reload after short delay
+    setTimeout(()=>location.reload(),1500);
+  }}catch(e){{
+    alert('Nätverksfel: '+e.message);
+    btn.disabled=false;btn.textContent='Lägg till';
+  }}
+}}
+
+function removeCustomSource(sourceKey){{
+  if(!confirm('Ta bort källan "'+sourceKey.replace(/_/g,' ')+'" från konsensus?'))return;
+  const pathParts=window.location.pathname.replace(/^\\/dashboard\\//,'').split('/');
+  const gameType=pathParts[0]||'V85';
+  const roundDate=pathParts[1]||'';
+  fetch('/api/tips/source/'+gameType+'/'+roundDate+'/'+encodeURIComponent(sourceKey),{{method:'DELETE'}})
+    .then(r=>r.json())
+    .then(()=>location.reload())
+    .catch(e=>alert('Fel: '+e.message));
+}}
 </script>
+
+<!-- ═══ Tips Upload Modal ═══ -->
+<div class="tips-modal-overlay" id="tips-modal">
+  <div class="tips-modal">
+    <div class="tips-modal-header">
+      <h3>Lägg till tipskälla</h3>
+      <button class="tips-modal-close" onclick="closeTipsUpload()">&times;</button>
+    </div>
+    <div class="tips-modal-body">
+      <div id="tips-step-upload">
+        <div class="tips-drop-zone" id="tips-drop-zone">
+          <input type="file" accept="image/*" id="tips-file-input" onchange="handleTipsFile(event)">
+          <div class="tips-drop-icon">📸</div>
+          <div class="tips-drop-text"><strong>Klicka eller dra en bild hit</strong><br>Screenshot från tipstjänst</div>
+        </div>
+        <input class="tips-source-input" id="tips-source-name" placeholder="Källans namn (t.ex. SpV Gävle)" />
+      </div>
+      <div id="tips-step-parsing" style="display:none">
+        <img id="tips-preview-image" class="tips-preview-img" />
+        <div class="tips-parsing">
+          <div class="spinner"></div>
+          <div style="margin-top:8px">Analyserar bild med AI...</div>
+        </div>
+      </div>
+      <div id="tips-step-preview" style="display:none">
+        <img id="tips-preview-image2" class="tips-preview-img" />
+        <div class="tips-preview-data" id="tips-preview-data"></div>
+      </div>
+      <div id="tips-step-done" style="display:none">
+        <div style="text-align:center;padding:24px">
+          <div style="font-size:2rem;margin-bottom:8px">&#10003;</div>
+          <div style="font-weight:700;color:#16a34a">Källa tillagd!</div>
+          <div style="font-size:.82rem;color:#64748b;margin-top:4px">Konsensus-rankingen uppdateras...</div>
+        </div>
+      </div>
+    </div>
+    <div class="tips-modal-footer" id="tips-modal-footer">
+      <button class="tips-btn tips-btn-secondary" onclick="closeTipsUpload()">Avbryt</button>
+      <button class="tips-btn tips-btn-primary" id="tips-confirm-btn" disabled onclick="confirmTipsSource()">Lägg till</button>
+    </div>
+  </div>
+</div>
 
 <!-- Mobile bottom nav -->
 <nav class="mobile-bottom-nav" id="mobile-bottom-nav">

@@ -221,6 +221,64 @@ def clear_manual_tips() -> None:
     _manual_tips.clear()
 
 
+def add_source_to_cache(
+    game_type: str,
+    date_str: str,
+    source_name: str,
+    source_data: dict,
+) -> bool:
+    """Add or update a tipster source in the tips_cache JSON file.
+
+    Args:
+        game_type: e.g. "V85"
+        date_str: ISO date, e.g. "2026-05-23"
+        source_name: key for the source, e.g. "spv_gavle"
+        source_data: dict with rankings, hot_info, changes etc.
+
+    Returns:
+        True on success.
+    """
+    cache_dir = Path(__file__).parent.parent.parent / "tips_cache"
+    cache_dir.mkdir(exist_ok=True)
+    cache_file = cache_dir / f"{game_type}_{date_str}.json"
+
+    if cache_file.exists():
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+    else:
+        data = {"game_type": game_type, "round_date": date_str, "sources": {}}
+
+    data.setdefault("sources", {})[source_name] = source_data
+    cache_file.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    logger.info(f"Added source '{source_name}' to {cache_file.name}")
+    return True
+
+
+def remove_source_from_cache(
+    game_type: str, date_str: str, source_name: str,
+) -> bool:
+    """Remove a tipster source from the tips_cache JSON file."""
+    cache_dir = Path(__file__).parent.parent.parent / "tips_cache"
+    cache_file = cache_dir / f"{game_type}_{date_str}.json"
+    if not cache_file.exists():
+        return False
+
+    data = json.loads(cache_file.read_text(encoding="utf-8"))
+    sources = data.get("sources", {})
+    if source_name not in sources:
+        return False
+
+    del sources[source_name]
+    cache_file.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    logger.info(f"Removed source '{source_name}' from {cache_file.name}")
+    return True
+
+
 # ── Aggregator ──────────────────────────────────────────────────────────────
 
 def _load_tips_cache_file(game_type: str, date_str: str) -> dict[str, str]:

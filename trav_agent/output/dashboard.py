@@ -2385,6 +2385,26 @@ font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all
 background:#f8fafc;color:#64748b;font-size:12px;cursor:pointer;
 font-family:inherit;text-align:left;transition:all .15s}}
 .agent-sidebar .agent-chip:hover{{background:#f1f5f9;color:#1e293b}}
+.agent-sessions{{padding:4px 8px;display:flex;flex-direction:column;gap:2px;
+max-height:300px;overflow-y:auto}}
+.session-item{{display:flex;flex-direction:column;padding:8px 10px;border-radius:8px;
+background:transparent;color:#64748b;font-size:12px;cursor:pointer;
+text-align:left;transition:all .15s;gap:2px;border:none;font-family:inherit;width:100%}}
+.session-item:hover{{background:#f1f5f9;color:#1e293b}}
+.session-item.active{{background:#fffbeb;color:#92400e;border-left:3px solid #f59e0b}}
+.session-item-top{{display:flex;justify-content:space-between;align-items:center}}
+.session-item-label{{font-weight:600;font-size:11px;color:#1e293b}}
+.session-item.active .session-item-label{{color:#92400e}}
+.session-item-count{{font-weight:400;font-size:10px;color:#94a3b8;
+background:#f1f5f9;padding:1px 5px;border-radius:4px}}
+.session-item-preview{{font-size:10.5px;color:#94a3b8;white-space:nowrap;
+overflow:hidden;text-overflow:ellipsis;max-width:170px}}
+.session-item.active .session-item-preview{{color:#b45309}}
+.session-item-del{{display:none;background:none;border:none;cursor:pointer;color:#cbd5e1;
+font-size:14px;padding:0 2px;font-family:inherit;line-height:1}}
+.session-item:hover .session-item-del{{display:block}}
+.session-item-del:hover{{color:#ef4444}}
+.session-empty{{font-size:11px;color:#94a3b8;padding:12px 4px;text-align:center;font-style:italic}}
 
 /* ── Main content area ── */
 .main-area{{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:calc(100vh - 56px)}}
@@ -3004,7 +3024,12 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   </div>
   <!-- Agent sidebar content -->
   <div id="sidebar-agent" class="agent-sidebar">
-    <button class="agent-new-btn" onclick="resetChat()">+ Ny session</button>
+    <button class="agent-new-btn" onclick="newChatSession()">+ Ny session</button>
+    <div class="nav-divider"></div>
+    <div class="nav-label">SESSIONER</div>
+    <div class="agent-sessions" id="agent-sessions"></div>
+    <div class="nav-divider"></div>
+    <div class="nav-label">SNABBFRÅGOR</div>
     <div class="agent-chips">
       <button class="agent-chip" onclick="askSuggestion('Sammanfatta omgången')">Sammanfatta omgången</button>
       <button class="agent-chip" onclick="askSuggestion('Vilka lopp har högst skällrisk?')">Skällrisker</button>
@@ -3294,22 +3319,151 @@ function toggleMobileSidebar(){{
 // ── AI Chat (SSE streaming) ──
 let chatMsgs=[];
 let chatAbort=null;
+let activeSessionKey='';
 
 function getCurrentRoundKey(){{
   return window.location.pathname.replace(/^\\/dashboard\\//,'').replace(/^\\/+/,'');
 }}
 
-function resetChat(){{
+// ── Session storage (localStorage, per device) ──
+function allSessionKeys(){{
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){{
+    const k=localStorage.key(i);
+    if(k&&k.startsWith('trav_chat_'))keys.push(k.slice(10));
+  }}
+  return keys;
+}}
+function saveSession(key,msgs){{
+  if(!key||!msgs.length)return;
+  const meta={{
+    key:key,
+    count:msgs.length,
+    preview:(msgs.find(m=>m.role==='user')||{{}}).content||'',
+    ts:Date.now()
+  }};
+  try{{
+    localStorage.setItem('trav_chat_'+key,JSON.stringify({{meta:meta,messages:msgs}}));
+  }}catch(e){{}}
+}}
+function loadSessionMsgs(key){{
+  try{{
+    const raw=localStorage.getItem('trav_chat_'+key);
+    if(raw){{const d=JSON.parse(raw);return d.messages||[];}}
+  }}catch(e){{}}
+  return [];
+}}
+function deleteSessionLocal(key){{
+  try{{localStorage.removeItem('trav_chat_'+key);}}catch(e){{}}
+}}
+function getSessionMeta(key){{
+  try{{
+    const raw=localStorage.getItem('trav_chat_'+key);
+    if(raw){{const d=JSON.parse(raw);return d.meta||null;}}
+  }}catch(e){{}}
+  return null;
+}}
+
+// ── Session list rendering (event delegation, no inline onclick) ──
+function renderSessionList(){{
+  const container=document.getElementById('agent-sessions');
+  if(!container)return;
+  const keys=allSessionKeys().sort((a,b)=>{{
+    const ma=getSessionMeta(a),mb=getSessionMeta(b);
+    return((mb&&mb.ts)||0)-((ma&&ma.ts)||0);
+  }});
+  if(!keys.length){{
+    container.innerHTML='<div class="session-empty">Inga sparade sessioner</div>';
+    return;
+  }}
+  container.innerHTML=keys.map(k=>{{
+    const m=getSessionMeta(k);
+    const parts=k.split('/');
+    const label=parts[0]+' '+parts[1];
+    const preview=m&&m.preview?m.preview.slice(0,50):'';
+    const count=m?m.count:0;
+    const isActive=k===activeSessionKey;
+    return '<button class="session-item'+(isActive?' active':'')+'" data-rk="'+k+'">'
+      +'<div class="session-item-top">'
+      +'<span class="session-item-label">'+label+'</span>'
+      +'<span class="session-item-count">'+Math.floor(count/2)+' frågor</span>'
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center">'
+      +'<span class="session-item-preview">'+preview.replace(/</g,'&lt;')+'</span>'
+      +'<span class="session-item-del" data-del="'+k+'">&times;</span>'
+      +'</div></button>';
+  }}).join('');
+}}
+
+// Event delegation for session clicks
+document.addEventListener('click',function(e){{
+  // Delete button
+  const delBtn=e.target.closest('.session-item-del');
+  if(delBtn){{
+    e.stopPropagation();
+    const rk=delBtn.getAttribute('data-del');
+    if(rk){{
+      deleteSessionLocal(rk);
+      if(activeSessionKey===rk){{
+        activeSessionKey=getCurrentRoundKey();
+        chatMsgs=loadSessionMsgs(activeSessionKey);
+        renderChat();
+        const sug=document.getElementById('agent-suggestions');
+        if(sug)sug.style.display=chatMsgs.length?'none':'flex';
+      }}
+      renderSessionList();
+      try{{fetch('/api/chat/session/'+encodeURIComponent(rk),{{method:'DELETE'}});}}catch(ex){{}}
+    }}
+    return;
+  }}
+  // Session item click
+  const item=e.target.closest('.session-item');
+  if(item){{
+    const rk=item.getAttribute('data-rk');
+    if(rk)switchToSession(rk);
+  }}
+}});
+
+function switchToSession(rk){{
   if(chatAbort){{chatAbort.abort();chatAbort=null;}}
+  activeSessionKey=rk;
+  chatMsgs=loadSessionMsgs(rk);
+  renderChat();
+  const sug=document.getElementById('agent-suggestions');
+  if(sug)sug.style.display=chatMsgs.length?'none':'flex';
+  renderSessionList();
+  showView('agent');
+  const ci=document.getElementById('chat-input');
+  if(ci)setTimeout(()=>ci.focus(),100);
+}}
+
+function newChatSession(){{
+  if(chatAbort){{chatAbort.abort();chatAbort=null;}}
+  // Save current if it has messages
+  if(chatMsgs.length&&activeSessionKey){{
+    saveSession(activeSessionKey,chatMsgs);
+  }}
+  // Start fresh for current round
+  activeSessionKey=getCurrentRoundKey()+'_'+Date.now();
   chatMsgs=[];
   renderChat();
   const sug=document.getElementById('agent-suggestions');
-  if(sug) sug.style.display='flex';
-  // Clear local storage for this round
-  try{{ sessionStorage.removeItem('chat_'+getCurrentRoundKey()); }}catch(e){{}}
-  try{{
-    fetch('/api/chat/session/'+encodeURIComponent(getCurrentRoundKey()),{{method:'DELETE'}});
-  }}catch(e){{}}
+  if(sug)sug.style.display='flex';
+  renderSessionList();
+  const ci=document.getElementById('chat-input');
+  if(ci)setTimeout(()=>ci.focus(),100);
+}}
+
+function resetChat(){{
+  if(chatAbort){{chatAbort.abort();chatAbort=null;}}
+  deleteSessionLocal(activeSessionKey);
+  activeSessionKey=getCurrentRoundKey();
+  chatMsgs=[];
+  renderChat();
+  const sug=document.getElementById('agent-suggestions');
+  if(sug)sug.style.display='flex';
+  renderSessionList();
+  try{{fetch('/api/chat/session/'+encodeURIComponent(getCurrentRoundKey()),{{method:'DELETE'}});}}catch(e){{}}
 }}
 
 function askSuggestion(text){{
@@ -3318,36 +3472,36 @@ function askSuggestion(text){{
 }}
 
 function saveChatLocal(){{
-  // Save to sessionStorage for this device
-  try{{ sessionStorage.setItem('chat_'+getCurrentRoundKey(), JSON.stringify(chatMsgs)); }}catch(e){{}}
+  if(activeSessionKey&&chatMsgs.length){{
+    saveSession(activeSessionKey,chatMsgs);
+    renderSessionList();
+  }}
 }}
 
 function loadChatSession(){{
-  // Load from sessionStorage first (instant, per device)
-  try{{
-    const stored=sessionStorage.getItem('chat_'+getCurrentRoundKey());
-    if(stored){{
-      chatMsgs=JSON.parse(stored);
-      if(chatMsgs.length>0){{
-        renderChat();
-        const sug=document.getElementById('agent-suggestions');
-        if(sug) sug.style.display='none';
-        return;
-      }}
-    }}
-  }}catch(e){{}}
-  // Fallback: load from server (picks up sessions from other devices)
-  fetch('/api/chat/session/'+encodeURIComponent(getCurrentRoundKey()))
+  activeSessionKey=getCurrentRoundKey();
+  // Load from localStorage
+  chatMsgs=loadSessionMsgs(activeSessionKey);
+  if(chatMsgs.length){{
+    renderChat();
+    const sug=document.getElementById('agent-suggestions');
+    if(sug)sug.style.display='none';
+    renderSessionList();
+    return;
+  }}
+  // Fallback: try server
+  fetch('/api/chat/session/'+encodeURIComponent(activeSessionKey))
     .then(r=>r.json())
     .then(data=>{{
       if(data.messages&&data.messages.length>0){{
         chatMsgs=data.messages;
         renderChat();
         const sug=document.getElementById('agent-suggestions');
-        if(sug) sug.style.display='none';
+        if(sug)sug.style.display='none';
         saveChatLocal();
       }}
     }}).catch(()=>{{}});
+  renderSessionList();
 }}
 
 document.addEventListener('DOMContentLoaded',()=>{{

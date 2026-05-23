@@ -2,24 +2,48 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from trav_agent.analysis.composite import CompositeAnalyzer
 from trav_agent.config import GAME_TYPES
 from trav_agent.data.atg_client import ATGClient
+from trav_agent.output.dashboard import generate_dashboard_html, generate_landing_html
 
 app = FastAPI(title="Trav Agent API", version="0.1.0")
 
 
-@app.get("/")
-async def root():
-    return {"status": "ok", "service": "trav-agent"}
+@app.get("/", response_class=HTMLResponse)
+async def landing():
+    return generate_landing_html()
 
 
-@app.get("/analyze/{game_type}/{day}")
+@app.get("/dashboard/{game_type}/{day}", response_class=HTMLResponse)
+async def dashboard(game_type: str, day: str):
+    game_type = game_type.upper()
+    if game_type not in GAME_TYPES:
+        raise HTTPException(400, f"Ogiltig spelform: {game_type}")
+
+    try:
+        d = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, f"Ogiltigt datum: {day}")
+
+    client = ATGClient()
+    game_round = await client.fetch_full_round(game_type, d)
+    if not game_round:
+        raise HTTPException(404, f"Ingen {game_type} hittad för {day}")
+
+    analyzer = CompositeAnalyzer()
+    analyzer.analyze_round(game_round)
+
+    html = generate_dashboard_html(game_round)
+    return html
+
+
+@app.get("/api/analyze/{game_type}/{day}")
 async def analyze(game_type: str, day: str):
     game_type = game_type.upper()
     if game_type not in GAME_TYPES:
@@ -66,7 +90,7 @@ async def analyze(game_type: str, day: str):
     return {"game_type": game_type, "date": day, "races": races}
 
 
-@app.get("/upcoming")
+@app.get("/api/upcoming")
 async def upcoming(days: int = 7):
     client = ATGClient()
     today = date.today()

@@ -238,7 +238,6 @@ def _load_tips_cache_file(game_type: str, date_str: str) -> dict[str, str]:
 
     results: dict[str, str] = {}
     sources = data.get("sources", {})
-    track = data.get("track", "")
 
     for src_key, src_data in sources.items():
         author = src_data.get("author", src_key)
@@ -269,9 +268,54 @@ def _load_tips_cache_file(game_type: str, date_str: str) -> dict[str, str]:
         if src_data.get("best_drag"):
             lines.append(f"Bästa drag: {src_data['best_drag']}")
 
+        trainer_comments = src_data.get("trainer_comments", {})
+        if trainer_comments:
+            lines.append("\nTränarkommentarer:")
+            for race, horses in sorted(trainer_comments.items()):
+                lines.append(f"  {race}:")
+                for num, info in sorted(horses.items(), key=lambda x: int(x[0])):
+                    pct = info.get("pct", "?")
+                    lines.append(
+                        f"    {num} {info['name']} ({info['driver']}) {pct}%: "
+                        f"{info['comment']}"
+                    )
+
+        tidsranken = src_data.get("tidsranken", {})
+        if tidsranken:
+            lines.append("\nTidsranken:")
+            for race, times in sorted(tidsranken.items()):
+                lines.append(f"  {race}: {times}")
+
         results[src_key] = "\n".join(lines)
 
+    spetstrid = data.get("spetstrid", {})
+    if spetstrid:
+        sp_lines = ["[Spetstrid — Edholms analys av spetsstriden per lopp]"]
+        for race, sp in sorted(spetstrid.items()):
+            contenders = ", ".join(sp.get("contenders", []))
+            leader = sp.get("predicted_leader", "?")
+            conf = sp.get("confidence", "?")
+            notes = sp.get("notes", "")
+            sp_lines.append(
+                f"  {race}: Spets → {leader} (conf: {conf}). "
+                f"Utmanare: {contenders}. {notes}"
+            )
+        results["_spetstrid"] = "\n".join(sp_lines)
+
     return results
+
+
+def load_tips_cache_raw(game_type: str, date_str: str) -> Optional[dict]:
+    """Load raw JSON data from tips cache file for consensus ranking."""
+    cache_dir = Path(__file__).parent.parent.parent / "tips_cache"
+    cache_file = cache_dir / f"{game_type}_{date_str}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        return json.loads(cache_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(f"Failed to read tips cache {cache_file}: {e}")
+        return None
 
 
 async def scrape_tips(game_type: str, date: str) -> dict:

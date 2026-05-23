@@ -153,6 +153,193 @@
       },
       "best_spike": "Huchuy Qosqo (V85-6), PolePosition (V85-8)",
       "summary": "Dubbelspikar: Huchuy Qosqo (V85-6) och PolePosition (V85-8). Skräll: Luke the Spook (V85-5)."
+    },
+    "expressen_tranarsnack": {
+      "author": "Expressen Travredaktion (Tränarsnacket)",
+      "published": "2026-05-22",
+      "url": "https://www.expressen.se/sport/trav/v85-tips-hetaste-tranarsnacket-infor-v85-pa-gavle/",
+      "trainer_comments": {
+        "V85-1": {
+          "1": {"name": "Felicia Hall", "driver": "E. Leo", "pct": 3, "comment": "Perfekt läge, trea förra distansförsöket. Rycktussar nytt."},
+          "2": {"name": "Clementin", "driver": "A. Peterson", "pct": 0, "comment": "Tuffare emot nu. Inte het."},
+          "3": {"name": "Direction Face", "driver": "C J Jepson", "pct": 16, "comment": "Känns jättebra men ej levererat på banan. Byter skor nu."},
+          "4": {"name": "Queen Montana", "driver": "T. Pettersson", "pct": 1, "comment": "Blir allt bättre, liknande kurva som förra året. Nära att knäcka koden."},
+          "5": {"name": "Qulör", "driver": "F B Larsson", "pct": 12, "comment": "Form, går ej att räkna bort."},
+          "6": {"name": "Stella Tooma", "driver": "R N Skoglund", "pct": 4, "comment": "Platsrysare med en bra start."},
+          "7": {"name": "Sweet Celebration", "driver": "J O Olsen", "pct": 2, "comment": "Gick jättebra barfota i Umeå, går barfota igen."},
+          "8": {"name": "Ditte Gel", "driver": "M E Djuse", "pct": 6, "comment": "Utvecklats, vann trots tredjespår senast. Spännande uppgift."},
+          "9": {"name": "Boutique Garde", "driver": "B. Goop", "pct": 1, "comment": "Fortsatt form. Inte främmande för topp 3. Barfota fram."},
+          "10": {"name": "Global Good Girl", "driver": "Ö. Kihlström", "pct": 3, "comment": "Örjan jättenöjd senast. 2640m fördel."},
+          "11": {"name": "Official Sox", "driver": "C. Sjöström", "pct": 34, "comment": "Ser jättefin ut, bör göra upp om det löser sig. 2640m fördel."},
+          "12": {"name": "You to Ezme", "driver": "J. Kontio", "pct": 0, "comment": "Nöjd med en matlapp."},
+          "13": {"name": "Havana Heaven", "driver": "U. Ohlsson", "pct": 3, "comment": "Smygform. Kan överraska."},
+          "14": {"name": "Appia Express", "driver": "M A Djuse", "pct": 2, "comment": "Gör alltid sitt bästa. Konstigt lopp senast."},
+          "15": {"name": "Supernova Lyjam", "driver": "O. Kylin Blom", "pct": 6, "comment": "Satt fast senast. Tränaren välförberedd."}
+        },
+        "V85-2": {
+          "1": {"name": "Nume Bris", "driver": "O J Östre", "pct": 10, "comment": "Fick perfekt läge. Kan slå till."},
+          "2": {"name": "Östby Saga", "driver": "H. Kihle", "pct": 1, "comment": "Glöm senast. Bättre bild i övriga lopp."},
+          "3": {"name": "Lysjö Isa", "driver": "K. Larsson", "pct": 0, "comment": "Inget för spelarna denna gång."},
+          "4": {"name": "Lille Rose G.L.", "driver": "O. Kylin Blom", "pct": 11, "comment": "Tufft inne men vill testa. Bara starta snabbt."},
+          "5": {"name": "Väskinge Inez", "driver": "N. Blom", "pct": 1, "comment": "Knepigt spår. Knappast vinst. Barfota runt om."},
+          "6": {"name": "Brigsås Milly", "driver": "R N Skoglund", "pct": 2, "comment": "Satt fast senast, mycket bättre form än raden. Bra läge."},
+          "7": {"name": "Sjö Kosa", "driver": "M. Lilius", "pct": 2, "comment": "Bra ordning men tuffa motståndare. Svårt att vinna."},
+          "8": {"name": "Kleppe Tuå", "driver": "C J Jepson", "pct": 9, "comment": "Formstark. Luring med Jepson."},
+          "9": {"name": "Tiras Perla", "driver": "J O Olsen", "pct": 3, "comment": "Supersnabb märr, blev sur av tussarna. Fina lopp innan."},
+          "10": {"name": "Läckra Lizzie", "driver": "R. Wilhelmsson", "pct": 0, "comment": "Bara en mittfältare här."},
+          "11": {"name": "Prinsessan Stöen", "driver": "M E Djuse", "pct": 2, "comment": "Bästa chansen i loppet. Tränat bra. Lite stum senast."},
+          "12": {"name": "Dån Klara", "driver": "J. Kontio", "pct": 1, "comment": "Växer in i klassen. Bättre form än raden. Extremt bra inne."},
+          "13": {"name": "Hulte Annika", "driver": "M A Djuse", "pct": 13, "comment": "Bättre än väntat senast. Utvecklats. Bra lopp."},
+          "14": {"name": "Ragnhild W.M", "driver": "T. Pettersson", "pct": 10, "comment": "Två lugna banjobb + 1.27/1600m. Behöver lopp."},
+          "15": {"name": "Tekno Tana", "driver": "U. Ohlsson", "pct": 28, "comment": "Tufft comeback men känns fin. På gång, löst liknande förut."}
+        },
+        "V85-3": {
+          "1": {"name": "Fabulous Gent", "driver": "R N Skoglund", "pct": 2, "comment": "Bättre form än raden, intressant läge."},
+          "2": {"name": "Mister Malabar", "driver": "Ö. Kihlström", "pct": 53, "comment": "Bra men för hetsig senast, lade bort krafter. Barfota runt om nytt."},
+          "3": {"name": "My D.X.One", "driver": "A. Peterson", "pct": 1, "comment": "Blivit allt bättre. Vill testa 2640m."},
+          "4": {"name": "Jolene Zet", "driver": "P. Karlsson", "pct": 0, "comment": "Bra i ny regi. Skräll? Barfota runt om."},
+          "5": {"name": "Manhattan J.P.", "driver": "C. Sjöström", "pct": 1, "comment": "Höll starkt från dödens senast. Formen bättre."},
+          "6": {"name": "R.K.Pascal", "driver": "B. Goop", "pct": 6, "comment": "Fin comeback. Gått framåt med loppet. Barfota runt om. Bör hantera 2640m."},
+          "7": {"name": "Snickers", "driver": "U. Eriksson", "pct": 13, "comment": "Känns jättebra, går från alla positioner. Kan gå 1.14."},
+          "8": {"name": "Bottnas Magic", "driver": "D. Wäjersten", "pct": 3, "comment": "Klart bra efter galoppen senast, inte slutkörd i mål."},
+          "9": {"name": "Global Graceland", "driver": "J. Kontio", "pct": 5, "comment": "Möter värre motstånd nu. Nja."},
+          "10": {"name": "Elias K.J.", "driver": "O. Kylin Blom", "pct": 1, "comment": "Jättebra form, vann från ledningen senast."},
+          "11": {"name": "Hallabaloo", "driver": "M E Djuse", "pct": 7, "comment": "Synd på läget men känns fin i träningen."},
+          "12": {"name": "Octavius Boko", "driver": "M. Lilius", "pct": 1, "comment": "Jobbig uppgift och inte het."}
+        },
+        "V85-4": {
+          "1": {"name": "Sangviks Lynet", "driver": "B. Goop", "pct": 3, "comment": "Svårt efter senaste insatserna. Testar barfota bak."},
+          "2": {"name": "Teknopys", "driver": "T. Pettersson", "pct": 0, "comment": "Tveksam form. Inget vinstbud."},
+          "3": {"name": "Bazoo Can", "driver": "I. Jansson-Wiklund", "pct": 11, "comment": "Radat upp bra insatser. Luring."},
+          "4": {"name": "Hammars Jonte", "driver": "K. Frick", "pct": 0, "comment": "Klart slagen av nr 7 senast."},
+          "5": {"name": "Silke Sjarmör", "driver": "O J Östre", "pct": 2, "comment": "Bör fixa femtespåret, kan vara med i främre träffen."},
+          "6": {"name": "Remlov", "driver": "K. Lindberg", "pct": 14, "comment": "Vann med sparat senast. Öppnat bra från springspår förut."},
+          "7": {"name": "Stuve Skarp", "driver": "H. Gustavsson", "pct": 11, "comment": "Väldigt fin i årets starter. Slog av takten senast. Barfota runt om nytt."},
+          "8": {"name": "Nordsjö Prinsen", "driver": "U. Ohlsson", "pct": 3, "comment": "Trög senast. Barfota nu, plus. Vill gå innerspår."},
+          "9": {"name": "Moshus Prinsen", "driver": "M. Strinnlund", "pct": 0, "comment": "Nyttig. Plockar pengar igen?"},
+          "10": {"name": "Storm Annsgal", "driver": "C J Jepson", "pct": 1, "comment": "Känns bra men svårt mot Palmesus N.O."},
+          "11": {"name": "Fosshaug Frasse", "driver": "M B Fransson", "pct": 0, "comment": "Glad för pengar i detta gäng."},
+          "12": {"name": "Klack Vidar", "driver": "O. Kylin Blom", "pct": 1, "comment": "Var på gång tre starter sedan, krafter kvar. Letar man sig in tidigt kan det lösa sig."},
+          "13": {"name": "Palmesus N.O.", "driver": "M E Djuse", "pct": 44, "comment": "Gör det fantastiskt bra. Hoppas på liknande insatser. Fin häst."},
+          "14": {"name": "Hulte Sixten", "driver": "M. Lilius", "pct": 0, "comment": "Jättefin form. Konstigt lopp senast, chansade invändigt."},
+          "15": {"name": "Hulte Adam", "driver": "H. Kihle", "pct": 3, "comment": "Bra form. Måste lösa sig mycket men inte omöjligt."}
+        },
+        "V85-5": {
+          "1": {"name": "Diamond Truppo", "driver": "T. Kylliäinen", "pct": 2, "comment": "Fint läge. Ett platsbud främst."},
+          "2": {"name": "High On Pepper", "driver": "J. Kontio", "pct": 2, "comment": "Satt fast i Finlandia-ajo. Innerspåret fälla. Skor runt om nu."},
+          "3": {"name": "Powwow", "driver": "B. Goop", "pct": 6, "comment": "Bra senast trots långt bak. Bra form."},
+          "4": {"name": "Global Etalon", "driver": "R N Skoglund", "pct": 3, "comment": "STRUKEN"},
+          "5": {"name": "Keep Asking", "driver": "Ö. Kihlström", "pct": 54, "comment": "Bra tvåa i Finlandia-ajo. Märkt av resan, inte lika pigg efteråt. Bättre nu."},
+          "6": {"name": "Kentucky River", "driver": "C J Jepson", "pct": 8, "comment": "Avslutade mycket bra i Paralympiatravet. Hittat nivå, stark och oöm."},
+          "7": {"name": "Mellby Joker", "driver": "M E Djuse", "pct": 1, "comment": "Jättebra senast, fin ut. Kan öppna men spår väl långt ut."},
+          "8": {"name": "H.C.'s Crazy Horse", "driver": "M A Djuse", "pct": 1, "comment": "Trött vid galoppen senast. Läget minus."},
+          "9": {"name": "Luke the Spook", "driver": "A. Kolgjini", "pct": 2, "comment": "Vass med rätt lopp. En rysare! Skor runt om nu."},
+          "10": {"name": "Mellby Jinx", "driver": "D. Wäjersten", "pct": 17, "comment": "Jättebra på Umåker. Hittat toppformen med lopp i kroppen."}
+        },
+        "V85-6": {
+          "1": {"name": "Shuffleboard", "driver": "B. Goop", "pct": 6, "comment": "Bra senast. Intressant läge, ska inte räknas bort."},
+          "2": {"name": "Huchuy Qosqo", "driver": "A. Eriksson", "pct": 3, "comment": "Nöjd med känslan och läget. Provar spets. Barfota runt om debut."},
+          "3": {"name": "Eagle of Oak", "driver": "M E Djuse", "pct": 52, "comment": "Sparat senast. Farlig från tät. Barfota runt om."},
+          "4": {"name": "Gibson Brodde", "driver": "O. Kylin Blom", "pct": 2, "comment": "Jättebra tvåa senast Solvalla. Täta starter borde falla väl ut."},
+          "5": {"name": "Poetical Trot", "driver": "L. Lönn", "pct": 4, "comment": "Positiv senast. Kommer mer och mer. Bättre läge nu. Barfota runt om."},
+          "6": {"name": "Classic Racer", "driver": "R N Skoglund", "pct": 1, "comment": "Tung resa senast. Risk för liknande nu."},
+          "7": {"name": "Justcantgetenough", "driver": "J. Dahlman", "pct": 4, "comment": "Fortsatt jättefin. Ändrar inget. Sugna att köpa, full fart startrusning."},
+          "8": {"name": "Golden Kronos", "driver": "D. Wäjersten", "pct": 15, "comment": "Inte vässad inför comeback senast. Godkänt ändå. Ska vara bättre nu."},
+          "9": {"name": "Hit or Miss", "driver": "C. Sjöström", "pct": 1, "comment": "Behövt de senaste loppen. På väg uppåt. Kör på chans."},
+          "10": {"name": "Cocktail Brodda", "driver": "U. Ohlsson", "pct": 1, "comment": "Pausat en dryg månad. Diffus form. Inte jättehet."},
+          "11": {"name": "Maverick", "driver": "C J Jepson", "pct": 6, "comment": "Ändringar förra start föll väl ut. Samma utrustning nu."},
+          "12": {"name": "Nightmare C.Boko", "driver": "T. Pettersson", "pct": 0, "comment": "Borta från tävling. Behöver loppet. Glad för en slant."}
+        },
+        "V85-7": {
+          "1": {"name": "Global Email", "driver": "Ö. Kihlström", "pct": 4, "comment": "Inte som bäst senast, hängig efteråt. Bättre nu."},
+          "2": {"name": "D'Artagnan Face", "driver": "R N Skoglund", "pct": 33, "comment": "Roligt senast, ny balans fungerade perfekt i svängar."},
+          "3": {"name": "True Lies", "driver": "B. Goop", "pct": 3, "comment": "Fin vid segern senast. Barfota runt om nu."},
+          "4": {"name": "Specification", "driver": "C J Jepson", "pct": 3, "comment": "Ställs på tuffare test här."},
+          "5": {"name": "Chico de Calamar", "driver": "A. Eriksson", "pct": 7, "comment": "Mycket bra senaste två. Frågan om psykisk stryk från förra loppet."},
+          "6": {"name": "Villiamson B.B.", "driver": "P G Norman", "pct": 2, "comment": "Lopp i kroppen. Inte golvad!"},
+          "7": {"name": "Don E.Star", "driver": "O J Andersson", "pct": 2, "comment": "Kändes uppåt senast. Rätta formen kommer. Tyvärr dåligt spår."},
+          "8": {"name": "Västerbo Adventure", "driver": "R. Skoglund", "pct": 5, "comment": "Jättebra form men trist läge. Barfota runt om nu."},
+          "9": {"name": "Automatic Flight", "driver": "M E Djuse", "pct": 3, "comment": "Tänkbar om favoriten sviker."},
+          "10": {"name": "Husavik", "driver": "S. Eriksson", "pct": 3, "comment": "Fantastiskt lopp senast, moralisk vinnare. Kan gå framåt."},
+          "11": {"name": "Readly Brodde", "driver": "D. Wäjersten", "pct": 28, "comment": "Fin senast, perfekt lopp. Bra för klassen. Läget besvärligt."},
+          "12": {"name": "Gaga Lady", "driver": "M A Djuse", "pct": 2, "comment": "Galopperade senast, kusks fel. Tuff häst men saknar rätta kapaciteten."}
+        },
+        "V85-8": {
+          "1": {"name": "Incomparable", "driver": "E. Leo", "pct": 1, "comment": "Innerspår Gävle inte bäst men startsnabb. Hoppas rygg på 7."},
+          "2": {"name": "Andy Gel", "driver": "P G Norman", "pct": 1, "comment": "Duktig senast, krafter sparade. Osäker om formen räcker."},
+          "3": {"name": "King of Cristal", "driver": "J. Kontio", "pct": 0, "comment": "Vinner för sällan. Nej tack."},
+          "4": {"name": "Raven", "driver": "S. Eriksson", "pct": 6, "comment": "Jättefin senast men för mycket tempo V1. Byter till norskt huvudlag."},
+          "5": {"name": "The Flying Eagle", "driver": "C J Jepson", "pct": 20, "comment": "Jättebra vid segrarna, mer fokuserad som valack. Bör räknas med."},
+          "6": {"name": "Express Love", "driver": "A. Lövdal", "pct": 1, "comment": "Vettig form. Bäst trea-fyra?"},
+          "7": {"name": "PolePosition", "driver": "Ö. Kihlström", "pct": 47, "comment": "Ruskigt bra på slutet, fin kurva. Stark och snabb. Barfota + bike."},
+          "8": {"name": "Ogden Boko", "driver": "M A Djuse", "pct": 13, "comment": "Jättenöjd senaste insatsen mot bra hästar. Snabb ut."},
+          "9": {"name": "Express Cash", "driver": "R N Skoglund", "pct": 1, "comment": "Känns fin. Formen okej åtminstone. Sköter sig."},
+          "10": {"name": "Freako", "driver": "M B Svedberg", "pct": 3, "comment": "Dunkel form. Om flera streck. Barfota runt om."},
+          "11": {"name": "Zätamustangen", "driver": "M E Djuse", "pct": 1, "comment": "Bra senast efter galopp. Jättefin form men galopp i sista svängen."},
+          "12": {"name": "Flotilla", "driver": "C. Sjöström", "pct": 1, "comment": "Fortsatt bra form men behöver överpace."}
+        }
+      },
+      "tidsranken": {
+        "V85-1": "14,3: 14 Appia Express. 14,6: 5 Qulör, 6 Stella Tooma, 15 Supernova Lyjam. 14,7: 7 Sweet Celebration",
+        "V85-2": "23,1: 13 Hulte Annika. 23,4: 15 Tekno Tana. 23,9: 12 Dån Klara. 24,4: 9 Tiras Perla. 25,3: 6 Brigsås Milly",
+        "V85-3": "15,1: 6 RK Pascal. 15,2: 5 Manhattan JP. 15,5: 1 Fabulous Gent, 10 Elias KJ, 12 Octavius Boko. 15,6: 7 Snickers",
+        "V85-4": "25,0: 13 Palmesus NO, 15 Hulte Adam. 25,2: 12 Klack Vidar. 25,3: 3 Bazoo Can. 25,5: 9 Moshus Prinsen",
+        "V85-5": "09,9: 10 Mellby Jinx. 10,1: 3 Powwow, 9 Luke the Spook. 10,2: 5 Keep Asking, 7 Mellby Joker",
+        "V85-6": "13,1: 8 Golden Kronos. 13,5: 7 Justcantgetenough. 13,6: 4 Gibson Brodde. 13,7: 11 Maverick",
+        "V85-7": "13,1: 6 Villiamson BB. 13,3: 7 Don E Star. 13,4: 9 Automatic Flight, 11 Readly Brodde. 13,6: 1 Global Email",
+        "V85-8": "11,7: 7 PolePosition. 12,2: 8 Ogden Boko, 12 Flotilla. 12,3: 10 Freako. 12,6: 5 The Flying Eagle"
+      },
+      "summary": "Tränarsnack med kommentarer från alla tränare. Utrustningsändringar noterade."
+    }
+  },
+  "spetstrid": {
+    "V85-1": {
+      "contenders": ["1 Felicia Hall", "3 Direction Face", "6 Stella Tooma"],
+      "predicted_leader": "3 Direction Face",
+      "confidence": "medium",
+      "notes": "Jepson mest angelägen. Bra chans att ta spetsen."
+    },
+    "V85-2": {
+      "contenders": ["1 Nume Bris", "4 Lille Rose G.L.", "6 Brigsås Milly"],
+      "predicted_leader": "6 Brigsås Milly",
+      "confidence": "medium",
+      "notes": "Nume Bris och Lille Rose kan öppna men svårt stå emot Brigsås Milly."
+    },
+    "V85-3": {
+      "contenders": ["2 Mister Malabar", "4 Jolene Zet", "7 Snickers"],
+      "predicted_leader": "2 Mister Malabar",
+      "confidence": "medium",
+      "notes": "Mister Malabar lättas i balansen, knapp spetsfavorit. Jolene Zet och Snickers utmanar."
+    },
+    "V85-4": {
+      "contenders": ["6 Remlov"],
+      "predicted_leader": "6 Remlov",
+      "confidence": "high",
+      "notes": "Hästarna från springspår gör upp. Remlov med lite mer rutinerad kusk får förtur."
+    },
+    "V85-5": {
+      "contenders": ["5 Keep Asking", "3 Powwow", "1 Diamond Truppo"],
+      "predicted_leader": "5 Keep Asking",
+      "confidence": "high",
+      "notes": "Keep Asking tar en längd på Powwow. Finländaren nöjd med rygg."
+    },
+    "V85-6": {
+      "contenders": ["2 Huchuy Qosqo", "3 Eagle of Oak"],
+      "predicted_leader": "2 Huchuy Qosqo",
+      "confidence": "medium",
+      "notes": "De fyra innersta snabba. Huchuy Qosqo och Eagle of Oak gör upp i första halva varvet."
+    },
+    "V85-7": {
+      "contenders": ["1 Global Email", "3 True Lies", "4 Specification", "6 Villiamson B.B."],
+      "predicted_leader": "6 Villiamson B.B.",
+      "confidence": "low",
+      "notes": "Global Email och Specification öppnar bra. Villiamson B.B. laddas utifrån, felfri tar han spetsen."
+    },
+    "V85-8": {
+      "contenders": ["1 Incomparable", "4 Raven", "5 The Flying Eagle"],
+      "predicted_leader": "5 The Flying Eagle",
+      "confidence": "medium",
+      "notes": "Raven släpper inte spetsen lätt, kan bli hård fight. The Flying Eagle förväntas ta den."
     }
   }
 }

@@ -5,9 +5,203 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+from collections import defaultdict
 from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
+
+
+# ── Source weights for consensus ranking ──────────────────────────────────
+# Higher = more influence. Sharp/paid sources weigh more than free.
+_SOURCE_WEIGHTS = {
+    "model": 3.0,
+    "sharps_berglund": 2.5,
+    "sharps_jensa": 2.0,
+    "expressen_edholm": 2.0,
+    "travcash": 1.5,
+    "aftonbladet_mario": 1.0,
+    "aftonbladet_robert": 1.0,
+    "aftonbladet_kim": 1.0,
+    "aftonbladet_quist": 1.0,
+    "aftonbladet_nils": 1.0,
+}
+
+_TIER_POINTS = {"A": 4, "B": 3, "BC": 2, "C": 1, "D": 0}
+
+
+def _parse_ordered_ranking(ranking_str: str) -> dict[str, str]:
+    """Parse '11-3-6-8-5-15-1-10' into tier assignments."""
+    nums = [n.strip() for n in ranking_str.split("-") if n.strip()]
+    if not nums:
+        return {}
+    total = len(nums)
+    tiers: dict[str, str] = {}
+    for i, num in enumerate(nums):
+        pct = i / total
+        if pct < 0.15:
+            tiers[num] = "A"
+        elif pct < 0.35:
+            tiers[num] = "B"
+        elif pct < 0.55:
+            tiers[num] = "BC"
+        elif pct < 0.80:
+            tiers[num] = "C"
+        else:
+            tiers[num] = "D"
+    return tiers
+
+
+def _parse_tiered_ranking(ranking_dict: dict) -> dict[str, str]:
+    """Parse {'A': '3-11', 'B': '1-6-8', ...} into per-horse tiers."""
+    tiers: dict[str, str] = {}
+    for tier, horses_str in ranking_dict.items():
+        nums = re.findall(r"\d+", str(horses_str))
+        for num in nums:
+            tiers[num] = tier
+    return tiers
+
+
+def _extract_spike_picks(picks: dict) -> dict[str, list[str]]:
+    """Extract horse numbers from picks like 'SPIK: 7 PolePosition'."""
+    result: dict[str, list[str]] = {}
+    for race, pick_str in picks.items():
+        nums = re.findall(r"\d+", str(pick_str).split("(")[0])
+        if nums:
+            result[race] = nums
+    return result
+
+
+def build_consensus_ranking(game_round, tips_raw: Optional[dict] = None) -> str:
+    """Build consensus A/B/C/D ranking from model + all tipster sources.
+
+    Aggregates rankings from model scores and all external tipsters
+    using weighted point system. Returns formatted text for AI context.
+    """
+    if not game_round:
+        return ""
+
+    sources = (tips_raw or {}).get("sources", {}) if tips_raw else {}
+    spetstrid = (tips_raw or {}).get("spetstrid", {}) if tips_raw else {}
+
+    lines = []
+    lines.append("=" * 50)
+    lines.append("KONSENSUS-RANKING (modell + alla experter)")
+    lines.append("=" * 50)
+
+    for race in game_round.races:
+        race_key = f"V85-{race.race_number}"
+
+        horse_scores: dict[str, float] = defaultdict(float)
+        horse_weights: dict[str, float] = defaultdict(float)
+        horse_names: dict[str, str] = {}
+
+        # 1. Model ranking (highest weight)
+        sorted_entries = sorted(
+            race.active_entries,
+            key=lambda e: e.super_score,
+            reverse=True,
+        )
+        model_weight = _SOURCE_WEIGHTS["model"]
+        for i, entry in enumerate(sorted_entries):
+            num = str(entry.post_position)
+            horse_names[num] = entry.horse.name
+            total = len(sorted_entries)
+            pct = i / total
+            if pct < 0.15:
+                tier = "A"
+            elif pct < 0.35:
+                tier = "B"
+            elif pct < 0.55:
+                tier = "BC"
+            elif pct < 0.80:
+                tier = "C"
+            else:
+                tier = "D"
+            horse_scores[num] += _TIER_POINTS[tier] * model_weight
+            horse_weights[num] += model_weight
+
+        # 2. External source rankings
+        for src_key, src_data in sources.items():
+            weight = _SOURCE_WEIGHTS.get(src_key, 0.8)
+
+            rankings = src_data.get("rankings", {})
+            race_ranking = rankings.get(race_key)
+            if race_ranking:
+                if isinstance(race_ranking, dict):
+                    tier_map = _parse_tiered_ranking(race_ranking)
+                elif isinstance(race_ranking, str) and race_ranking not in (
+                    "Alla brett",
+                ):
+                    tier_map = _parse_ordered_ranking(race_ranking)
+                else:
+                    tier_map = {}
+
+                for num, tier in tier_map.items():
+                    pts = _TIER_POINTS.get(tier, 1)
+                    horse_scores[num] += pts * weight
+                    horse_weights[num] += weight
+
+            picks = src_data.get("picks", {})
+            race_picks = picks.get(race_key)
+            if race_picks and not rankings.get(race_key):
+                pick_str = str(race_picks)
+                if "SPIK" in pick_str.upper():
+                    nums = re.findall(r"\d+", pick_str.split("(")[0])
+                    for num in nums[:1]:
+                        horse_scores[num] += _TIER_POINTS["A"] * weight
+                        horse_weights[num] += weight
+                elif "Skräll" in pick_str:
+                    nums = re.findall(r"\d+", pick_str.split("(")[0])
+                    for num in nums[:1]:
+                        horse_scores[num] += _TIER_POINTS["B"] * weight
+                        horse_weights[num] += weight
+
+        # 3. Normalize and assign consensus tiers
+        if not horse_scores:
+            continue
+
+        avg_scores = {}
+        for num in horse_scores:
+            w = horse_weights[num]
+            avg_scores[num] = horse_scores[num] / w if w > 0 else 0
+
+        sorted_horses = sorted(avg_scores.items(), key=lambda x: -x[1])
+        total = len(sorted_horses)
+
+        consensus_tiers: dict[str, list[str]] = {
+            "A": [], "B": [], "BC": [], "C": [], "D": [],
+        }
+        for i, (num, score) in enumerate(sorted_horses):
+            pct = i / total if total > 0 else 0
+            name = horse_names.get(num, f"Häst {num}")
+            label = f"{num} {name} ({score:.1f}p)"
+            if pct < 0.15:
+                consensus_tiers["A"].append(label)
+            elif pct < 0.35:
+                consensus_tiers["B"].append(label)
+            elif pct < 0.55:
+                consensus_tiers["BC"].append(label)
+            elif pct < 0.80:
+                consensus_tiers["C"].append(label)
+            else:
+                consensus_tiers["D"].append(label)
+
+        lines.append(f"\n--- {race_key}: Lopp {race.race_number} ---")
+        for tier in ["A", "B", "BC", "C", "D"]:
+            if consensus_tiers[tier]:
+                lines.append(f"  {tier}: {', '.join(consensus_tiers[tier])}")
+
+        sp = spetstrid.get(race_key, {})
+        if sp:
+            leader = sp.get("predicted_leader", "?")
+            conf = sp.get("confidence", "?")
+            notes = sp.get("notes", "")
+            lines.append(
+                f"  Spetstrid → {leader} (konfidens: {conf}). {notes}"
+            )
+
+    return "\n".join(lines)
 
 
 def _build_ranking_tiers(game_round) -> str:
@@ -337,6 +531,7 @@ def _build_system_prompt(
     backlog_context: str,
     tips_context: str = "",
     memory_context: str = "",
+    consensus_context: str = "",
 ) -> str:
     """Build the enhanced system prompt for the agent."""
     parts = [
@@ -351,7 +546,8 @@ def _build_system_prompt(
         "- Bedöma skrällrisker och ge garderingsråd\n"
         "- Ge konkreta spelförslag — inte bara analys\n"
         "- Jämföra med tips från externa källor när tillgängligt\n"
-        "- Referera till banspecifika mönster och historisk statistik\n",
+        "- Referera till banspecifika mönster och historisk statistik\n"
+        "- Analysera spetsstriden per lopp — vem tar ledningen och hur påverkar det\n",
 
         "## Format\n"
         "- Använd **fetstil** för viktiga namn och siffror\n"
@@ -362,6 +558,9 @@ def _build_system_prompt(
         "## Data",
         f"\n### Omgångsdata\n{round_context}\n",
     ]
+
+    if consensus_context:
+        parts.append(f"\n### Konsensus-ranking\n{consensus_context}\n")
 
     if backlog_context:
         parts.append(f"\n### Historisk statistik\n{backlog_context}\n")
@@ -379,6 +578,8 @@ def _build_system_prompt(
         "- Flagga alltid om en rekommendation går emot marknaden (streckprocent)\n"
         "- Om tips från externa källor finns, jämför med modellens egna analyser\n"
         "- Om banspecifika mönster finns, nämn dem i relevanta svar\n"
+        "- Använd konsensus-rankingen som primär guide — den väger samman modell och alla experter\n"
+        "- Inkludera spetstrid-analys när användaren frågar om specifika lopp\n"
     )
 
     return "\n".join(parts)
@@ -391,12 +592,14 @@ async def chat(
     api_key: str,
     tips_context: str = "",
     memory_context: str = "",
+    consensus_context: str = "",
 ) -> str:
     """Skicka meddelanden till Anthropic API och returnera svaret."""
     import httpx
 
     system_prompt = _build_system_prompt(
-        round_context, backlog_context, tips_context, memory_context
+        round_context, backlog_context, tips_context, memory_context,
+        consensus_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
@@ -429,6 +632,7 @@ async def chat_stream(
     api_key: str,
     tips_context: str = "",
     memory_context: str = "",
+    consensus_context: str = "",
 ) -> AsyncIterator[str]:
     """Stream chat response from Anthropic API, yielding text chunks.
 
@@ -441,7 +645,8 @@ async def chat_stream(
     import httpx
 
     system_prompt = _build_system_prompt(
-        round_context, backlog_context, tips_context, memory_context
+        round_context, backlog_context, tips_context, memory_context,
+        consensus_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")

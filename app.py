@@ -230,15 +230,21 @@ async def api_chat(request: Request):
     backlog_data = await _load_backlog()
 
     try:
-        from trav_agent.chat.agent import build_backlog_context, build_round_context, chat_stream
+        from trav_agent.chat.agent import (
+            build_backlog_context, build_consensus_ranking,
+            build_round_context, chat_stream,
+        )
         from trav_agent.chat.memory import build_learning_context, save_session
-        from trav_agent.data.tips_scraper import build_tips_context, scrape_tips
+        from trav_agent.data.tips_scraper import (
+            build_tips_context, load_tips_cache_raw, scrape_tips,
+        )
 
         round_ctx = build_round_context(game_round) if game_round else "Ingen omgångsdata."
         bl_ctx = build_backlog_context(game_round, backlog_data) if game_round and backlog_data else ""
 
         # Build tips context
         tips_ctx = ""
+        consensus_ctx = ""
         if game_round:
             game_type = game_round.game_type
             round_date = str(game_round.round_date)
@@ -249,6 +255,9 @@ async def api_chat(request: Request):
                 except Exception:
                     _tips_cache[cache_key] = {}
             tips_ctx = build_tips_context(_tips_cache.get(cache_key, {}))
+
+            tips_raw = load_tips_cache_raw(game_type, round_date)
+            consensus_ctx = build_consensus_ranking(game_round, tips_raw)
 
         # Build memory context
         memory_ctx = ""
@@ -261,6 +270,7 @@ async def api_chat(request: Request):
                 async for chunk in chat_stream(
                     messages, round_ctx, bl_ctx, ANTHROPIC_API_KEY,
                     tips_context=tips_ctx, memory_context=memory_ctx,
+                    consensus_context=consensus_ctx,
                 ):
                     full_response += chunk
                     yield f"data: {json.dumps({'delta': chunk})}\n\n"

@@ -2414,6 +2414,17 @@ font-size:14px;padding:0 2px;font-family:inherit;line-height:1}}
 .view{{display:none;max-width:1100px;margin:0 auto;width:100%}}
 .view.active{{display:block}}
 
+/* Backtest sub-tabs */
+.backtest-tabs{{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid #e5e7eb}}
+.bt-tab{{padding:10px 20px;border:none;background:transparent;color:#64748b;font-size:.85rem;
+font-weight:500;cursor:pointer;position:relative;font-family:inherit;transition:color .15s}}
+.bt-tab:hover{{color:#1e293b}}
+.bt-tab.active{{color:#1e293b;font-weight:600}}
+.bt-tab.active::after{{content:'';position:absolute;bottom:-1px;left:8px;right:8px;
+height:2px;background:#f59e0b;border-radius:1px}}
+.bt-panel{{display:none}}
+.bt-panel.active{{display:block}}
+
 /* Dashboard sections within dashboard view */
 .dashboard-section{{display:none;max-width:1100px;margin:0 auto}}
 .dashboard-section.active{{display:block}}
@@ -2989,8 +3000,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   <div class="nav-tabs">
     <button class="nav-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
     <button class="nav-tab" data-view="agent" onclick="showView('agent')">Agent</button>
-    {'<button class="nav-tab" data-view="stats" onclick="showView(&#39;stats&#39;)">Statistik</button>' if stats_section else ''}
-    {'<button class="nav-tab" data-view="backlog" onclick="showView(&#39;backlog&#39;)">Backlog</button>' if backlog_section else ''}
+    {'<button class="nav-tab" data-view="backtest" onclick="showView(&#39;backtest&#39;)">Backtest</button>' if stats_section or backlog_section else ''}
   </div>
   <div class="nav-right">
     <span class="nav-clock" id="nav-clock"></span>
@@ -3076,14 +3086,18 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   </div>
 </div>
 
-<!-- ═══ Stats View ═══ -->
-<div class="view" id="view-stats">
-  {stats_section}
-</div>
-
-<!-- ═══ Backlog View ═══ -->
-<div class="view" id="view-backlog">
-  {backlog_section}
+<!-- ═══ Backtest View (ROI + historik) ═══ -->
+<div class="view" id="view-backtest">
+  <div class="backtest-tabs">
+    <button class="bt-tab active" data-bt="roi" onclick="showBacktestTab('roi')">ROI &amp; Statistik</button>
+    <button class="bt-tab" data-bt="history" onclick="showBacktestTab('history')">Historik</button>
+  </div>
+  <div class="bt-panel active" id="bt-roi">
+    {stats_section}
+  </div>
+  <div class="bt-panel" id="bt-history">
+    {backlog_section}
+  </div>
 </div>
 
 </main>
@@ -3144,6 +3158,16 @@ function showDivision(num){{
   document.querySelectorAll('#sidebar-dashboard .div-item').forEach(b=>b.classList.remove('active'));
   const di=document.querySelector('#sidebar-dashboard .div-item[data-div="'+num+'"]');
   if(di) di.classList.add('active');
+}}
+
+// ── Backtest sub-tabs ──
+function showBacktestTab(tab){{
+  document.querySelectorAll('.bt-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.bt-panel').forEach(p=>p.classList.remove('active'));
+  const tabBtn=document.querySelector('.bt-tab[data-bt="'+tab+'"]');
+  const panel=document.getElementById('bt-'+tab);
+  if(tabBtn) tabBtn.classList.add('active');
+  if(panel) panel.classList.add('active');
 }}
 
 // ── Drawer ──
@@ -3949,6 +3973,10 @@ function removeCustomSource(sourceKey){{
   <button data-view="agent" onclick="showView('agent');updateMobileNav(this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
     Agent
+  </button>
+  <button data-view="backtest" onclick="showView('backtest');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+    Backtest
   </button>
 </nav>
 <script>

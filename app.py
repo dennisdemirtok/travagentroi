@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -42,12 +43,19 @@ async def _load_backlog():
         except Exception as e:
             logger.warning(f"Failed to load backlog from Supabase: {e}")
 
-    # Fallback: local file
+    # Fallback: local file (try .gz first, then plain json)
     try:
         from trav_agent.config import PROJECT_ROOT
-        path = PROJECT_ROOT / "backlog.json"
-        if path.exists():
-            with open(path) as f:
+        gz_path = PROJECT_ROOT / "backlog.json.gz"
+        plain_path = PROJECT_ROOT / "backlog.json"
+        if gz_path.exists():
+            with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+                _backlog_cache = json.load(f)
+            n = len(_backlog_cache.get("entries", []))
+            logger.info(f"Backlog loaded from gzip: {n} entries")
+            return _backlog_cache
+        elif plain_path.exists():
+            with open(plain_path) as f:
                 _backlog_cache = json.load(f)
             n = len(_backlog_cache.get("entries", []))
             logger.info(f"Backlog loaded from file: {n} entries")

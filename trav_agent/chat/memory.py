@@ -133,6 +133,152 @@ def list_sessions() -> list[dict]:
     return sessions
 
 
+# ── Persistent learnings (cross-session memory) ───────────────────────────
+
+_LEARNINGS_FILE = _SESSIONS_DIR / "_learnings.json"
+_learnings: list[dict] | None = None
+
+
+def _load_learnings() -> list[dict]:
+    """Load learnings from disk, cached in memory."""
+    global _learnings
+    if _learnings is not None:
+        return _learnings
+
+    if _LEARNINGS_FILE.exists():
+        try:
+            _learnings = json.loads(_LEARNINGS_FILE.read_text(encoding="utf-8"))
+            return _learnings
+        except Exception as e:
+            logger.warning(f"Failed to load learnings: {e}")
+
+    _learnings = []
+    return _learnings
+
+
+def _save_learnings() -> None:
+    """Persist learnings to disk."""
+    if _learnings is None:
+        return
+    try:
+        _SESSIONS_DIR.mkdir(exist_ok=True)
+        _LEARNINGS_FILE.write_text(
+            json.dumps(_learnings, ensure_ascii=False, indent=1),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to save learnings: {e}")
+
+
+def add_learning(learning: str, category: str = "general", round_key: str = "") -> None:
+    """Add a learning insight that persists across sessions.
+
+    Args:
+        learning: The insight text (e.g. "User prefers 0.50 kr/rad as base cost")
+        category: One of "preference", "correction", "strategy", "general"
+        round_key: Which round this came from
+    """
+    entries = _load_learnings()
+    entries.append({
+        "text": learning,
+        "category": category,
+        "round_key": round_key,
+        "added_at": datetime.now().isoformat(timespec="seconds"),
+    })
+    # Keep max 100 learnings (FIFO)
+    if len(entries) > 100:
+        _learnings.clear()
+        _learnings.extend(entries[-100:])
+    _save_learnings()
+    logger.info(f"Added learning [{category}]: {learning[:60]}")
+
+
+def get_learnings_context() -> str:
+    """Build a context string from all stored learnings for the agent.
+
+    Returns:
+        Formatted string for inclusion in the system prompt.
+    """
+    entries = _load_learnings()
+    if not entries:
+        return ""
+
+    lines = [
+        "## Minne från tidigare sessioner",
+        "Dessa insikter har sparats från tidigare konversationer:\n",
+    ]
+
+    by_cat: dict[str, list[str]] = {}
+    for e in entries:
+        cat = e.get("category", "general")
+        by_cat.setdefault(cat, []).append(e.get("text", ""))
+
+    cat_labels = {
+        "preference": "Användarpreferenser",
+        "correction": "Rättelser & korrigeringar",
+        "strategy": "Strategiinsikter",
+        "general": "Allmänt",
+    }
+    for cat, label in cat_labels.items():
+        items = by_cat.get(cat, [])
+        if items:
+            lines.append(f"**{label}:**")
+            for item in items:
+                lines.append(f"- {item}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def extract_learnings_from_session(messages: list[dict], round_key: str = "") -> None:
+    """Analyze a completed chat session and extract learnings automatically.
+
+    Looks for:
+    - User corrections ("nej", "fel", "inte så", "rätta")
+    - Preferences ("jag vill", "jag föredrar", "använd alltid")
+    - Strategy insights from assistant analysis
+    """
+    if not messages or len(messages) < 2:
+        return
+
+    # Simple heuristic: scan user messages for correction/preference patterns
+    correction_patterns = [
+        "nej ", "fel", "inte så", "rätta", "korrigera", "stämmer inte",
+        "istället", "borde vara", "det ska vara", "ändra",
+    ]
+    preference_patterns = [
+        "jag vill", "jag föredrar", "använd alltid", "visa alltid",
+        "skippa", "inkludera alltid", "tänk på att", "kom ihåg",
+        "från och med nu", "framöver",
+    ]
+
+    for msg in messages:
+        if msg.get("role") != "user":
+            continue
+        text_lower = (msg.get("content") or "").lower()
+
+        for pat in correction_patterns:
+            if pat in text_lower:
+                # Extract the correction (use the full user message, truncated)
+                content = msg.get("content", "")[:200]
+                add_learning(
+                    f"Användarrättelse: {content}",
+                    category="correction",
+                    round_key=round_key,
+                )
+                break
+
+        for pat in preference_patterns:
+            if pat in text_lower:
+                content = msg.get("content", "")[:200]
+                add_learning(
+                    f"Användarpreferens: {content}",
+                    category="preference",
+                    round_key=round_key,
+                )
+                break
+
+
 # ── Track knowledge ─────────────────────────────────────────────────────────
 
 def build_track_knowledge(backlog_data: dict, track_name: str) -> str:

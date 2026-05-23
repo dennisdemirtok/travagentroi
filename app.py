@@ -243,7 +243,10 @@ async def api_chat(request: Request):
             build_model_performance_context, build_round_context,
             chat_stream,
         )
-        from trav_agent.chat.memory import build_learning_context, save_session
+        from trav_agent.chat.memory import (
+            build_learning_context, extract_learnings_from_session,
+            get_learnings_context, save_session,
+        )
         from trav_agent.data.tips_scraper import (
             build_tips_context, load_tips_cache_raw, scrape_tips,
         )
@@ -278,6 +281,9 @@ async def api_chat(request: Request):
         if game_round and backlog_data:
             memory_ctx = build_learning_context(backlog_data, game_round)
 
+        # Build persistent learnings context (cross-session memory)
+        learnings_ctx = get_learnings_context()
+
         async def event_generator():
             full_response = ""
             try:
@@ -286,16 +292,19 @@ async def api_chat(request: Request):
                     tips_context=tips_ctx, memory_context=memory_ctx,
                     consensus_context=consensus_ctx,
                     model_perf_context=model_perf_ctx,
+                    learnings_context=learnings_ctx,
                 ):
                     full_response += chunk
                     yield f"data: {json.dumps({'delta': chunk})}\n\n"
 
                 yield f"data: {json.dumps({'done': True})}\n\n"
 
-                # Save session after successful completion
+                # Save session and extract learnings after completion
                 if round_key:
                     all_msgs = list(messages) + [{"role": "assistant", "content": full_response}]
                     save_session(round_key, all_msgs)
+                    # Auto-extract learnings from session
+                    extract_learnings_from_session(all_msgs, round_key)
 
             except Exception as e:
                 logger.error(f"Chat stream error: {e}")
@@ -337,6 +346,32 @@ async def list_chat_sessions():
     """List all saved chat sessions with metadata."""
     from trav_agent.chat.memory import list_sessions
     return {"sessions": list_sessions()}
+
+
+@app.post("/api/chat/learn")
+async def add_chat_learning(request: Request):
+    """Manually add a learning to the agent's persistent memory."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    text = data.get("text", "")
+    category = data.get("category", "general")
+
+    if not text:
+        return JSONResponse({"error": "'text' krävs"}, status_code=400)
+
+    from trav_agent.chat.memory import add_learning
+    add_learning(text, category=category)
+    return {"status": "learned", "text": text, "category": category}
+
+
+@app.get("/api/chat/learnings")
+async def get_chat_learnings():
+    """Get all stored learnings."""
+    from trav_agent.chat.memory import _load_learnings
+    return {"learnings": _load_learnings()}
 
 
 # ── Tips API ────────────────────────────────────────────────────────────────

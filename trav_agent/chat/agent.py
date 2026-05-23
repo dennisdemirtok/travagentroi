@@ -632,11 +632,14 @@ def _build_system_prompt(
     memory_context: str = "",
     consensus_context: str = "",
     model_perf_context: str = "",
+    learnings_context: str = "",
 ) -> str:
     """Build the enhanced system prompt for the agent."""
     parts = [
         "Du är **Kungens Trav AI** — en expertassistent för svensk travanalys "
-        "integrerad i Kungens Trav-dashboarden. Du svarar alltid på svenska.\n",
+        "integrerad i Kungens Trav-dashboarden. Du svarar alltid på svenska.\n"
+        "Du har ett persistent minne — du lär dig av tidigare sessioner och "
+        "kommer ihåg rättelser, preferenser och insikter från användaren.\n",
 
         "## Dina uppgifter\n"
         "- Analysera hästar, kuskar och tränare i omgången\n"
@@ -674,6 +677,9 @@ def _build_system_prompt(
     if memory_context:
         parts.append(f"\n### Inlärda mönster\n{memory_context}\n")
 
+    if learnings_context:
+        parts.append(f"\n{learnings_context}\n")
+
     parts.append(
         "\n## Regler\n"
         "- Svara kortfattat och informativt men med substans\n"
@@ -697,13 +703,14 @@ async def chat(
     memory_context: str = "",
     consensus_context: str = "",
     model_perf_context: str = "",
+    learnings_context: str = "",
 ) -> str:
     """Skicka meddelanden till Anthropic API och returnera svaret."""
     import httpx
 
     system_prompt = _build_system_prompt(
         round_context, backlog_context, tips_context, memory_context,
-        consensus_context, model_perf_context,
+        consensus_context, model_perf_context, learnings_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
@@ -738,6 +745,7 @@ async def chat_stream(
     memory_context: str = "",
     consensus_context: str = "",
     model_perf_context: str = "",
+    learnings_context: str = "",
 ) -> AsyncIterator[str]:
     """Stream chat response from Anthropic API, yielding text chunks.
 
@@ -751,7 +759,7 @@ async def chat_stream(
 
     system_prompt = _build_system_prompt(
         round_context, backlog_context, tips_context, memory_context,
-        consensus_context, model_perf_context,
+        consensus_context, model_perf_context, learnings_context,
     )
 
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")

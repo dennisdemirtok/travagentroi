@@ -2453,7 +2453,7 @@ function closeDrawer(){{
 }}
 // ── Round dropdown ──
 function changeRound(sel){{
-  window.location.href='/'+sel.value;
+  window.location.href='/dashboard/'+sel.value;
 }}
 // Toggle visa alla äldre entries i backlog
 function toggleShowAll(){{

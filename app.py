@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from trav_agent.analysis.composite import CompositeAnalyzer
 from trav_agent.config import GAME_TYPES
@@ -14,8 +14,60 @@ from trav_agent.output.dashboard import generate_dashboard_html, generate_landin
 
 app = FastAPI(title="Trav Agent API", version="0.1.0")
 
+MAIN_GAME_TYPES = {"V75", "V85", "V86", "V64", "GS75"}
 
-@app.get("/", response_class=HTMLResponse)
+
+async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_forward: int = 7) -> list[tuple]:
+    """Fetch available rounds from ATG calendar for the round switcher."""
+    today = date.today()
+    rounds = []
+    for offset in range(-days_back, days_forward + 1):
+        d = today + timedelta(days=offset)
+        try:
+            cal = await client.get_calendar(d)
+            cal_games = cal.get("games", {})
+            for gt, game_list in cal_games.items():
+                gt_upper = gt.upper()
+                if gt_upper not in MAIN_GAME_TYPES:
+                    continue
+                has_id = game_list and any(g.get("id") for g in game_list)
+                if not has_id:
+                    continue
+                track = ""
+                if game_list and game_list[0].get("tracks"):
+                    tracks = game_list[0]["tracks"]
+                    if isinstance(tracks, list) and tracks:
+                        track = tracks[0].get("name", "")
+                    elif isinstance(tracks, dict):
+                        track = next(iter(tracks.values()), {}).get("name", "")
+                is_past = d < today
+                key = f"{gt_upper}/{d}"
+                rounds.append((key, gt_upper, str(d), is_past, track))
+        except Exception:
+            continue
+    return rounds
+
+
+@app.get("/")
+async def root():
+    client = ATGClient()
+    today = date.today()
+    for offset in range(8):
+        d = today + timedelta(days=offset)
+        try:
+            cal = await client.get_calendar(d, skip_cache=(offset <= 1))
+            cal_games = cal.get("games", {})
+            for gt, game_list in cal_games.items():
+                if gt.upper() in MAIN_GAME_TYPES:
+                    has_id = game_list and any(g.get("id") for g in game_list)
+                    if has_id:
+                        return RedirectResponse(f"/dashboard/{gt.upper()}/{d}")
+        except Exception:
+            continue
+    return HTMLResponse(generate_landing_html())
+
+
+@app.get("/landing", response_class=HTMLResponse)
 async def landing():
     return generate_landing_html()
 
@@ -32,14 +84,25 @@ async def dashboard(game_type: str, day: str):
         raise HTTPException(400, f"Ogiltigt datum: {day}")
 
     client = ATGClient()
+
     game_round = await client.fetch_full_round(game_type, d)
     if not game_round:
         raise HTTPException(404, f"Ingen {game_type} hittad för {day}")
 
+    if game_round.is_finished or d < date.today():
+        pass
+    else:
+        await client.refresh_results(game_round)
+
     analyzer = CompositeAnalyzer()
     analyzer.analyze_round(game_round)
 
-    html = generate_dashboard_html(game_round)
+    available_rounds = await _get_available_rounds(client)
+
+    html = generate_dashboard_html(
+        game_round,
+        available_rounds=available_rounds,
+    )
     return html
 
 

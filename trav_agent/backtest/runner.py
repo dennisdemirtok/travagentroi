@@ -107,6 +107,23 @@ class BacktestRunner:
                 filtered = [s for s in original if s.start_date < race_date]
                 if len(filtered) < len(original):
                     entry.horse.past_starts = filtered
+                # Recompute career stats from filtered starts only —
+                # prevents look-ahead bias in career-based factors
+                entry.horse.recompute_career_from_starts()
+
+    @staticmethod
+    def _neutralize_closing_odds(game_round: GameRound) -> None:
+        """Nollställ slutlig streckprocent och odds i backtest.
+
+        Closing odds (slutstrecket) är en stark framtidssignal som
+        inte finns tillgänglig i live-läge. Genom att nollställa
+        bet_percentage tvingas modellen förlita sig på sina egna
+        analysfaktorer istället för marknadens slutdata.
+        """
+        for race in game_round.races:
+            for entry in race.entries:
+                entry.bet_percentage = None
+                entry.odds = None
 
     async def run_single(self, game_round: GameRound) -> RoundPrediction:
         """Kör analys på en enskild omgång och jämför med resultat.
@@ -115,6 +132,9 @@ class BacktestRunner:
         """
         # Filtrera bort framtida starter för att undvika data leakage
         self._filter_future_starts(game_round)
+
+        # Neutralisera closing odds — modellen ska inte använda slutstrecket
+        self._neutralize_closing_odds(game_round)
 
         # Kör vår analys
         self.analyzer.analyze_round(game_round)

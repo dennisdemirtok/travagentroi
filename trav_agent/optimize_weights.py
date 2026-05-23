@@ -239,8 +239,10 @@ async def load_all_races(
             if not game_round or not game_round.is_finished:
                 continue
 
-            # Filter future starts (temporal integrity)
+            # Filter future starts and recompute career (temporal integrity)
             BacktestRunner._filter_future_starts(game_round)
+            # Neutralize closing odds — optimizer must not use market data
+            BacktestRunner._neutralize_closing_odds(game_round)
 
             for race in game_round.races:
                 if not race.result_order or len(race.active_entries) < 3:

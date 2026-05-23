@@ -1110,340 +1110,88 @@ def _system_html(game_round: GameRound) -> str:
 
 
 def _stats_html(backlog_data: dict | None = None) -> str:
-    """Generera statistik-sektion med ROI per år och per bana, per strategi."""
+    """Generera statistik-sektion med strategi-kort, CSS-bar-chart och smart gruppering."""
     if not backlog_data or "strategies" not in backlog_data:
         return ""
 
     strategies = backlog_data["strategies"]
     strat_names = list(strategies.keys())
 
-    # Strategi-knappar
-    strat_buttons = ['<button class="strat-btn active" onclick="filterStats(\'all\')">Alla strategier</button>']
-    strat_short = {"I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom", "D_market_gap": "D_market", "I_streck_spik1": "I_spik1", "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3"}
-    for s in strat_names:
-        short = strat_short.get(s, s[:10])
-        strat_buttons.append(
-            f'<button class="strat-btn" onclick="filterStats(\'{s}\')">{short}</button>'
-        )
-
-    # Speltyp-knappar
-    GT_COLORS_BTN = {
-        "V75": "#f59e0b", "V85": "#f59e0b", "GS75": "#a78bfa",
-        "V86": "#fb923c", "V64": "#34d399", "V65": "#34d399",
+    strat_short = {
+        "I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom",
+        "D_market_gap": "D_market", "I_streck_spik1": "I_spik1",
+        "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3",
     }
-    all_game_types = sorted(set(
-        gt
-        for s in strategies.values()
-        for gt in s.get("game_types", {}).keys()
-    ))
-    gt_buttons = ['<button class="gt-btn active" onclick="filterStatsGT(\'all\')">Alla speltyper</button>']
-    for gt in all_game_types:
-        color = GT_COLORS_BTN.get(gt, "#64748b")
-        gt_buttons.append(
-            f'<button class="gt-btn" onclick="filterStatsGT(\'{gt}\')" '
-            f'style="--gt-color:{color}">{gt}</button>'
-        )
-
-    # ── Strategi-översikt ──
-    overview_rows = []
-    for s in strat_names:
-        ss = strategies[s]
-        short = strat_short.get(s, s[:10])
-        roi = ss.get("roi", 0)
-        roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-        netto = ss.get("netto", 0)
-        netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-        overview_rows.append(
-            f'<tr>'
-            f'<td><strong>{short}</strong></td>'
-            f'<td>{ss.get("rounds_played", 0)}</td>'
-            f'<td>{ss.get("full_hits", 0)}</td>'
-            f'<td>{ss.get("partial_hits", 0)}</td>'
-            f'<td>{ss.get("total_cost", 0):,.0f} kr</td>'
-            f'<td>{ss.get("total_payout", 0):,.0f} kr</td>'
-            f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-            f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-            f'</tr>'
-        )
-
-    overview_html = (
-        f'<div class="stats-block">'
-        f'<h3>Strategi-översikt</h3>'
-        f'<div class="table-wrap"><table class="stats-table">'
-        f'<thead><tr><th>Strategi</th><th>Omg</th><th>Full</th><th>Del</th>'
-        f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-        f'<tbody>{"".join(overview_rows)}</tbody>'
-        f'</table></div></div>'
-    )
-
-    # ── ROI per speltyp — en tabell per strategi (dold via JS) ──
-    game_type_sections = []
+    STRAT_COLORS = {
+        "I_streck_1st": ("#f59e0b", "rgba(245,166,35,0.10)"),
+        "Q_dom_x_mktgap": ("#a78bfa", "rgba(167,139,250,0.10)"),
+        "D_market_gap": ("#fb923c", "rgba(251,146,60,0.10)"),
+        "I_streck_spik1": ("#fbbf24", "rgba(251,191,36,0.10)"),
+        "I_streck_spik2": ("#34d399", "rgba(52,211,153,0.10)"),
+        "I_streck_spik3": ("#f472b6", "rgba(244,114,182,0.10)"),
+    }
     GT_COLORS_STATS = {
         "V75": "#f59e0b", "V85": "#f59e0b", "GS75": "#a78bfa",
         "V86": "#fb923c", "V64": "#34d399", "V65": "#34d399",
     }
-    for s in strat_names:
-        game_types = strategies[s].get("game_types", {})
-        if not game_types:
-            continue
-        short = strat_short.get(s, s[:10])
-        gt_rows = []
-        for gt in sorted(game_types.keys()):
-            g = game_types[gt]
-            roi = g.get("roi", 0)
-            roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-            netto = g.get("netto", 0)
-            netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-            gt_color = GT_COLORS_STATS.get(gt, "#64748b")
-            gt_rows.append(
-                f'<tr data-gt="{gt}">'
-                f'<td><strong style="color:{gt_color}">{gt}</strong></td>'
-                f'<td>{g.get("rounds", 0)}</td>'
-                f'<td>{g.get("full", 0)}</td>'
-                f'<td>{g.get("wins", 0)}</td>'
-                f'<td>{g.get("cost", 0):,.0f} kr</td>'
-                f'<td>{g.get("payout", 0):,.0f} kr</td>'
-                f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-                f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-                f'</tr>'
-            )
 
-        game_type_sections.append(
-            f'<div class="stats-block strat-block" data-strat="{s}">'
-            f'<h3>🎰 ROI per speltyp — {short}</h3>'
-            f'<div class="table-wrap"><table class="stats-table">'
-            f'<thead><tr><th>Speltyp</th><th>Omg</th><th>Full</th><th>Vinster</th>'
-            f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-            f'<tbody>{"".join(gt_rows)}</tbody>'
-            f'</table></div></div>'
+    # Group strategies: main vs variants
+    MAIN_STRATS = {"I_streck_1st", "Q_dom_x_mktgap", "D_market_gap"}
+    main_names = [s for s in strat_names if s in MAIN_STRATS]
+    variant_names = [s for s in strat_names if s not in MAIN_STRATS]
+
+    # ── Build strategy cards ──
+    def _strat_card(s: str) -> str:
+        ss = strategies[s]
+        short = strat_short.get(s, s[:10])
+        roi = ss.get("roi", 0)
+        netto = ss.get("netto", 0)
+        rounds_played = ss.get("rounds_played", 0)
+        full_hits = ss.get("full_hits", 0)
+        hit_rate = (full_hits / rounds_played * 100) if rounds_played > 0 else 0
+        roi_color = "#22c55e" if roi >= 0 else "#ef4444"
+        netto_color = "#22c55e" if netto >= 0 else "#ef4444"
+        accent, bg = STRAT_COLORS.get(s, ("#64748b", "rgba(100,116,139,0.10)"))
+        return (
+            f'<div class="sc-card" style="border-top:3px solid {accent}">'
+            f'<div class="sc-header">'
+            f'<span class="sc-name" style="color:{accent}">{short}</span>'
+            f'<span class="sc-rounds">{rounds_played} omg</span>'
+            f'</div>'
+            f'<div class="sc-roi" style="color:{roi_color}">{roi:+.1f}%</div>'
+            f'<div class="sc-label">ROI</div>'
+            f'<div class="sc-metrics">'
+            f'<div class="sc-metric"><span class="sc-metric-val">{full_hits}</span>'
+            f'<span class="sc-metric-lbl">Alla ratt</span></div>'
+            f'<div class="sc-metric"><span class="sc-metric-val">{hit_rate:.0f}%</span>'
+            f'<span class="sc-metric-lbl">Traffprocent</span></div>'
+            f'<div class="sc-metric"><span class="sc-metric-val" style="color:{netto_color}">{netto:+,.0f}</span>'
+            f'<span class="sc-metric-lbl">Netto (kr)</span></div>'
+            f'</div>'
+            f'</div>'
         )
 
-    # ── Backtest vs Live-jämförelse ──
-    bt_vs_live_html = ""
-    entries = backlog_data.get("entries", [])
-    if entries:
-        from collections import defaultdict
-        live_by_strat = defaultdict(lambda: {"cost": 0, "payout": 0, "rounds": 0, "full": 0, "partial": 0})
-        for entry in entries:
-            if entry.get("live") and entry.get("races_finished", 0) == entry.get("races_total", 0) and entry.get("races_finished", 0) > 0:
-                # Avslutad live-omgång (alla lopp klara)
-                s = entry.get("strategy", "")
-                ls = live_by_strat[s]
-                ls["rounds"] += 1
-                ls["cost"] += entry.get("cost", 0)
-                ls["payout"] += entry.get("payout", 0)
-                if entry.get("hit"):
-                    ls["full"] += 1
-                elif entry.get("payout", 0) > 0:
-                    ls["partial"] += 1
-            elif not entry.get("live"):
-                pass  # Backtest-stats redan i strategies dict
+    main_cards = "".join(_strat_card(s) for s in main_names)
+    variant_cards = "".join(_strat_card(s) for s in variant_names)
 
-        # Bygg rader
-        bt_live_rows = []
-        for s in strat_names:
-            short = strat_short.get(s, s[:10])
-            # Backtest ROI från strategies
-            bt_roi = strategies[s].get("roi", 0)
-            bt_roi_cls = "#22c55e" if bt_roi > 0 else "#ef4444"
-            bt_rounds = strategies[s].get("rounds_played", 0)
-
-            # Live stats
-            ls = live_by_strat.get(s)
-            if ls and ls["rounds"] >= 1:
-                l_roi = (ls["payout"] - ls["cost"]) / ls["cost"] * 100 if ls["cost"] > 0 else 0
-                l_roi_cls = "#22c55e" if l_roi > 0 else "#ef4444"
-                l_netto = ls["payout"] - ls["cost"]
-                l_netto_cls = "#22c55e" if l_netto > 0 else "#ef4444"
-                if ls["rounds"] >= 5:
-                    status = '<span style="color:#22c55e">Tracking</span>'
-                    roi_str = f'<span style="color:{l_roi_cls};font-weight:700">{l_roi:+.1f}%</span>'
-                    netto_str = f'<span style="color:{l_netto_cls};font-weight:700">{l_netto:+,.0f} kr</span>'
-                else:
-                    status = f'<span style="color:#6b7280">Samlar data ({ls["rounds"]}/5)</span>'
-                    roi_str = f'<span style="color:{l_roi_cls}">{l_roi:+.1f}%</span>'
-                    netto_str = f'<span style="color:{l_netto_cls}">{l_netto:+,.0f} kr</span>'
-            else:
-                status = '<span style="color:#6b7280">Ingen data</span>'
-                roi_str = '<span style="color:#6b7280">—</span>'
-                netto_str = '<span style="color:#6b7280">—</span>'
-                ls = {"rounds": 0}
-
-            bt_live_rows.append(
-                f'<tr>'
-                f'<td><strong>{short}</strong></td>'
-                f'<td style="color:{bt_roi_cls};font-weight:700">{bt_roi:+.1f}%</td>'
-                f'<td>{bt_rounds}</td>'
-                f'<td>{roi_str}</td>'
-                f'<td>{netto_str}</td>'
-                f'<td>{ls["rounds"]}</td>'
-                f'<td>{status}</td>'
-                f'</tr>'
-            )
-
-        if bt_live_rows:
-            bt_vs_live_html = (
-                f'<div class="stats-block">'
-                f'<h3>🔄 Backtest vs Live</h3>'
-                f'<div class="table-wrap"><table class="stats-table">'
-                f'<thead><tr><th>Strategi</th><th>Backtest ROI</th><th>BT omg</th>'
-                f'<th>Live ROI</th><th>Live netto</th><th>Live omg</th><th>Status</th></tr></thead>'
-                f'<tbody>{"".join(bt_live_rows)}</tbody>'
-                f'</table></div></div>'
-            )
-
-    # ── ROI per år — en tabell per strategi (dold via JS) ──
-    yearly_sections = []
-    for s in strat_names:
-        yearly = strategies[s].get("yearly", {})
-        if not yearly:
-            continue
-        short = strat_short.get(s, s[:10])
-        yr_rows = []
-        for year in sorted(yearly.keys()):
-            y = yearly[year]
-            roi = y.get("roi", 0)
-            roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-            netto = y.get("netto", 0)
-            netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-            yr_rows.append(
-                f'<tr>'
-                f'<td><strong>{year}</strong></td>'
-                f'<td>{y.get("rounds", 0)}</td>'
-                f'<td>{y.get("full", 0)}</td>'
-                f'<td>{y.get("wins", 0)}</td>'
-                f'<td>{y.get("cost", 0):,.0f} kr</td>'
-                f'<td>{y.get("payout", 0):,.0f} kr</td>'
-                f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-                f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-                f'</tr>'
-            )
-
-        yearly_sections.append(
-            f'<div class="stats-block strat-block" data-strat="{s}">'
-            f'<h3>📅 ROI per år — {short}</h3>'
-            f'<div class="table-wrap"><table class="stats-table">'
-            f'<thead><tr><th>År</th><th>Omg</th><th>Full</th><th>Vinster</th>'
-            f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-            f'<tbody>{"".join(yr_rows)}</tbody>'
-            f'</table></div></div>'
+    strategy_cards_html = (
+        f'<div class="sc-section">'
+        f'<h3 class="sc-group-title">Huvudstrategier</h3>'
+        f'<div class="sc-grid">{main_cards}</div>'
+    )
+    if variant_cards:
+        strategy_cards_html += (
+            f'<div class="sc-variant-toggle">'
+            f'<button class="sc-toggle-btn" data-action="toggle-variants">Visa varianter ({len(variant_names)})</button>'
+            f'</div>'
+            f'<div class="sc-variants-wrap" style="display:none">'
+            f'<h3 class="sc-group-title">Varianter</h3>'
+            f'<div class="sc-grid">{variant_cards}</div>'
+            f'</div>'
         )
+    strategy_cards_html += '</div>'
 
-    # ── ROI per bana — en tabell per strategi ──
-    track_sections = []
-    for s in strat_names:
-        tracks = strategies[s].get("tracks", {})
-        if not tracks:
-            continue
-        short = strat_short.get(s, s[:10])
-        trk_rows = []
-        # Sortera efter omgångar (mest först)
-        for track in sorted(tracks.keys(), key=lambda t: tracks[t].get("rounds", 0), reverse=True):
-            t = tracks[track]
-            roi = t.get("roi", 0)
-            roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-            netto = t.get("netto", 0)
-            netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-            trk_rows.append(
-                f'<tr>'
-                f'<td><strong>{_esc(track)}</strong></td>'
-                f'<td>{t.get("rounds", 0)}</td>'
-                f'<td>{t.get("full", 0)}</td>'
-                f'<td>{t.get("wins", 0)}</td>'
-                f'<td>{t.get("cost", 0):,.0f} kr</td>'
-                f'<td>{t.get("payout", 0):,.0f} kr</td>'
-                f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-                f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-                f'</tr>'
-            )
-
-        track_sections.append(
-            f'<div class="stats-block strat-block" data-strat="{s}">'
-            f'<h3>🏇 ROI per bana — {short}</h3>'
-            f'<div class="table-wrap"><table class="stats-table">'
-            f'<thead><tr><th>Bana</th><th>Omg</th><th>Full</th><th>Vinster</th>'
-            f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-            f'<tbody>{"".join(trk_rows)}</tbody>'
-            f'</table></div></div>'
-        )
-
-    # ── ROI per månad — en tabell per strategi ──
-    monthly_sections = []
-    for s in strat_names:
-        monthly = strategies[s].get("monthly", {})
-        if not monthly:
-            continue
-        short = strat_short.get(s, s[:10])
-        m_rows = []
-        for month in sorted(monthly.keys()):
-            m = monthly[month]
-            roi = m.get("roi", 0)
-            roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-            netto = m.get("netto", 0)
-            netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-            m_rows.append(
-                f'<tr>'
-                f'<td><strong>{m.get("name", month)}</strong></td>'
-                f'<td>{m.get("rounds", 0)}</td>'
-                f'<td>{m.get("full", 0)}</td>'
-                f'<td>{m.get("wins", 0)}</td>'
-                f'<td>{m.get("cost", 0):,.0f} kr</td>'
-                f'<td>{m.get("payout", 0):,.0f} kr</td>'
-                f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-                f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-                f'</tr>'
-            )
-
-        monthly_sections.append(
-            f'<div class="stats-block strat-block" data-strat="{s}">'
-            f'<h3>📆 ROI per månad — {short}</h3>'
-            f'<div class="table-wrap"><table class="stats-table">'
-            f'<thead><tr><th>Månad</th><th>Omg</th><th>Full</th><th>Vinster</th>'
-            f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-            f'<tbody>{"".join(m_rows)}</tbody>'
-            f'</table></div></div>'
-        )
-
-    # ── ROI per speltyp per år — en tabell per strategi × speltyp ──
-    yearly_gt_sections = []
-    for s in strat_names:
-        yearly_gt = strategies[s].get("yearly_by_game_type", {})
-        if not yearly_gt:
-            continue
-        short = strat_short.get(s, s[:10])
-        for gt in sorted(yearly_gt.keys()):
-            gt_color = GT_COLORS_STATS.get(gt, "#64748b")
-            yr_data = yearly_gt[gt]
-            yr_rows = []
-            for year in sorted(yr_data.keys()):
-                y = yr_data[year]
-                roi = y.get("roi", 0)
-                roi_cls = "#22c55e" if roi > 0 else "#ef4444"
-                netto = y.get("netto", 0)
-                netto_cls = "#22c55e" if netto > 0 else "#ef4444"
-                yr_rows.append(
-                    f'<tr>'
-                    f'<td><strong>{year}</strong></td>'
-                    f'<td>{y.get("rounds", 0)}</td>'
-                    f'<td>{y.get("full", 0)}</td>'
-                    f'<td>{y.get("wins", 0)}</td>'
-                    f'<td>{y.get("cost", 0):,.0f} kr</td>'
-                    f'<td>{y.get("payout", 0):,.0f} kr</td>'
-                    f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
-                    f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td>'
-                    f'</tr>'
-                )
-            yearly_gt_sections.append(
-                f'<div class="stats-block strat-block gt-block" data-strat="{s}" data-gt="{gt}">'
-                f'<h3 style="color:{gt_color}">📅 {gt} ROI per år — {short}</h3>'
-                f'<div class="table-wrap"><table class="stats-table">'
-                f'<thead><tr><th>År</th><th>Omg</th><th>Full</th><th>Vinster</th>'
-                f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
-                f'<tbody>{"".join(yr_rows)}</tbody>'
-                f'</table></div></div>'
-            )
-
-    # Equity curve data from backlog entries
+    # ── Equity curve (Chart.js — kept) ──
     import json as _json
     equity_data = []
     entries = backlog_data.get("entries", [])
@@ -1458,8 +1206,8 @@ def _stats_html(backlog_data: dict | None = None) -> str:
     if equity_data:
         chart_html = (
             f'<div class="stats-block">'
-            f'<h3>📊 Equity Curve — Kumulativ avkastning</h3>'
-            f'<canvas id="equity-chart" height="200"></canvas>'
+            f'<h3>Equity Curve</h3>'
+            f'<canvas id="equity-chart" height="180"></canvas>'
             f'<script>'
             f'(function(){{'
             f'const data = {_json.dumps(equity_data)};'
@@ -1468,27 +1216,30 @@ def _stats_html(backlog_data: dict | None = None) -> str:
             f'data:{{datasets:[{{data:data,borderColor:"#f59e0b",backgroundColor:"rgba(245,166,35,0.08)",'
             f'fill:true,tension:0.3,pointRadius:0,borderWidth:2}}]}},'
             f'options:{{responsive:true,plugins:{{legend:{{display:false}}}},'
-            f'scales:{{x:{{type:"category",ticks:{{color:"#64748b",maxTicksLimit:8,font:{{size:10}}}},'
-            f'grid:{{color:"rgba(255,255,255,0.04)"}}}},'
-            f'y:{{ticks:{{color:"#64748b",callback:function(v){{return (v/1000).toFixed(0)+"k"}},'
-            f'font:{{size:10}}}},grid:{{color:"rgba(255,255,255,0.04)"}}}}}}}}}}'
+            f'scales:{{x:{{type:"category",ticks:{{color:"#94a3b8",maxTicksLimit:8,font:{{size:10}}}},'
+            f'grid:{{display:false}}}},'
+            f'y:{{ticks:{{color:"#94a3b8",callback:function(v){{return (v/1000).toFixed(0)+"k"}},'
+            f'font:{{size:10}}}},grid:{{color:"rgba(0,0,0,0.04)"}}}}}}}}}}'
             f');}})();'
             f'</script>'
             f'</div>'
         )
 
-    # ── Månadsvis ROI — senaste 6 månaderna (aggregerat alla strategier) ──
-    monthly_roi_html = ""
+    # ── Monthly ROI CSS bar chart ──
+    MONTH_NAMES_SV = {
+        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+        "05": "Maj", "06": "Jun", "07": "Jul", "08": "Aug",
+        "09": "Sep", "10": "Okt", "11": "Nov", "12": "Dec",
+    }
+    monthly_bar_html = ""
     entries_for_monthly = backlog_data.get("entries", [])
     if entries_for_monthly:
         from collections import defaultdict as _defaultdict
-        month_agg = _defaultdict(lambda: {
-            "cost": 0, "payout": 0, "rounds": 0, "hits": 0,
-        })
+        month_agg = _defaultdict(lambda: {"cost": 0, "payout": 0, "rounds": 0, "hits": 0})
         for entry in entries_for_monthly:
             d = entry.get("date", "")
             if len(d) >= 7:
-                ym = d[:7]  # YYYY-MM
+                ym = d[:7]
                 ma = month_agg[ym]
                 ma["cost"] += entry.get("cost", 0)
                 ma["payout"] += entry.get("payout", 0)
@@ -1497,84 +1248,229 @@ def _stats_html(backlog_data: dict | None = None) -> str:
                     ma["hits"] += 1
 
         if month_agg:
-            sorted_months = sorted(month_agg.keys(), reverse=True)[:6]
-            # Find max abs ROI for bar scaling
+            sorted_months = sorted(month_agg.keys(), reverse=True)[:12]
+            sorted_months.reverse()  # chronological order for chart
+
             roi_values = []
             for ym in sorted_months:
                 ma = month_agg[ym]
                 roi_val = ((ma["payout"] - ma["cost"]) / ma["cost"] * 100) if ma["cost"] > 0 else 0
-                roi_values.append(abs(roi_val))
-            max_abs_roi = max(roi_values) if roi_values else 1
+                roi_values.append(roi_val)
+            max_abs_roi = max(abs(v) for v in roi_values) if roi_values else 1
             if max_abs_roi == 0:
                 max_abs_roi = 1
 
-            MONTH_NAMES_SV = {
-                "01": "Januari", "02": "Februari", "03": "Mars",
-                "04": "April", "05": "Maj", "06": "Juni",
-                "07": "Juli", "08": "Augusti", "09": "September",
-                "10": "Oktober", "11": "November", "12": "December",
-            }
-
-            m_roi_rows = []
-            for ym in sorted_months:
+            bar_items = []
+            for i, ym in enumerate(sorted_months):
                 ma = month_agg[ym]
-                roi = ((ma["payout"] - ma["cost"]) / ma["cost"] * 100) if ma["cost"] > 0 else 0
+                roi = roi_values[i]
                 netto = ma["payout"] - ma["cost"]
                 win_rate = (ma["hits"] / ma["rounds"] * 100) if ma["rounds"] > 0 else 0
-                roi_color = "#22c55e" if roi >= 0 else "#ef4444"
-                netto_color = "#22c55e" if netto >= 0 else "#ef4444"
-                bar_width = abs(roi) / max_abs_roi * 100
-                bar_bg = "rgba(34,197,94,0.25)" if roi >= 0 else "rgba(239,68,68,0.25)"
-                bar_border = "#22c55e" if roi >= 0 else "#ef4444"
+                bar_pct = abs(roi) / max_abs_roi * 100
+                bar_color = "#22c55e" if roi >= 0 else "#ef4444"
+                bar_bg = "rgba(34,197,94,0.20)" if roi >= 0 else "rgba(239,68,68,0.20)"
                 month_num = ym[5:7]
                 year_short = ym[2:4]
                 month_label = f"{MONTH_NAMES_SV.get(month_num, month_num)} '{year_short}"
-                m_roi_rows.append(
-                    f'<tr>'
-                    f'<td><strong>{month_label}</strong></td>'
-                    f'<td style="text-align:center">{ma["rounds"]}</td>'
-                    f'<td style="color:{roi_color};font-weight:700;text-align:right">{roi:+.1f}%</td>'
-                    f'<td>'
-                    f'<div style="display:flex;align-items:center;gap:6px">'
-                    f'<div style="width:{bar_width:.0f}%;min-width:2px;height:16px;'
-                    f'background:{bar_bg};border-left:3px solid {bar_border};'
-                    f'border-radius:2px"></div>'
+                netto_color = "#22c55e" if netto >= 0 else "#ef4444"
+                bar_items.append(
+                    f'<div class="mbar-row">'
+                    f'<span class="mbar-label">{month_label}</span>'
+                    f'<div class="mbar-track">'
+                    f'<div class="mbar-fill" style="width:{max(bar_pct, 2):.0f}%;background:{bar_bg};border-left:3px solid {bar_color}"></div>'
                     f'</div>'
-                    f'</td>'
-                    f'<td style="text-align:center">{win_rate:.0f}%</td>'
-                    f'<td style="color:{netto_color};font-weight:700;text-align:right">'
-                    f'{netto:+,.0f} kr</td>'
-                    f'</tr>'
+                    f'<span class="mbar-val" style="color:{bar_color}">{roi:+.1f}%</span>'
+                    f'<span class="mbar-netto" style="color:{netto_color}">{netto:+,.0f} kr</span>'
+                    f'<span class="mbar-meta">{ma["rounds"]} omg &middot; {win_rate:.0f}% vinst</span>'
+                    f'</div>'
                 )
 
-            monthly_roi_html = (
+            monthly_bar_html = (
                 f'<div class="stats-block">'
-                f'<h3>📆 Månadsvis ROI — senaste 6 månaderna</h3>'
-                f'<div class="table-wrap"><table class="stats-table">'
-                f'<thead><tr>'
-                f'<th>Månad</th><th style="text-align:center">Omgångar</th>'
-                f'<th style="text-align:right">ROI</th><th style="min-width:120px"></th>'
-                f'<th style="text-align:center">Vinstfrekvens</th>'
-                f'<th style="text-align:right">Netto</th>'
-                f'</tr></thead>'
-                f'<tbody>{"".join(m_roi_rows)}</tbody>'
-                f'</table></div></div>'
+                f'<h3>Manadsvis ROI</h3>'
+                f'<div class="mbar-chart">{"".join(bar_items)}</div>'
+                f'</div>'
             )
+
+    # ── Speltyp-filter + detail tables (kept, with compact filter) ──
+    all_game_types = sorted(set(
+        gt for s in strategies.values() for gt in s.get("game_types", {}).keys()
+    ))
+    gt_buttons = ['<button class="gt-btn active" data-action="filter-stats-gt" data-gt="all">Alla</button>']
+    for gt in all_game_types:
+        color = GT_COLORS_STATS.get(gt, "#64748b")
+        gt_buttons.append(
+            f'<button class="gt-btn" data-action="filter-stats-gt" data-gt="{gt}" '
+            f'style="--gt-color:{color}">{gt}</button>'
+        )
+
+    strat_buttons = ['<button class="strat-btn active" data-action="filter-stats" data-strat="all">Alla</button>']
+    for s in strat_names:
+        short = strat_short.get(s, s[:10])
+        strat_buttons.append(
+            f'<button class="strat-btn" data-action="filter-stats" data-strat="{s}">{short}</button>'
+        )
+
+    # ── Detail tables per strategy (speltyp, year, track) ──
+    detail_sections = []
+
+    for s in strat_names:
+        short = strat_short.get(s, s[:10])
+
+        # Game type table
+        game_types = strategies[s].get("game_types", {})
+        if game_types:
+            gt_rows = []
+            for gt in sorted(game_types.keys()):
+                g = game_types[gt]
+                roi = g.get("roi", 0)
+                roi_cls = "#22c55e" if roi > 0 else "#ef4444"
+                netto = g.get("netto", 0)
+                netto_cls = "#22c55e" if netto > 0 else "#ef4444"
+                gt_color = GT_COLORS_STATS.get(gt, "#64748b")
+                gt_rows.append(
+                    f'<tr data-gt="{gt}">'
+                    f'<td><strong style="color:{gt_color}">{gt}</strong></td>'
+                    f'<td>{g.get("rounds", 0)}</td><td>{g.get("full", 0)}</td>'
+                    f'<td>{g.get("cost", 0):,.0f} kr</td><td>{g.get("payout", 0):,.0f} kr</td>'
+                    f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
+                    f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td></tr>'
+                )
+            detail_sections.append(
+                f'<div class="stats-block strat-block" data-strat="{s}">'
+                f'<h3>Speltyp &mdash; {short}</h3>'
+                f'<div class="table-wrap"><table class="stats-table">'
+                f'<thead><tr><th>Typ</th><th>Omg</th><th>Full</th>'
+                f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
+                f'<tbody>{"".join(gt_rows)}</tbody></table></div></div>'
+            )
+
+        # Yearly table
+        yearly = strategies[s].get("yearly", {})
+        if yearly:
+            yr_rows = []
+            for year in sorted(yearly.keys()):
+                y = yearly[year]
+                roi = y.get("roi", 0)
+                roi_cls = "#22c55e" if roi > 0 else "#ef4444"
+                netto = y.get("netto", 0)
+                netto_cls = "#22c55e" if netto > 0 else "#ef4444"
+                yr_rows.append(
+                    f'<tr><td><strong>{year}</strong></td>'
+                    f'<td>{y.get("rounds", 0)}</td><td>{y.get("full", 0)}</td>'
+                    f'<td>{y.get("cost", 0):,.0f} kr</td><td>{y.get("payout", 0):,.0f} kr</td>'
+                    f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
+                    f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td></tr>'
+                )
+            detail_sections.append(
+                f'<div class="stats-block strat-block" data-strat="{s}">'
+                f'<h3>Per ar &mdash; {short}</h3>'
+                f'<div class="table-wrap"><table class="stats-table">'
+                f'<thead><tr><th>Ar</th><th>Omg</th><th>Full</th>'
+                f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
+                f'<tbody>{"".join(yr_rows)}</tbody></table></div></div>'
+            )
+
+        # Track table
+        tracks = strategies[s].get("tracks", {})
+        if tracks:
+            trk_rows = []
+            for track in sorted(tracks.keys(), key=lambda t: tracks[t].get("rounds", 0), reverse=True)[:10]:
+                t = tracks[track]
+                roi = t.get("roi", 0)
+                roi_cls = "#22c55e" if roi > 0 else "#ef4444"
+                netto = t.get("netto", 0)
+                netto_cls = "#22c55e" if netto > 0 else "#ef4444"
+                trk_rows.append(
+                    f'<tr><td><strong>{_esc(track)}</strong></td>'
+                    f'<td>{t.get("rounds", 0)}</td><td>{t.get("full", 0)}</td>'
+                    f'<td>{t.get("cost", 0):,.0f} kr</td><td>{t.get("payout", 0):,.0f} kr</td>'
+                    f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
+                    f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td></tr>'
+                )
+            detail_sections.append(
+                f'<div class="stats-block strat-block" data-strat="{s}">'
+                f'<h3>Per bana &mdash; {short}</h3>'
+                f'<div class="table-wrap"><table class="stats-table">'
+                f'<thead><tr><th>Bana</th><th>Omg</th><th>Full</th>'
+                f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
+                f'<tbody>{"".join(trk_rows)}</tbody></table></div></div>'
+            )
+
+        # Yearly by game type
+        yearly_gt = strategies[s].get("yearly_by_game_type", {})
+        if yearly_gt:
+            for gt in sorted(yearly_gt.keys()):
+                gt_color = GT_COLORS_STATS.get(gt, "#64748b")
+                yr_data = yearly_gt[gt]
+                yr_rows = []
+                for year in sorted(yr_data.keys()):
+                    y = yr_data[year]
+                    roi = y.get("roi", 0)
+                    roi_cls = "#22c55e" if roi > 0 else "#ef4444"
+                    netto = y.get("netto", 0)
+                    netto_cls = "#22c55e" if netto > 0 else "#ef4444"
+                    yr_rows.append(
+                        f'<tr><td><strong>{year}</strong></td>'
+                        f'<td>{y.get("rounds", 0)}</td><td>{y.get("full", 0)}</td>'
+                        f'<td>{y.get("cost", 0):,.0f} kr</td><td>{y.get("payout", 0):,.0f} kr</td>'
+                        f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
+                        f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td></tr>'
+                    )
+                detail_sections.append(
+                    f'<div class="stats-block strat-block gt-block" data-strat="{s}" data-gt="{gt}">'
+                    f'<h3 style="color:{gt_color}">{gt} per ar &mdash; {short}</h3>'
+                    f'<div class="table-wrap"><table class="stats-table">'
+                    f'<thead><tr><th>Ar</th><th>Omg</th><th>Full</th>'
+                    f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
+                    f'<tbody>{"".join(yr_rows)}</tbody></table></div></div>'
+                )
+
+    # ── Monthly per-strategy tables ──
+    for s in strat_names:
+        monthly = strategies[s].get("monthly", {})
+        if not monthly:
+            continue
+        short = strat_short.get(s, s[:10])
+        m_rows = []
+        for month in sorted(monthly.keys()):
+            m = monthly[month]
+            roi = m.get("roi", 0)
+            roi_cls = "#22c55e" if roi > 0 else "#ef4444"
+            netto = m.get("netto", 0)
+            netto_cls = "#22c55e" if netto > 0 else "#ef4444"
+            m_rows.append(
+                f'<tr><td><strong>{m.get("name", month)}</strong></td>'
+                f'<td>{m.get("rounds", 0)}</td><td>{m.get("full", 0)}</td>'
+                f'<td>{m.get("cost", 0):,.0f} kr</td><td>{m.get("payout", 0):,.0f} kr</td>'
+                f'<td style="color:{roi_cls};font-weight:700">{roi:+.1f}%</td>'
+                f'<td style="color:{netto_cls};font-weight:700">{netto:+,.0f} kr</td></tr>'
+            )
+        detail_sections.append(
+            f'<div class="stats-block strat-block" data-strat="{s}">'
+            f'<h3>Per manad &mdash; {short}</h3>'
+            f'<div class="table-wrap"><table class="stats-table">'
+            f'<thead><tr><th>Manad</th><th>Omg</th><th>Full</th>'
+            f'<th>Insats</th><th>Utdeln</th><th>ROI</th><th>Netto</th></tr></thead>'
+            f'<tbody>{"".join(m_rows)}</tbody></table></div></div>'
+        )
+
+    # ── Assemble ──
+    filter_html = (
+        f'<div class="stats-filter-bar">'
+        f'<div class="strat-filter">{"".join(strat_buttons)}</div>'
+        f'<div class="strat-filter gt-filter-row">{"".join(gt_buttons)}</div>'
+        f'</div>'
+    )
 
     return (
         f'<div id="stats" class="summary-card stats-section">'
-        f'<h2>📈 Statistik — ROI per år, månad, speltyp & bana</h2>'
+        f'<h2>Statistik</h2>'
+        f'{strategy_cards_html}'
         f'{chart_html}'
-        f'{monthly_roi_html}'
-        f'<div class="strat-filter">{"".join(strat_buttons)}</div>'
-        f'<div class="strat-filter gt-filter-row">{"".join(gt_buttons)}</div>'
-        f'{overview_html}'
-        f'{bt_vs_live_html}'
-        f'{"".join(game_type_sections)}'
-        f'{"".join(yearly_sections)}'
-        f'{"".join(monthly_sections)}'
-        f'{"".join(yearly_gt_sections)}'
-        f'{"".join(track_sections)}'
+        f'{monthly_bar_html}'
+        f'{filter_html}'
+        f'{"".join(detail_sections)}'
         f'</div>'
     )
 
@@ -1583,39 +1479,100 @@ def _backlog_html(
     game_round: GameRound,
     backlog_data: dict | None = None,
 ) -> str:
-    """Generera backlog-sektion med historiska system-resultat, alla strategier."""
+    """Generera backlog-sektion med aggregerade sammanfattningskort och filtrerbar tabell."""
     if not backlog_data or "entries" not in backlog_data:
         return ""
 
     entries = backlog_data["entries"]
     cutoff = str(date.today() - timedelta(days=30))
-    strat_short = {"I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom", "D_market_gap": "D_market", "I_streck_spik1": "I_spik1", "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3"}
+    strat_short = {
+        "I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom",
+        "D_market_gap": "D_market", "I_streck_spik1": "I_spik1",
+        "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3",
+    }
 
-    # Strategi-filterknappar
-    all_strategies = sorted(set(e.get("strategy", "") for e in entries))
-    filter_btns = ['<button class="strat-btn active" onclick="filterBacklog(\'all\')">Alla strategier</button>']
-    for s in all_strategies:
-        short = strat_short.get(s, s[:10])
-        filter_btns.append(
-            f'<button class="strat-btn" onclick="filterBacklog(\'{s}\')">{short}</button>'
-        )
-
-    # Speltyp-filterknappar
     GT_COLORS_BL = {
         "V75": "#f59e0b", "V85": "#f59e0b", "GS75": "#a78bfa",
         "V86": "#fb923c", "V64": "#34d399", "V65": "#34d399",
     }
+
+    # ── Aggregate stats per strategy for summary cards ──
+    from collections import defaultdict as _defaultdict
+    strat_agg = _defaultdict(lambda: {
+        "cost": 0, "payout": 0, "rounds": 0, "full": 0, "partial": 0,
+    })
+    for entry in entries:
+        if entry.get("live"):
+            continue
+        s = entry.get("strategy", "")
+        sa = strat_agg[s]
+        sa["rounds"] += 1
+        sa["cost"] += entry.get("cost", 0)
+        sa["payout"] += entry.get("payout", 0)
+        if entry.get("hit"):
+            sa["full"] += 1
+        elif entry.get("payout", 0) > 0:
+            sa["partial"] += 1
+
+    # ── Summary metric cards (top-level aggregation) ──
+    strat_colors = {
+        "I_streck_1st": ("#f59e0b", "rgba(245,166,35,0.15)"),
+        "Q_dom_x_mktgap": ("#a78bfa", "rgba(167,139,250,0.15)"),
+        "D_market_gap": ("#fb923c", "rgba(251,146,60,0.15)"),
+        "I_streck_spik1": ("#fbbf24", "rgba(251,191,36,0.15)"),
+        "I_streck_spik2": ("#34d399", "rgba(52,211,153,0.15)"),
+        "I_streck_spik3": ("#f472b6", "rgba(244,114,182,0.15)"),
+    }
+
+    agg_cards = []
+    for s in sorted(strat_agg.keys()):
+        sa = strat_agg[s]
+        short = strat_short.get(s, s[:10])
+        netto = sa["payout"] - sa["cost"]
+        roi = (netto / sa["cost"] * 100) if sa["cost"] > 0 else 0
+        hit_rate = (sa["full"] / sa["rounds"] * 100) if sa["rounds"] > 0 else 0
+        accent, bg = strat_colors.get(s, ("#64748b", "rgba(100,116,139,0.15)"))
+        roi_color = "#22c55e" if roi >= 0 else "#ef4444"
+        netto_color = "#22c55e" if netto >= 0 else "#ef4444"
+        agg_cards.append(
+            f'<div class="hist-agg-card" style="border-top:3px solid {accent}">'
+            f'<div class="hist-agg-name" style="color:{accent}">{short}</div>'
+            f'<div class="hist-agg-grid">'
+            f'<div class="hist-agg-item"><span class="hist-agg-val">{sa["rounds"]}</span><span class="hist-agg-lbl">Omgangar</span></div>'
+            f'<div class="hist-agg-item"><span class="hist-agg-val" style="color:{roi_color}">{roi:+.1f}%</span><span class="hist-agg-lbl">ROI</span></div>'
+            f'<div class="hist-agg-item"><span class="hist-agg-val">{hit_rate:.0f}%</span><span class="hist-agg-lbl">Traffprocent</span></div>'
+            f'<div class="hist-agg-item"><span class="hist-agg-val" style="color:{netto_color}">{netto:+,.0f}</span><span class="hist-agg-lbl">Netto (kr)</span></div>'
+            f'</div></div>'
+        )
+
+    agg_section = (
+        f'<div class="hist-agg-wrap">'
+        f'<h3 class="hist-agg-title">Per strategi</h3>'
+        f'<div class="hist-agg-grid-outer">{"".join(agg_cards)}</div>'
+        f'</div>'
+    )
+
+    # ── Strategy filter (compact, event delegation) ──
+    all_strategies = sorted(set(e.get("strategy", "") for e in entries))
+    filter_btns = ['<button class="strat-btn active" data-action="filter-backlog" data-strat="all">Alla</button>']
+    for s in all_strategies:
+        short = strat_short.get(s, s[:10])
+        filter_btns.append(
+            f'<button class="strat-btn" data-action="filter-backlog" data-strat="{s}">{short}</button>'
+        )
+
+    # Speltyp filter (compact)
     all_game_types = sorted(set(e.get("game_type", "") for e in entries if e.get("game_type")))
-    gt_filter_btns = ['<button class="gt-btn active" onclick="filterBacklogGT(\'all\')">Alla speltyper</button>']
+    gt_filter_btns = ['<button class="gt-btn active" data-action="filter-backlog-gt" data-gt="all">Alla</button>']
     for gt in all_game_types:
         color = GT_COLORS_BL.get(gt, "#64748b")
         gt_filter_btns.append(
-            f'<button class="gt-btn" onclick="filterBacklogGT(\'{gt}\')" '
+            f'<button class="gt-btn" data-action="filter-backlog-gt" data-gt="{gt}" '
             f'style="--gt-color:{color}">{gt}</button>'
         )
     gt_filter_btns.append(
-        '<button class="gt-btn" onclick="filterBacklogRecent(12)" '
-        'style="--gt-color:#f59e0b">Senaste 12 mån</button>'
+        '<button class="gt-btn" data-action="filter-backlog-recent" data-months="12" '
+        'style="--gt-color:#f59e0b">12 man</button>'
     )
 
     rows = []
@@ -1647,21 +1604,21 @@ def _backlog_html(
             elif payout > 0:
                 partial_hits += 1
 
-        # Resultat-badge med antal rätt
+        # Resultat-badge
         if is_live:
             races_remaining = races_total - races_finished
             if races_finished == 0:
-                hit_badge = f'<span class="live-result-badge">⏳ 0/{races_total} ({races_remaining} kvar)</span>'
+                hit_badge = f'<span class="live-result-badge">0/{races_total} ({races_remaining} kvar)</span>'
             elif num_correct == races_finished:
-                hit_badge = f'<span class="live-result-badge live-allright">✓ {num_correct}/{races_finished} ({races_remaining} kvar)</span>'
+                hit_badge = f'<span class="live-result-badge live-allright">{num_correct}/{races_finished} ({races_remaining} kvar)</span>'
             else:
-                hit_badge = f'<span class="live-result-badge">◐ {num_correct}/{races_finished} ({races_remaining} kvar)</span>'
+                hit_badge = f'<span class="live-result-badge">{num_correct}/{races_finished} ({races_remaining} kvar)</span>'
         elif hit:
-            hit_badge = f'<span class="hit-badge">✓ {num_correct}/{num_races}</span>'
+            hit_badge = f'<span class="hit-badge">{num_correct}/{num_races}</span>'
         elif payout > 0:
-            hit_badge = f'<span class="partial-badge">◐ {num_correct}/{num_races}</span>'
+            hit_badge = f'<span class="partial-badge">{num_correct}/{num_races}</span>'
         else:
-            hit_badge = f'<span class="miss-badge">✗ {num_correct}/{num_races}</span>'
+            hit_badge = f'<span class="miss-badge">{num_correct}/{num_races}</span>'
 
         if is_live:
             payout_str = "—"
@@ -1674,49 +1631,37 @@ def _backlog_html(
             netto_str = f"{netto:+,.0f} kr"
             netto_cls = "color:#22c55e" if netto > 0 else "color:#ef4444"
 
-        # Strategi-kort
         short_strat = strat_short.get(strategy, strategy[:10])
-        strat_colors = {
-            "I_streck_1st": ("#f59e0b", "rgba(245,166,35,0.15)"),
-            "Q_dom_x_mktgap": ("#a78bfa", "rgba(167,139,250,0.15)"),
-            "D_market_gap": ("#fb923c", "rgba(251,146,60,0.15)"),
-            "I_streck_spik1": ("#fbbf24", "rgba(251,191,36,0.15)"),
-            "I_streck_spik2": ("#34d399", "rgba(52,211,153,0.15)"),
-            "I_streck_spik3": ("#f472b6", "rgba(244,114,182,0.15)"),
-        }
         sc, sbg = strat_colors.get(strategy, ("#64748b", "rgba(100,116,139,0.15)"))
         strat_badge = f'<span class="strat-tag" style="color:{sc};background:{sbg}">{short_strat}</span>'
 
-        # Extra info
         ppr = entry.get("payout_per_row", 0)
         wr = entry.get("winning_rows", 0)
-        detail = f"{ppr:,.0f}/rad×{wr}" if ppr > 0 else ""
+        detail = f"{ppr:,.0f}/rad" if ppr > 0 else ""
 
-        # LIVE-badge
-        live_badge = ' <span class="live-badge">🔴 LIVE</span>' if is_live else ""
+        live_badge = ' <span class="live-badge">LIVE</span>' if is_live else ""
 
-        # Expanderbar rad med system-detaljer
         has_races = bool(entry.get("races"))
-        toggle_attr = f'onclick="toggleBlDetail(\'bl-detail-{idx}\')"' if has_races else ''
-        expand_icon = '<span class="bl-expand-icon">▸</span> ' if has_races else ''
+        toggle_attr = f'data-action="toggle-bl-detail" data-detail="bl-detail-{idx}"' if has_races else ''
+        expand_icon = '<span class="bl-expand-icon">&#9656;</span> ' if has_races else ''
 
-        # Speltyp-badge med färg
         entry_gt = entry.get("game_type", "")
-        gt_c, gt_bg = GT_COLORS_BL.get(entry_gt, "#64748b"), {
+        gt_c = GT_COLORS_BL.get(entry_gt, "#64748b")
+        gt_bg_map = {
             "V75": "rgba(245,166,35,0.08)", "V85": "rgba(245,166,35,0.08)",
             "GS75": "rgba(167,139,250,0.15)", "V86": "rgba(251,146,60,0.15)",
             "V64": "rgba(52,211,153,0.15)", "V65": "rgba(52,211,153,0.15)",
-        }.get(entry_gt, "rgba(100,116,139,0.15)")
+        }
+        gt_bg = gt_bg_map.get(entry_gt, "rgba(100,116,139,0.15)")
         gt_badge = f'<span class="gt-tag" style="color:{gt_c};background:{gt_bg}">{entry_gt}</span>'
 
-        # Hoppa över äldre entries (>30 dagar) — de räknas i summering men renderas ej
         entry_date = entry.get("date", "")
         is_older = entry_date < cutoff and not is_live
         if is_older:
             hidden_count += 1
             continue
-        cls_attr = f' class="bl-expandable"' if has_races else ""
 
+        cls_attr = f' class="bl-expandable"' if has_races else ""
         rows.append(
             f'<tr{cls_attr} {toggle_attr} data-strategy="{strategy}" data-gt="{entry_gt}">'
             f'<td>{expand_icon}{entry.get("date", "")}{live_badge}</td>'
@@ -1731,7 +1676,6 @@ def _backlog_html(
             f'</tr>'
         )
 
-        # Expanderbar detalj-rad med picks per lopp
         if has_races:
             race_rows = []
             for rd in entry["races"]:
@@ -1739,7 +1683,6 @@ def _backlog_html(
                     f'{p["nr"]} {p["namn"]} ({p["score"]}p/{p["streck"]}%)'
                     for p in rd.get("pick_list", [])
                 )
-
                 race_status = rd.get("status", "finished")
                 ratt = rd.get("ratt")
                 if race_status == "pending" or ratt is None:
@@ -1755,11 +1698,7 @@ def _backlog_html(
                 vinnare = rd.get("vinnare", "")
                 vinnare_namn = rd.get("vinnare_namn", "")
                 vinnare_streck = rd.get("vinnare_streck", 0)
-
-                if vinnare:
-                    vinnare_str = f'Vann: {vinnare} {vinnare_namn} ({vinnare_streck}%)'
-                else:
-                    vinnare_str = '<span style="color:#6b7280">Väntar...</span>'
+                vinnare_str = f'Vann: {vinnare} {vinnare_namn} ({vinnare_streck}%)' if vinnare else '<span style="color:#6b7280">Vantar...</span>'
 
                 race_rows.append(
                     f'<tr class="bl-race-row">'
@@ -1769,8 +1708,7 @@ def _backlog_html(
                     f'<td style="{ratt_cls};font-weight:600">{ratt_icon}</td>'
                     f'<td colspan="3" style="font-size:.75rem;color:#6b7280">{picks_str}</td>'
                     f'<td style="font-size:.75rem;color:#6b7280">{vinnare_str}</td>'
-                    f'<td></td>'
-                    f'</tr>'
+                    f'<td></td></tr>'
                 )
 
             rows.append(
@@ -1786,12 +1724,12 @@ def _backlog_html(
     total_wins = full_hits + partial_hits
     win_rate = total_wins / total_rounds * 100 if total_rounds > 0 else 0
 
-    show_all_btn = ""
+    show_all_note = ""
     if hidden_count > 0:
-        show_all_btn = (
-            f'<span style="color:#6b7280;font-size:.82rem;margin-bottom:.8rem;display:inline-block">'
-            f'Visar senaste 30 dagar ({total_rounds - hidden_count} av {total_rounds} omgångar)'
-            f'</span>'
+        show_all_note = (
+            f'<div class="bl-date-note">'
+            f'Visar senaste 30 dagar ({total_rounds - hidden_count} av {total_rounds})'
+            f'</div>'
         )
 
     # Streak indicator (last 5 non-live rounds)
@@ -1800,28 +1738,32 @@ def _backlog_html(
         if entry.get("live", False):
             continue
         if entry.get("hit", False):
-            recent_results.append('<span style="color:#22c55e;font-weight:700">✓</span>')
+            recent_results.append('<span class="streak-dot streak-hit"></span>')
         elif entry.get("payout", 0) > 0:
-            recent_results.append('<span style="color:#eab308;font-weight:700">◐</span>')
+            recent_results.append('<span class="streak-dot streak-partial"></span>')
         else:
-            recent_results.append('<span style="color:#ef4444;font-weight:700">✗</span>')
-        if len(recent_results) >= 5:
+            recent_results.append('<span class="streak-dot streak-miss"></span>')
+        if len(recent_results) >= 10:
             break
-    streak_html = f'<span style="margin-left:.8rem;font-size:1.1rem;letter-spacing:.3rem">{"".join(recent_results)}</span>' if recent_results else ""
+    streak_html = f'<div class="streak-bar">{"".join(recent_results)}</div>' if recent_results else ""
 
     return (
         f'<div id="backlog" class="summary-card backlog-section">'
-        f'<h2>📊 Backlog — Historiska resultat{streak_html}</h2>'
+        f'<h2>Historik</h2>'
+        f'{agg_section}'
+        f'{streak_html}'
+        f'<div class="bl-filter-bar">'
         f'<div class="strat-filter bl-filter">{"".join(filter_btns)}</div>'
         f'<div class="strat-filter gt-filter-row bl-gt-filter">{"".join(gt_filter_btns)}</div>'
-        f'{show_all_btn}'
+        f'</div>'
+        f'{show_all_note}'
         f'<div class="backlog-summary" id="bl-summary">'
-        f'<div class="bl-stat"><span class="bl-val" id="bl-rounds">{total_rounds}</span><span class="bl-lbl">Omgångar</span></div>'
-        f'<div class="bl-stat"><span class="bl-val" id="bl-full">{full_hits}</span><span class="bl-lbl">Alla rätt</span></div>'
+        f'<div class="bl-stat"><span class="bl-val" id="bl-rounds">{total_rounds}</span><span class="bl-lbl">Omgangar</span></div>'
+        f'<div class="bl-stat"><span class="bl-val" id="bl-full">{full_hits}</span><span class="bl-lbl">Alla ratt</span></div>'
         f'<div class="bl-stat"><span class="bl-val" id="bl-partial">{partial_hits}</span><span class="bl-lbl">Delvinster</span></div>'
         f'<div class="bl-stat"><span class="bl-val" id="bl-winrate">{win_rate:.0f}%</span><span class="bl-lbl">Vinstfrekvens</span></div>'
-        f'<div class="bl-stat"><span class="bl-val" id="bl-cost">{total_cost:,.0f} kr</span><span class="bl-lbl">Total insats</span></div>'
-        f'<div class="bl-stat"><span class="bl-val" id="bl-payout">{total_payout:,.0f} kr</span><span class="bl-lbl">Total utdelning</span></div>'
+        f'<div class="bl-stat"><span class="bl-val" id="bl-cost">{total_cost:,.0f} kr</span><span class="bl-lbl">Insats</span></div>'
+        f'<div class="bl-stat"><span class="bl-val" id="bl-payout">{total_payout:,.0f} kr</span><span class="bl-lbl">Utdelning</span></div>'
         f'<div class="bl-stat"><span class="bl-val" id="bl-roi" style="color:{roi_cls}">{roi:+.1f}%</span><span class="bl-lbl">ROI</span></div>'
         f'<div class="bl-stat"><span class="bl-val" id="bl-netto" style="color:{roi_cls}">{total_netto:+,.0f} kr</span><span class="bl-lbl">Netto</span></div>'
         f'</div>'
@@ -2228,6 +2170,33 @@ def generate_dashboard_html(
             track_str = f" {track}" if track else ""
             round_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
         round_dropdown = '<select class="round-select" onchange="changeRound(this)">' + "".join(round_options) + '</select>'
+
+    # Round navigator for sidebar
+    round_navigator = ""
+    if norm_rounds and len(norm_rounds) >= 2:
+        sorted_rounds = sorted(norm_rounds, key=lambda r: r[2])
+        current_idx = -1
+        for i, (key, *_rest) in enumerate(sorted_rounds):
+            if key == current_key:
+                current_idx = i
+                break
+        prev_key = sorted_rounds[current_idx - 1][0] if current_idx > 0 else ""
+        next_key = sorted_rounds[current_idx + 1][0] if current_idx < len(sorted_rounds) - 1 else ""
+        prev_disabled = " disabled" if not prev_key else ""
+        next_disabled = " disabled" if not next_key else ""
+        prev_href = f"data-key=\"{prev_key}\"" if prev_key else ""
+        next_href = f"data-key=\"{next_key}\"" if next_key else ""
+        round_navigator = (
+            f'<div class="round-nav">'
+            f'<button class="round-nav-btn"{prev_disabled} {prev_href} data-action="nav-round">'
+            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>'
+            f'</button>'
+            f'<span class="round-nav-label">{_esc(game_round.game_type)} {date_str}</span>'
+            f'<button class="round-nav-btn"{next_disabled} {next_href} data-action="nav-round">'
+            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
+            f'</button>'
+            f'</div>'
+        )
 
     # Race sections (all visible — no premium gating)
     race_sections_parts = []
@@ -2936,6 +2905,89 @@ flex-shrink:0}}
 .bl-older{{display:none}}
 .bl-show-all .bl-older{{display:table-row}}
 
+/* ── Round navigator ── */
+.round-nav{{display:flex;align-items:center;gap:6px;justify-content:center}}
+.round-nav-btn{{width:28px;height:28px;border-radius:8px;border:1px solid #e5e7eb;
+background:#ffffff;color:#64748b;cursor:pointer;display:flex;align-items:center;
+justify-content:center;transition:all .15s;flex-shrink:0;padding:0}}
+.round-nav-btn:hover:not([disabled]){{background:#f8fafc;border-color:#cbd5e1;color:#1e293b}}
+.round-nav-btn[disabled]{{opacity:.3;cursor:not-allowed}}
+.round-nav-label{{font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;
+letter-spacing:-0.01em;text-align:center;flex:1}}
+
+/* ── Strategy cards (ROI tab) ── */
+.sc-section{{margin-bottom:24px}}
+.sc-group-title{{font-size:.8rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+letter-spacing:.06em;margin-bottom:12px}}
+.sc-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:16px}}
+.sc-card{{background:#ffffff;border-radius:12px;padding:18px;border:1px solid #e5e7eb;
+box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:all .2s}}
+.sc-card:hover{{box-shadow:0 4px 12px rgba(0,0,0,0.08);transform:translateY(-1px)}}
+.sc-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}}
+.sc-name{{font-size:.85rem;font-weight:700}}
+.sc-rounds{{font-size:.7rem;color:#94a3b8;font-weight:500}}
+.sc-roi{{font-size:1.6rem;font-weight:800;font-family:'JetBrains Mono',monospace;
+font-variant-numeric:tabular-nums;letter-spacing:-0.02em}}
+.sc-label{{font-size:.6rem;text-transform:uppercase;color:#94a3b8;letter-spacing:.06em;
+font-weight:600;margin-bottom:10px}}
+.sc-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+padding-top:10px;border-top:1px solid #f1f5f9}}
+.sc-metric{{text-align:center}}
+.sc-metric-val{{display:block;font-size:.82rem;font-weight:700;color:#1e293b;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
+.sc-metric-lbl{{display:block;font-size:.55rem;text-transform:uppercase;color:#94a3b8;
+letter-spacing:.04em;font-weight:600;margin-top:2px}}
+.sc-variant-toggle{{text-align:center;margin:4px 0 16px}}
+.sc-toggle-btn{{padding:6px 18px;border-radius:20px;border:1px solid #e5e7eb;
+background:#ffffff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;
+font-family:inherit;transition:all .2s}}
+.sc-toggle-btn:hover{{border-color:#f59e0b;color:#b45309;background:#fffbeb}}
+
+/* ── Monthly bar chart (CSS-only) ── */
+.mbar-chart{{display:flex;flex-direction:column;gap:6px}}
+.mbar-row{{display:grid;grid-template-columns:70px 1fr 60px 80px 1fr;gap:8px;align-items:center;
+padding:6px 0;border-bottom:1px solid #f8f9fb}}
+.mbar-row:last-child{{border-bottom:none}}
+.mbar-label{{font-size:.78rem;font-weight:600;color:#1e293b;white-space:nowrap}}
+.mbar-track{{height:20px;background:#f8f9fb;border-radius:4px;overflow:hidden}}
+.mbar-fill{{height:100%;border-radius:2px;transition:width .5s ease}}
+.mbar-val{{font-size:.78rem;font-weight:700;text-align:right;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
+.mbar-netto{{font-size:.72rem;font-weight:600;text-align:right;
+font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
+.mbar-meta{{font-size:.65rem;color:#94a3b8;white-space:nowrap}}
+
+/* ── Stats filter bar ── */
+.stats-filter-bar{{margin-bottom:16px;padding:14px 16px;background:#f9fafb;
+border-radius:10px;border:1px solid #e5e7eb}}
+
+/* ── Historik aggregated cards ── */
+.hist-agg-wrap{{margin-bottom:20px}}
+.hist-agg-title{{font-size:.8rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+letter-spacing:.06em;margin-bottom:12px}}
+.hist-agg-grid-outer{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}}
+.hist-agg-card{{background:#ffffff;border-radius:10px;padding:14px 16px;border:1px solid #e5e7eb;
+box-shadow:0 1px 2px rgba(0,0,0,0.04)}}
+.hist-agg-name{{font-size:.82rem;font-weight:700;margin-bottom:8px}}
+.hist-agg-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 12px}}
+.hist-agg-item{{display:flex;flex-direction:column}}
+.hist-agg-val{{font-size:.95rem;font-weight:700;font-family:'JetBrains Mono',monospace;
+font-variant-numeric:tabular-nums;color:#1e293b}}
+.hist-agg-lbl{{font-size:.55rem;text-transform:uppercase;color:#94a3b8;letter-spacing:.04em;font-weight:600}}
+
+/* ── Streak bar ── */
+.streak-bar{{display:flex;gap:4px;margin-bottom:16px;padding:10px 14px;
+background:#ffffff;border-radius:10px;border:1px solid #e5e7eb}}
+.streak-dot{{width:18px;height:18px;border-radius:6px;flex-shrink:0}}
+.streak-hit{{background:rgba(34,197,94,0.18)}}
+.streak-partial{{background:rgba(234,179,8,0.18)}}
+.streak-miss{{background:rgba(239,68,68,0.18)}}
+
+/* ── Backlog filter bar ── */
+.bl-filter-bar{{margin-bottom:12px;padding:12px 14px;background:#f9fafb;
+border-radius:10px;border:1px solid #e5e7eb}}
+.bl-date-note{{font-size:.75rem;color:#94a3b8;margin-bottom:10px;font-style:italic}}
+
 /* Hamburger menu button */
 .hamburger-btn{{display:none;background:none;border:none;cursor:pointer;padding:6px;color:#1e293b}}
 .hamburger-btn svg{{display:block}}
@@ -3016,8 +3068,8 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   <!-- Dashboard sidebar content -->
   <div id="sidebar-dashboard">
     <div class="sb-info">
-      <div class="sb-info-type">{_esc(game_round.game_type)}</div>
-      <div class="sb-info-meta">{date_str} · {track_name}</div>
+      {round_navigator}
+      <div class="sb-info-meta" style="margin-top:4px">{track_name}</div>
     </div>
     <div class="sb-nav">
       <button class="nav-item active" data-section="summary" onclick="showSection('summary')">

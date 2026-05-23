@@ -2656,16 +2656,27 @@ flex-shrink:0}}
 .sidebar-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99;
 backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}}
 
+/* ── Mobile bottom nav ── */
+.mobile-bottom-nav{{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+background:#ffffff;border-top:1px solid #e5e7eb;padding:6px 0 env(safe-area-inset-bottom,6px);
+box-shadow:0 -2px 10px rgba(0,0,0,0.06)}}
+.mobile-bottom-nav button{{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+background:none;border:none;padding:6px 0;color:#94a3b8;font-size:.65rem;font-weight:600;
+font-family:inherit;cursor:pointer;transition:color .2s}}
+.mobile-bottom-nav button.active{{color:#f59e0b}}
+.mobile-bottom-nav button svg{{width:20px;height:20px}}
+
 /* ── Responsive ── */
 @media(max-width:768px){{
   .top-navbar{{padding:0 12px}}
   .hamburger-btn{{display:block}}
   .nav-tabs{{display:none}}
+  .mobile-bottom-nav{{display:flex}}
   .sidebar{{transform:translateX(-100%);transition:transform .3s ease;z-index:150;
   background:#f9fafb;box-shadow:4px 0 20px rgba(0,0,0,0.1)}}
   .sidebar.mobile-open{{transform:translateX(0)}}
   .sidebar-overlay.open{{display:block}}
-  .main-area{{margin-left:0 !important}}
+  .main-area{{margin-left:0 !important;padding-bottom:60px}}
   .content{{padding:16px}}
   .system-drawer{{padding:1rem}}
   .round-select{{max-width:160px;font-size:.78rem}}
@@ -2811,10 +2822,13 @@ function showView(name){{
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const target=document.getElementById('view-'+name);
   if(target) target.classList.add('active');
-  // Toggle nav tabs
+  // Toggle nav tabs (desktop + mobile)
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   const tab=document.querySelector('.nav-tab[data-view="'+name+'"]');
   if(tab) tab.classList.add('active');
+  document.querySelectorAll('.mobile-bottom-nav button').forEach(b=>b.classList.remove('active'));
+  const mBtn=document.querySelector('.mobile-bottom-nav button[data-view="'+name+'"]');
+  if(mBtn) mBtn.classList.add('active');
   // Toggle sidebar content
   const sbDash=document.getElementById('sidebar-dashboard');
   const sbAgent=document.getElementById('sidebar-agent');
@@ -3521,6 +3535,24 @@ border-top:1px solid #2e3138}
     el.innerHTML=html||'<p style="color:#6b7280">Inga omg\\u00e5ngar hittade.</p>';
   }catch(e){el.innerHTML='<p style="color:#ef4444">Kunde inte ladda.</p>';}
 })();
+</script>
+
+<!-- Mobile bottom nav -->
+<nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+  <button class="active" data-view="dashboard" onclick="showView('dashboard');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Dashboard
+  </button>
+  <button data-view="agent" onclick="showView('agent');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
+    Agent
+  </button>
+</nav>
+<script>
+function updateMobileNav(btn){{
+  document.querySelectorAll('.mobile-bottom-nav button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}}
 </script>
 
 </body>

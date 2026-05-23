@@ -3000,7 +3000,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   <div class="nav-tabs">
     <button class="nav-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
     <button class="nav-tab" data-view="agent" onclick="showView('agent')">Agent</button>
-    {'<button class="nav-tab" data-view="backtest" onclick="showView(&#39;backtest&#39;)">Backtest</button>' if stats_section or backlog_section else ''}
+    <button class="nav-tab" data-view="backtest" onclick="showView('backtest')">Backtest</button>
   </div>
   <div class="nav-right">
     <span class="nav-clock" id="nav-clock"></span>
@@ -3093,10 +3093,10 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
     <button class="bt-tab" data-bt="history" onclick="showBacktestTab('history')">Historik</button>
   </div>
   <div class="bt-panel active" id="bt-roi">
-    {stats_section}
+    {stats_section if stats_section else '<div style="text-align:center;padding:60px 20px;color:#94a3b8"><div style="font-size:2.5rem;margin-bottom:12px">📊</div><h3 style="color:#1e293b;margin-bottom:8px">Ingen backtest-data tillgänglig</h3><p style="max-width:400px;margin:0 auto;font-size:.85rem">Backlog-filen (backlog.json) behöver laddas upp till servern eller synkas via Supabase för att visa ROI-statistik.</p></div>'}
   </div>
   <div class="bt-panel" id="bt-history">
-    {backlog_section}
+    {backlog_section if backlog_section else '<div style="text-align:center;padding:60px 20px;color:#94a3b8"><div style="font-size:2.5rem;margin-bottom:12px">📋</div><h3 style="color:#1e293b;margin-bottom:8px">Ingen historik tillgänglig</h3><p style="max-width:400px;margin:0 auto;font-size:.85rem">Ladda upp backlog.json för att se alla historiska baktester.</p></div>'}
   </div>
 </div>
 

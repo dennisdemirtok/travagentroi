@@ -373,7 +373,7 @@ async def chat(
         round_context, backlog_context, tips_context, memory_context
     )
 
-    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20241022")
+    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
@@ -418,7 +418,7 @@ async def chat_stream(
         round_context, backlog_context, tips_context, memory_context
     )
 
-    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20241022")
+    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream(

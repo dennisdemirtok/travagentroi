@@ -205,6 +205,9 @@ class RaceEntry(BaseModel):
     # Driver statistics (from ATG API driver.statistics)
     driver_win_pct: float = 0.0  # Driver's overall win percentage (0-1)
     driver_starts_year: int = 0  # Driver's starts this year
+    driver_top3_pct: float = 0.0  # Driver's top-3 placement percentage (0-1)
+    driver_earnings: int = 0  # Driver's total earnings this year
+    driver_home_track: str = ""  # Driver's home track name
 
     # Equipment details (from ATG API horse.shoes + sulky)
     shoe_front_off: bool = False  # Barefoot front (no front shoes)

@@ -276,6 +276,34 @@ CREATE TABLE IF NOT EXISTS tips_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_tips_cache_lookup ON tips_cache(game_type, round_date);
 
+-- 15. VINNARSPEL-RESULTAT (chansspik flat bet tracking)
+CREATE TABLE IF NOT EXISTS bet_results (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    round_date      DATE NOT NULL,
+    game_type       TEXT NOT NULL,
+    track_name      TEXT DEFAULT '',
+    race_number     INTEGER NOT NULL,
+    horse_name      TEXT NOT NULL,
+    post_position   INTEGER NOT NULL,
+    model_rank      INTEGER NOT NULL,        -- 1 or 2
+    streck_pct      REAL NOT NULL,            -- 0.05-0.20
+    composite_score REAL DEFAULT 0,
+    odds_estimated  REAL DEFAULT 0,
+    driver_name     TEXT DEFAULT '',
+    bet_amount      REAL DEFAULT 500,
+    won             BOOLEAN DEFAULT FALSE,
+    placement       INTEGER,                  -- 1=vann, 2=tvåa, etc, NULL=pågår
+    actual_odds     REAL DEFAULT 0,
+    payout          REAL DEFAULT 0,           -- bet_amount * actual_odds if won
+    round_finished  BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(round_date, game_type, race_number, post_position)
+);
+CREATE INDEX IF NOT EXISTS idx_bet_results_date ON bet_results(round_date DESC);
+CREATE INDEX IF NOT EXISTS idx_bet_results_type ON bet_results(game_type, round_date DESC);
+CREATE INDEX IF NOT EXISTS idx_bet_results_won ON bet_results(won) WHERE won = TRUE;
+
 -- ============================================================
 -- Klar! Verifiera med: SELECT tablename FROM pg_tables WHERE schemaname = 'public';
 -- ============================================================

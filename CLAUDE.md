@@ -35,11 +35,16 @@ ATG har semi-öppna API:er som inte kräver autentisering:
 ```
 trav_agent/
 ├── data/           # ATG-klient, datamodeller, cache
-├── analysis/       # Analysfaktorer (tid, form, bana, etc.)
+├── analysis/       # Analysfaktorer (15 st: tid, form, bana, kusk, etc.)
 ├── backtest/       # Backtesting-motor
-├── output/         # Rapportgenerering
+├── database/       # Supabase sync (backlog, bet_results)
+├── output/         # Dashboard HTML-generator (~5000 rader)
 ├── cli.py          # Kommandorad
-└── config.py       # Vikter & inställningar
+└── config.py       # Vikter & inställningar (v9 hybrid)
+
+app.py              # FastAPI server (dashboard, AI chat, bet API)
+scripts/            # Analysscript (proffs-edge, vinnarspel, viktoptimering)
+proffs_cache/       # Proffs-konsensusdata (pre/post-race JSON)
 ```
 
 ## Kommandorads-användning
@@ -80,6 +85,32 @@ async def peek():
 asyncio.run(peek())
 ```
 
+## Modellversion (v9 — Hybrid)
+
+Hybrid-modell: 25% modell + 75% marknad (streckprocent).
+Bara 4 faktorer tillför positiv edge till hybriden:
+
+| Faktor | Vikt | Edge |
+|--------|------|------|
+| post_position | 0.35 | +0.38% |
+| age | 0.35 | +0.32% |
+| driver_class | 0.15 | +0.13% |
+| category_profile | 0.10 | +0.13% |
+
+Alla andra faktorer (tid, form, bana, etc.) behålls med 0-vikt
+för dashboard-analys men påverkar inte ranking.
+
+### Chansspik Vinnarspel (validerad strategi)
+- Kriterier: modell rank ≤ 2, streck 5-20%
+- ROI: +47.8% (walk-forward validerad, 92 omgångar)
+- Vinstfrekvens: 21.0% (72/343), snittodds: 7.0x
+- ~3.8 kandidater per omgång
+
+### Proffs Rescue (systembygge)
+- Om proffs rankar häst topp-3 men modellen har den rank 4-6
+  + streck 5-20% + proffs ≥15% + edge ≥10pp → ersätt lägsta pick
+- Max 1 rescue per lopp
+
 ## Dennis' V85-metod (bakgrund)
 
 - Max 2 spikar per omgång (>40% streck)
@@ -88,13 +119,41 @@ asyncio.run(peek())
 - Avd 5 och 7 skrällar mest
 - Ett lopp avgör — gå brett i osäkra lopp
 - Skrällindex: om 3+ expertsystem gardar 8+ hästar = hög skrällrisk
+- V75 = V85 (samma spelform, bara namnbyte + 1 extra lopp)
 
-## Nästa steg / TODO
+## Ranking-system
 
-- [ ] Verifiera ATG API-parsers mot faktisk data
-- [ ] Implementera MCP browser-scraping för travsport.se (djupare hästhistorik)
-- [ ] Lägg till kusk-statistik från extern källa
-- [ ] Implementera faktor-optimering (grid search på vikter)
+A/B/C/D ranking genom hela systemet:
+- **A** = Spik (grön) — rank 1, stark favorit
+- **B** = 2-val/3-val (blå) — rank 2-3
+- **C** = Gardering (amber) — rank 4-6
+- **D** = Strykning (röd) — rank 7+
+
+## Dashboard-flikar
+
+1. **Dashboard** — Översikt, system, lopp-per-lopp analys
+2. **Statistik** — ROI per strategi, speltyp, tidsperiod
+3. **Backlog** — Historiska systemresultat
+4. **Bet** — Vinnarspel-rekommendationer + live P&L tracking
+5. **Agent** — AI-chat med omgångskontext
+
+## TODO
+
+- [ ] Kör viktoptimeraren (`scripts/optimize_weights.py`) på senaste data
+- [ ] Backfill bet_results i Supabase (kör gamla omgångar genom dashboard)
+- [ ] TRAIS API-integration (TR Media) för loppkommentarer
+- [ ] Excel-export av rekommendationer
 - [ ] Skrällindex-integration (koppla expertkonsensus-data)
-- [ ] Testa modellen på V75 (2025 historik finns)
-- [ ] Exportera rekommendationer till Excel (för konsensus-jämförelse)
+- [ ] Mobile-responsiv förbättring (hamburger-meny, swipe)
+
+## Klart (tidigare TODO)
+
+- [x] ATG API-parsers verifierade
+- [x] Kusk-statistik (driver_class + driver_trainer faktorer)
+- [x] Faktor-optimering (grid search script klart)
+- [x] Proffs-konsensus pipeline (scraping + launchd cron)
+- [x] Supabase backlog + bet results sync
+- [x] Dashboard ljust tema + ny layout
+- [x] AI chat med omgångskontext
+- [x] Chansspik vinnarspel backtest + dashboard-integration
+- [x] A/B/C/D ranking-system

@@ -67,6 +67,7 @@ def get_table_counts() -> dict[str, int]:
         "backlog_rounds": "id",
         "backlog_race_picks": "id",
         "agent_sessions": "id",
+        "bet_results": "id",
     }
     counts = {}
     for table, pk_col in tables.items():

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import hashlib
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from trav_agent.analysis.composite import CompositeAnalyzer
@@ -25,6 +28,11 @@ MAIN_GAME_TYPES = {"V75", "V85", "V86", "V64", "GS75"}
 _round_cache: dict[str, object] = {}
 _backlog_cache: dict | None = None
 _tips_cache: dict[str, dict] = {}
+
+# Cache for available rounds (avoid 21 API calls per page load)
+_available_rounds_cache: list[tuple] = []
+_available_rounds_ts: float = 0.0
+_ROUNDS_CACHE_TTL = 600  # 10 minutes
 
 
 def _build_strategies_summary(backlog: dict) -> dict:
@@ -165,6 +173,7 @@ async def _refresh_live_rounds():
                         await client.refresh_results(game_round)
                         analyzer.analyze_round(game_round)
                         _round_cache[key] = game_round
+                        _dashboard_html_cache.pop(key, None)  # invalidate HTML cache
                         logger.info(f"Refreshed live round: {key}")
         except Exception as e:
             logger.warning(f"Live refresh error: {e}")
@@ -178,10 +187,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Trav Agent API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ETag cache for dashboard HTML (avoid re-generating identical pages)
+_dashboard_html_cache: dict[str, tuple[str, str]] = {}  # key -> (etag, html)
 
 
 async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_forward: int = 7) -> list[tuple]:
-    """Fetch available rounds from ATG calendar for the round switcher."""
+    """Fetch available rounds from ATG calendar for the round switcher.
+
+    Cached for 10 minutes to avoid 21 API calls per page load.
+    """
+    global _available_rounds_cache, _available_rounds_ts
+
+    now = time.time()
+    if _available_rounds_cache and (now - _available_rounds_ts) < _ROUNDS_CACHE_TTL:
+        return _available_rounds_cache
+
     today = date.today()
     rounds = []
     for offset in range(-days_back, days_forward + 1):
@@ -203,7 +225,6 @@ async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_for
                         first_track = tracks[0]
                         if isinstance(first_track, dict):
                             track = first_track.get("name", "")
-                        # tracks can be a list of ints (track IDs) — skip
                     elif isinstance(tracks, dict):
                         first_val = next(iter(tracks.values()), {})
                         if isinstance(first_val, dict):
@@ -213,6 +234,10 @@ async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_for
                 rounds.append((key, gt_upper, str(d), is_past, track))
         except Exception:
             continue
+
+    _available_rounds_cache = rounds
+    _available_rounds_ts = now
+    logger.info(f"Refreshed available rounds cache: {len(rounds)} rounds")
     return rounds
 
 
@@ -241,7 +266,7 @@ async def landing():
 
 
 @app.get("/dashboard/{game_type}/{day}", response_class=HTMLResponse)
-async def dashboard(game_type: str, day: str):
+async def dashboard(game_type: str, day: str, request: Request):
     game_type = game_type.upper()
     if game_type not in GAME_TYPES:
         raise HTTPException(400, f"Ogiltig spelform: {game_type}")
@@ -267,6 +292,14 @@ async def dashboard(game_type: str, day: str):
         analyzer = CompositeAnalyzer()
         analyzer.analyze_round(game_round)
         _round_cache[key] = game_round
+
+        # Sync vinnarspel candidates to Supabase (fire-and-forget)
+        if SUPABASE_ENABLED:
+            try:
+                from trav_agent.database.bet_sync import sync_bet_results
+                sync_bet_results(game_round)
+            except Exception as e:
+                logger.debug(f"Bet sync skipped: {e}")
 
     available_rounds = await _get_available_rounds(client)
     backlog_data = await _load_backlog()
@@ -294,14 +327,49 @@ async def dashboard(game_type: str, day: str):
     except Exception:
         pass
 
-    html = generate_dashboard_html(
-        game_round,
-        available_rounds=available_rounds,
-        backlog_data=backlog_data,
-        tips_raw=tips_raw,
-        proffs_data=proffs_data,
+    # Check ETag cache — return 304 if unchanged
+    cache_entry = _dashboard_html_cache.get(key)
+    if cache_entry:
+        etag, cached_html = cache_entry
+        if_none_match = request.headers.get("if-none-match")
+        if if_none_match == etag:
+            return HTMLResponse(status_code=304, headers={"ETag": etag})
+        html = cached_html
+    else:
+        html = generate_dashboard_html(
+            game_round,
+            available_rounds=available_rounds,
+            backlog_data=backlog_data,
+            tips_raw=tips_raw,
+            proffs_data=proffs_data,
+        )
+        etag = '"' + hashlib.md5(html.encode()).hexdigest()[:16] + '"'
+        _dashboard_html_cache[key] = (etag, html)
+
+    return HTMLResponse(
+        content=html,
+        headers={
+            "ETag": etag,
+            "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+        },
     )
-    return html
+
+
+# ── Bet Result API ─────────────────────────────────────────────────────────
+
+@app.get("/api/bets")
+async def api_bets(game_type: str = None, days: int = 90):
+    """Return vinnarspel bet history with P&L aggregation."""
+    if not SUPABASE_ENABLED:
+        return JSONResponse({"error": "Supabase ej konfigurerad"}, status_code=503)
+
+    try:
+        from trav_agent.database.bet_sync import load_bet_history
+        data = load_bet_history(game_type=game_type, days_back=days)
+        return JSONResponse(data)
+    except Exception as e:
+        logger.error(f"Bet history error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── AI Chat (SSE Streaming) ────────────────────────────────────────────────

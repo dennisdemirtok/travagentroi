@@ -500,11 +500,19 @@ class ATGClient:
                     bet_pct = bd / 10000.0  # 1120 → 0.1120 (11.20%)
                     break
 
-        # Driver statistics — parse win percentage and starts from most recent year
+        # Driver statistics — parse win percentage, placement, earnings from most recent year
         driver_win_pct = 0.0
         driver_starts_year = 0
+        driver_top3_pct = 0.0
+        driver_earnings = 0
+        driver_home_track = ""
         driver_data = data.get("driver", {})
         if isinstance(driver_data, dict):
+            # Home track
+            home_track_data = driver_data.get("homeTrack", {})
+            if isinstance(home_track_data, dict):
+                driver_home_track = home_track_data.get("name", "")
+
             driver_stats = driver_data.get("statistics", {})
             years_data = driver_stats.get("years", {})
             if years_data:
@@ -513,10 +521,18 @@ class ATGClient:
                 year_stats = years_data[latest_year]
                 if isinstance(year_stats, dict):
                     driver_starts_year = year_stats.get("starts", 0)
+                    driver_earnings = year_stats.get("earnings", 0)
                     # winPercentage is per mille (1540 = 15.40% = 0.154)
                     win_pct_raw = year_stats.get("winPercentage", 0)
                     if win_pct_raw:
                         driver_win_pct = win_pct_raw / 10000.0
+                    # Top-3 placement rate from placement data
+                    placement = year_stats.get("placement", {})
+                    if isinstance(placement, dict) and driver_starts_year > 0:
+                        p1 = placement.get("1", 0) or 0
+                        p2 = placement.get("2", 0) or 0
+                        p3 = placement.get("3", 0) or 0
+                        driver_top3_pct = (p1 + p2 + p3) / driver_starts_year
 
         # Shoes — parse structured shoe data
         shoe_front_off = False
@@ -572,6 +588,9 @@ class ATGClient:
             bet_percentage=bet_pct,
             driver_win_pct=driver_win_pct,
             driver_starts_year=driver_starts_year,
+            driver_top3_pct=driver_top3_pct,
+            driver_earnings=driver_earnings,
+            driver_home_track=driver_home_track,
             shoe_front_off=shoe_front_off,
             shoe_back_off=shoe_back_off,
             shoe_changed=shoe_changed,

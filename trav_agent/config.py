@@ -110,40 +110,38 @@ def get_todays_game_types() -> list[str]:
 
 @dataclass
 class FactorWeights:
-    """Vikter för varje analysfaktor. Summerar till 1.0.
+    """Vikter for varje analysfaktor. Summerar till 1.0.
 
-    Version 7: 13 faktorer — Dennis's metod + optimerade vikter.
+    Version 7.1: 13 faktorer — Dennis's metod, omoptimerade.
 
-    Ombyggd modell baserad pa Dennis's personliga spelmetodik:
-    - time_analysis: Distansjusterad tid senaste 5 starter (Dennis: huvudsignal)
-    - competition_strength: Motstandsstyrka — prissumma/klass (Dennis: skrall-detektor)
-    - last_win: Seger senast + momentum (Dennis: "positivt")
-    - layoff: Uppehall negativt for lang vila (Dennis: "inte formen direkt")
+    Forandringar vs v7.0:
+    - time_analysis uppgraderad: 5 primart + 6-10 med decay, tillagg
+    - equipment: barfot/sulkybyte (Am/Va) som skrall-signal
+    - Vikter omoptimerade efter alla forandringar
 
     Optimerat med random search + hill climbing pa 424 V75/V85-lopp:
-    - top1: 23.3% (vinnare korrekt)
-    - top2: 37.5% (topp 2 ratt)
-    - top3: 52.1% (topp 3 ratt)
-    - spik: 28.1% traffsakerhet (160 spikar)
+    - top1: 24.3% (vinnare korrekt)
+    - top2: 37.7% (topp 2 ratt)
+    - top3: 54.0% (topp 3 ratt)
+    - spik: 30.7% traffsakerhet (150 spikar)
 
     Utan data-leakage (temporal filtrering + neutraliserade closing odds).
     """
 
-    # v7 optimerade vikter (hill climbing pa 424 V75/V85-lopp)
-    # Optimerat for balanced top1+top3: 23.3% top1, 52.1% top3
-    prize_index: float = 0.157         # Starkaste prediktorn
-    post_position: float = 0.147       # Sparprofil — hog prediktivitet
-    age: float = 0.141                 # Aldersfaktor — peak vid 4 ar
-    time_analysis: float = 0.122       # Dennis's distansjusterade tid
-    competition_strength: float = 0.096 # Dennis's motstandsstyrka
-    driver_class: float = 0.088        # Kuskens vinstprocent
-    track_profile: float = 0.084       # Banerfarenhet
-    category_profile: float = 0.058    # Kategoriprofil
-    last_win: float = 0.042            # Dennis's seger-senast
-    form_curve: float = 0.029          # Formkurva
-    equipment: float = 0.018           # Barfot/sulky
-    driver_trainer: float = 0.016      # Kusk-tranar kombination
-    layoff: float = 0.004              # Uppehall
+    # v7.1 optimerade vikter (hill climbing pa 424 V75/V85-lopp)
+    post_position: float = 0.157       # Sparprofil
+    prize_index: float = 0.156         # Prispengaindex
+    age: float = 0.146                 # Aldersfaktor
+    time_analysis: float = 0.130       # Dennis's tid (5+10 med decay, tillagg)
+    competition_strength: float = 0.102 # Motstandsstyrka (Dennis)
+    track_profile: float = 0.074       # Banerfarenhet
+    driver_class: float = 0.062        # Kuskens vinstprocent
+    category_profile: float = 0.062    # Kategoriprofil
+    last_win: float = 0.049            # Seger senast (Dennis)
+    form_curve: float = 0.049          # Formkurva
+    equipment: float = 0.005           # Barfot/sulky (Am/Va)
+    driver_trainer: float = 0.005      # Kusk-tranar kombination
+    layoff: float = 0.003              # Uppehall
 
     # Interaktionstermer borttagna
     interaction_track_post: float = 0.0

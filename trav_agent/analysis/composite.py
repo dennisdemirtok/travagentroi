@@ -40,8 +40,8 @@ class CompositeAnalyzer:
     def __init__(self, config: Optional[AnalysisConfig] = None):
         self.config = config or DEFAULT_CONFIG
         self.factors: list[AnalysisFactor] = [
-            # v7 Dennis-method: time analysis uses only last 5
-            TimeAnalysis(recent_n=5),
+            # v7.1: senaste 5 primart + 6-10 som stod med decay
+            TimeAnalysis(recent_n=10),
             PrizeIndex(recent_n=self.config.recent_starts_count),
             FormCurve(recent_n=self.config.recent_starts_count),
             TrackProfile(),

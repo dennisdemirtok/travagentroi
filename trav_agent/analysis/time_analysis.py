@@ -1,16 +1,20 @@
-"""Tidanalys v4 — Dennis's metod: distansjusterad tid senaste 5 starter.
+"""Tidanalys v5 — Dennis's metod: distansjusterad tid, tillagg, auto/volt.
 
-Ombyggd baserat pa Dennis's personliga metodik:
-- BARA senaste 5 starter (aktuell form, inte gammal historia)
-- Projicera forvantad km-tid vid LOPPETS distans/metod
-- Auto ar snabbare an volt — viktning beror pa distans
-- Tunga banor/forhallanden beaktas
-- Output: confidence score for predicted time at current distance
+Dennis's insikter (senaste feedback):
+- Tid = HUVUDSIGNAL, ska viktas tungt
+- Senaste 5 starter ar starkast, senaste 10 kan kollas men med decay
+  ("hastar tappar form eller blir aldre")
+- "a" = auto, utan "a" = volt i km-tid
+- Individuella distanser: 2140 vs 2160 = 20m tillagg
+  ("de som startar med tillagg maste springa mycket fortare")
+- Hog PRIS + lagt odds i historik = stark hast
+- Amerikansk vagn (Am) vs vanlig vagn (Va) byte = signal
 
-Nyckelinsikter:
+Nyckelkonstanter (empiriska):
   Volt→auto median: ~1.4s (1600-2200m), ~0.3s (2400+m)
-  Distansfaktor: 0.20s/100m (empiriskt fran 455k startpar)
-  Dennis: "senaste 5 brukar ge indikation pa hur man star sig just nu"
+  Distansfaktor: 0.20s/100m
+  Tillagg: 20m = ~0.04s/km extra (hasten springer langre,
+           plus ute i ytterspar = annu mer nackdel)
 """
 
 from __future__ import annotations
@@ -43,11 +47,6 @@ AUTO_VOLT_DIFF = {
 # Kallblod offset
 COLD_BLOOD_OFFSET = 6.0
 
-# Track condition offsets (estimated — tung bana etc.)
-# These are applied when track conditions are known
-HEAVY_TRACK_OFFSET = 1.5  # Seconds slower on heavy track
-WINTER_TRACK_OFFSET = 0.8  # Slightly slower in winter
-
 # Benchmark km-tider vid standarddistanser (auto, varmblod)
 DISTANCE_BENCHMARKS = {
     1640: 72.5,
@@ -57,8 +56,15 @@ DISTANCE_BENCHMARKS = {
     3140: 77.0,
 }
 
-# Recency weights for 5 starts (most recent = highest)
-RECENCY_WEIGHTS = [1.0, 0.85, 0.70, 0.55, 0.40]
+# Tillagg: 20m extra distans i voltlopp
+# Hasten springer langre OCH ute i ytterspar
+# Empirisk effekt: ~0.04-0.06 s/km per 20m tillagg
+TILLAGG_PENALTY_PER_20M = 0.05  # s/km slower per 20m tillagg
+
+# Recency weights: 5 primary + 5 secondary (decay)
+# Dennis: "senaste 5 ar starkast, senaste 10 kan kollas men med decay"
+RECENCY_WEIGHTS_PRIMARY = [1.0, 0.90, 0.78, 0.65, 0.50]
+RECENCY_WEIGHTS_SECONDARY = [0.30, 0.22, 0.15, 0.10, 0.06]
 
 
 def _get_volt_auto_diff(distance: int) -> float:
@@ -74,10 +80,7 @@ def _get_volt_auto_diff(distance: int) -> float:
 
 
 def _capped_distance_adjustment(dist_delta_m: int) -> float:
-    """Berakna distansjustering med empirisk faktor + cap.
-
-    Linjar 0.2s/100m upp till ±400m, diminishing 0.1s/100m utover.
-    """
+    """Distansjustering med cap + diminishing returns."""
     abs_delta = abs(dist_delta_m)
     sign = 1 if dist_delta_m >= 0 else -1
 
@@ -98,158 +101,184 @@ def project_time_to_distance(
     to_method: StartMethod,
     breed: str = "varmblod",
 ) -> float:
-    """Project a km_time from one race config to another.
+    """Projicera en km-tid fran en konfiguration till en annan.
 
-    Dennis's method: "det gar inte jamfora en som har sprungit 1640
-    och en som bara sprungit 2140 — dar far man analysera och se
-    vilken skillnad tidsskillnaderna kan vara"
-
-    This converts a historical km_time to what that horse would
-    likely run at the target distance/method.
+    Dennis: "det gar inte jamfora en som har sprungit 1640 och en som
+    bara sprungit 2140 — dar far man analysera och se vilken skillnad
+    tidsskillnaderna kan vara for att fa en trolig tid"
     """
     projected = km_time
 
-    # Distance adjustment: longer distances = slower per km
+    # Distansjustering
     dist_delta = to_distance - from_distance
     projected += _capped_distance_adjustment(dist_delta)
 
-    # Start method adjustment
-    # Auto is faster than volt — if horse ran volt and now runs auto,
-    # subtract the offset (will be faster)
-    # Dennis: "auto ar ju snabbare an volt sa en som sprungit sin tid
-    # pa auto kan vara snabbare och ska inte viktas lika hart"
+    # Startmetodjustering
     volt_diff = _get_volt_auto_diff(from_distance)
     if from_method == StartMethod.VOLT and to_method == StartMethod.AUTO:
-        projected -= volt_diff  # Volt->auto = faster
+        projected -= volt_diff
     elif from_method == StartMethod.AUTO and to_method == StartMethod.VOLT:
-        projected += volt_diff  # Auto->volt = slower
-
-    # Cold blood adjustment
-    if breed == "kallblod":
-        # Already baked into their times, no adjustment needed for same breed
-        pass
+        projected += volt_diff
 
     return projected
 
 
 def _get_benchmark_for_race(race: Race) -> float:
-    """Get expected benchmark km_time for this race configuration."""
+    """Benchmark km-tid for loppets konfiguration."""
     dist = race.distance
     closest_dist = min(DISTANCE_BENCHMARKS.keys(), key=lambda d: abs(d - dist))
     benchmark = DISTANCE_BENCHMARKS[closest_dist]
 
-    # Adjust for distance difference from closest benchmark
     dist_diff = (dist - closest_dist) / 100 * DISTANCE_FACTOR
     benchmark += dist_diff
 
-    # Volt races are slower
     if race.start_method == StartMethod.VOLT:
         benchmark += _get_volt_auto_diff(dist)
 
-    # Cold blood
     if race.breed.value == "kallblod":
         benchmark += COLD_BLOOD_OFFSET
 
     return benchmark
 
 
+def _tillagg_penalty(entry: RaceEntry, race: Race) -> float:
+    """Berakna tillags-nackdel for hastar med extra distans.
+
+    Dennis: "de som startar med tillagg maste springa mycket fortare
+    ute i sparen for att hinna ikapp. de kan inte viktas pa samma
+    satt i ett lopp nar det kommer till tid."
+
+    Entry.distance > race.distance = hasten har tillagg.
+    20m tillagg ar vanligast, 40m forekomemr.
+    """
+    if entry.distance <= 0 or race.distance <= 0:
+        return 0.0
+
+    tillagg_m = entry.distance - race.distance
+    if tillagg_m <= 0:
+        return 0.0
+
+    # Varje 20m tillagg = ~0.05 s/km extra (langre distans + yttre spar)
+    penalty = (tillagg_m / 20.0) * TILLAGG_PENALTY_PER_20M
+    return penalty
+
+
 class TimeAnalysis(AnalysisFactor):
-    """Dennis's tidanalys: distansjusterad tid senaste 5 starter.
+    """Tidanalys v5 — distansjusterad tid, tillagg, 5+10 starter.
 
-    Karnidé: Projicera varje historisk tid till loppets distans/metod,
-    vikta efter relevans och recency, ge en confidence score.
+    Dennis: "distans tid ocksa viktigt att det ar senaste tiden.
+    5 senaste starter ar starkast och sedan kan man kolla senaste
+    10 men dar man inte fa bli for blind pa for gamla resultat
+    hastar tappar form eller blir aldre"
 
-    Dennis: "senaste 5 starternas tid dar jag forsökt göra en viktning
-    beroende pa vilken distans eller auto,volt for de beraknas lite
-    olika. det far ju vara nagon confidence score kring tiden man
-    tror de har just nu formmasigt"
+    Arkitektur:
+    1. Senaste 5: hog vikt (primart signal)
+    2. Senaste 6-10: lag vikt (stod/bakgrund med decay)
+    3. Tillagg-kompensation (entry.distance vs race.distance)
+    4. Distans/metod-projektion till loppets konfiguration
     """
 
     name = "time_analysis"
 
-    def __init__(self, recent_n: int = 5):
-        self.recent_n = min(recent_n, 5)  # Max 5 — Dennis's rule
+    def __init__(self, recent_n: int = 10):
+        # Anvander 10 starter men viktar: 5 primart, 5 sekundart
+        self.recent_n = 10
 
     def score(self, entry: RaceEntry, race: Race) -> float:
-        """Score based on projected km times at current race distance.
+        """Score 0-100 baserat pa projicerade km-tider.
 
-        Components:
-        1. Projected best time (40%) — best time after distance/method projection
-        2. Weighted average projected time (25%) — recency-weighted average
-        3. Time confidence (20%) — how confident are we in the projection
-        4. Form trend (15%) — improving or declining times
-
-        Returns 0-100 score.
+        Komponenter:
+        1. Basta projicerade tid (35%) — basta tid efter justering
+        2. Viktat medeltal senaste 5 (25%) — aktuell form
+        3. Bakgrunds-medeltal 6-10 (10%) — historisk kapacitet med decay
+        4. Tidskonfidens (15%) — hur sakra ar vi
+        5. Formtrend (15%) — forbattras eller forsamras tider
         """
-        recent = entry.horse.recent_starts(5)  # Always 5
+        recent = entry.horse.recent_starts(self.recent_n)
         timed_starts = [s for s in recent if s.km_time and s.km_time > 0]
 
         if not timed_starts:
-            return 30.0  # No time data
+            return 30.0
 
         breed = race.breed.value
         benchmark = _get_benchmark_for_race(race)
 
-        # Project all times to current race distance/method
-        projections = []
+        # Tillagg-kompensation for denna hast
+        tillagg = _tillagg_penalty(entry, race)
+
+        # Projicera alla tider till loppets distans/metod
+        # Anvand HASTENS individuella distans (entry.distance) som maldistans
+        target_dist = entry.distance if entry.distance > 0 else race.distance
+        target_method = race.start_method
+
+        primary_projs = []    # Senaste 5
+        secondary_projs = []  # Starter 6-10
+
         for i, s in enumerate(timed_starts):
             projected = project_time_to_distance(
                 s.km_time,
                 s.distance if s.distance > 0 else race.distance,
                 s.start_method,
-                race.distance,
-                race.start_method,
+                target_dist,
+                target_method,
                 breed,
             )
-            # Calculate projection confidence for this individual start
             conf = self._start_projection_confidence(s, race)
-            recency_w = RECENCY_WEIGHTS[i] if i < len(RECENCY_WEIGHTS) else 0.3
-            projections.append((projected, conf, recency_w, s))
 
-        # ── 1. Projected best time (40%) ────────────────────────────────
-        # Best projected time, weighted by confidence
-        # A projection from same distance+method is more reliable
-        best_proj_score = self._best_projected_score(projections, benchmark)
+            if i < 5:
+                w = RECENCY_WEIGHTS_PRIMARY[i] if i < len(RECENCY_WEIGHTS_PRIMARY) else 0.4
+                primary_projs.append((projected, conf, w, s))
+            else:
+                idx = i - 5
+                w = RECENCY_WEIGHTS_SECONDARY[idx] if idx < len(RECENCY_WEIGHTS_SECONDARY) else 0.05
+                secondary_projs.append((projected, conf, w, s))
 
-        # ── 2. Weighted average projected time (25%) ────────────────────
-        avg_proj_score = self._weighted_avg_score(projections, benchmark)
+        # ── 1. Basta projicerade tid (35%) ──────────────────────────────
+        best_score = self._best_projected_score(
+            primary_projs + secondary_projs, benchmark, tillagg
+        )
 
-        # ── 3. Time confidence (20%) ────────────────────────────────────
-        # How reliable is our time projection? Based on data quality.
-        confidence_score = self._confidence_score(projections, race)
+        # ── 2. Viktat medeltal senaste 5 (25%) ─────────────────────────
+        avg5_score = self._weighted_avg_score(primary_projs, benchmark, tillagg)
 
-        # ── 4. Form trend (15%) ─────────────────────────────────────────
-        # Are times improving or getting worse?
-        trend_score = self._trend_score(projections)
+        # ── 3. Bakgrunds-medeltal 6-10 (10%) ───────────────────────────
+        if secondary_projs:
+            bg_score = self._weighted_avg_score(secondary_projs, benchmark, tillagg)
+        else:
+            bg_score = avg5_score  # Fallback till senaste 5
+
+        # ── 4. Tidskonfidens (15%) ──────────────────────────────────────
+        confidence = self._confidence_score(primary_projs, race)
+
+        # ── 5. Formtrend (15%) ──────────────────────────────────────────
+        trend = self._trend_score(primary_projs)
 
         total = (
-            best_proj_score * 0.40
-            + avg_proj_score * 0.25
-            + confidence_score * 0.20
-            + trend_score * 0.15
+            best_score * 0.35
+            + avg5_score * 0.25
+            + bg_score * 0.10
+            + confidence * 0.15
+            + trend * 0.15
         )
 
         return min(100.0, max(0.0, total))
 
     @staticmethod
     def _start_projection_confidence(start: PastStart, race: Race) -> float:
-        """How confident are we in projecting this start's time to the race?
+        """Konfidens for att projicera denna starts tid till loppet.
 
-        High confidence:
-        - Same distance (±100m) AND same method → 1.0
-        - Same method, close distance (±300m) → 0.85
-        - Different method but same distance → 0.75
+        Hog konfidens:
+        - Samma distans (±100m) + samma metod → 1.0
+        - Samma metod, nara distans (±300m) → 0.85
+        - Annan metod men samma distans → 0.75
 
-        Lower confidence:
-        - Different method AND different distance → 0.5-0.65
-        - Very different distance (>600m) → 0.3-0.4
-
-        Also considers: disqualified/galloped starts are less reliable
+        Lag konfidens:
+        - Annan metod + annan distans → 0.5-0.65
+        - Mycket annorlunda distans (>600m) → 0.3-0.4
+        - Diskad/galopp → reduceras 60%
         """
-        confidence = 1.0
-
-        # Distance similarity
         dist_diff = abs(start.distance - race.distance) if start.distance > 0 else 500
+
         if dist_diff <= 100:
             dist_conf = 1.0
         elif dist_diff <= 300:
@@ -261,15 +290,9 @@ class TimeAnalysis(AnalysisFactor):
         else:
             dist_conf = 0.30
 
-        # Method similarity
-        if start.start_method == race.start_method:
-            method_conf = 1.0
-        else:
-            method_conf = 0.75
-
+        method_conf = 1.0 if start.start_method == race.start_method else 0.75
         confidence = dist_conf * method_conf
 
-        # Penalize galloped/disqualified starts (unreliable time)
         if start.galloped or start.disqualified:
             confidence *= 0.4
 
@@ -279,25 +302,25 @@ class TimeAnalysis(AnalysisFactor):
     def _best_projected_score(
         projections: list[tuple[float, float, float, PastStart]],
         benchmark: float,
+        tillagg: float = 0.0,
     ) -> float:
-        """Score based on the best projected time.
+        """Score baserat pa basta projicerade tid.
 
-        Uses confidence-weighted selection: a very good time with low
-        confidence is worth less than a good time with high confidence.
+        Med konfidens-viktning: bra tid med lag konfidens
+        ar vard mindre an ok tid med hog konfidens.
         """
         if not projections:
             return 30.0
 
-        # Score each projection: quality * confidence
         best_score = 0.0
         for projected, conf, recency_w, _start in projections:
-            # Time quality: how much faster than benchmark
-            diff = benchmark - projected  # Positive = faster
+            # Justera for tillagg (tillagg gor tiden mer imponerande)
+            adjusted = projected - tillagg  # Ta bort tillaggs-handikapp
+
+            diff = benchmark - adjusted  # Positivt = snabbare
             quality = 50.0 + diff * 15.0
             quality = min(100.0, max(0.0, quality))
 
-            # Weight by confidence (but don't zero out — even low-conf
-            # data is better than nothing)
             effective_quality = quality * (0.3 + 0.7 * conf)
             best_score = max(best_score, effective_quality)
 
@@ -307,8 +330,9 @@ class TimeAnalysis(AnalysisFactor):
     def _weighted_avg_score(
         projections: list[tuple[float, float, float, PastStart]],
         benchmark: float,
+        tillagg: float = 0.0,
     ) -> float:
-        """Recency-weighted average of projected times."""
+        """Recency-viktat medeltal av projicerade tider."""
         if not projections:
             return 30.0
 
@@ -324,8 +348,11 @@ class TimeAnalysis(AnalysisFactor):
             return 30.0
 
         avg_time = weighted_time / total_weight
+        # Justera for tillagg
+        avg_time -= tillagg
+
         diff = benchmark - avg_time
-        score = 50.0 + diff * 12.0  # Slightly less aggressive than best-time
+        score = 50.0 + diff * 12.0
         return min(100.0, max(0.0, score))
 
     @staticmethod
@@ -333,37 +360,32 @@ class TimeAnalysis(AnalysisFactor):
         projections: list[tuple[float, float, float, PastStart]],
         race: Race,
     ) -> float:
-        """Overall confidence in our time projection.
+        """Overall konfidens i tidsprojektionen.
 
-        High confidence when:
-        - Multiple starts at similar distance/method
-        - No galloped/disqualified starts
-        - Recent starts (not stale data)
-        - Consistent times (low variance)
+        Hog konfidens nar:
+        - Manga starter vid liknande distans/metod
+        - Inga galopperade/diskade starter
+        - Konsekventa tider (lag varians)
+        - Exakt distans-data finns
         """
         if not projections:
             return 20.0
 
-        # Factor 1: Data quantity (more starts = more confident)
-        qty_score = min(1.0, len(projections) / 4.0)  # 4+ starts = full qty
-
-        # Factor 2: Average individual confidence
+        qty_score = min(1.0, len(projections) / 4.0)
         avg_conf = sum(conf for _, conf, _, _ in projections) / len(projections)
 
-        # Factor 3: Time consistency (low std dev = more predictable)
         times = [proj for proj, _, _, _ in projections]
         if len(times) >= 2:
             mean_t = sum(times) / len(times)
             variance = sum((t - mean_t) ** 2 for t in times) / len(times)
             std_dev = math.sqrt(variance)
-            # std_dev < 1.0s is very consistent, > 3.0s is wild
             consistency = max(0.0, min(1.0, 1.0 - (std_dev - 0.5) / 3.0))
         else:
             consistency = 0.5
 
-        # Factor 4: Any same-distance data?
         has_exact = any(
-            abs(s.distance - race.distance) <= 100 and s.start_method == race.start_method
+            abs(s.distance - race.distance) <= 100
+            and s.start_method == race.start_method
             for _, _, _, s in projections
         )
         exact_bonus = 0.2 if has_exact else 0.0
@@ -381,15 +403,14 @@ class TimeAnalysis(AnalysisFactor):
     def _trend_score(
         projections: list[tuple[float, float, float, PastStart]],
     ) -> float:
-        """Are projected times improving or declining?
+        """Forbattras eller forsamras tiderna?
 
-        Compares most recent 2 starts vs older starts.
-        Improving = positive trend = higher score.
+        Jamfor senaste 2 med aldre starter.
+        Dennis: "hastar tappar form eller blir aldre"
         """
         if len(projections) < 3:
-            return 50.0  # Not enough data for trend
+            return 50.0
 
-        # Recent: first 2 projections (most recent starts)
         recent_times = [proj for proj, conf, _, _ in projections[:2] if conf > 0.3]
         older_times = [proj for proj, conf, _, _ in projections[2:] if conf > 0.3]
 
@@ -399,13 +420,12 @@ class TimeAnalysis(AnalysisFactor):
         avg_recent = sum(recent_times) / len(recent_times)
         avg_older = sum(older_times) / len(older_times)
 
-        # Improvement: older was slower (higher km_time) than recent
-        improvement = avg_older - avg_recent  # Positive = improving
+        improvement = avg_older - avg_recent  # Positivt = forbattring
         score = 50.0 + improvement * 18.0
         return min(100.0, max(0.0, score))
 
 
-# Keep normalize_km_time for backward compatibility (used by other modules)
+# Bakåtkompatibilitet
 def normalize_km_time(
     km_time: float,
     distance: int,

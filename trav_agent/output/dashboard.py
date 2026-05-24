@@ -1098,15 +1098,91 @@ def _system_html(game_round: GameRound) -> str:
             f'</div>'
         )
 
+    # ── Dennis-method system builder ──
+    dennis_html = _dennis_system_html(game_round)
+
     return (
         f'<div id="system" class="summary-card system-section">'
         f'<h2>💰 System — Budget 2,500 kr</h2>'
         f'<p style="color:#6b7280;font-size:.85rem;margin-bottom:1rem">'
         f'4 strategier backtestade på 266 omgångar (5 år). '
         f'Inkl. spik-variant med 1 spik vid hög konfidens.</p>'
+        f'{dennis_html}'
         f'{"".join(systems_html)}'
         f'</div>'
     )
+
+
+def _dennis_system_html(game_round: GameRound) -> str:
+    """Dennis-method system: intelligent breddning baserad pa skrallrisk."""
+    try:
+        from ..analysis.system_builder import build_system
+    except ImportError:
+        return ""
+
+    budgets = [200, 500]
+    cards = []
+
+    for budget in budgets:
+        plan = build_system(game_round, budget=budget, strategy="dennis")
+
+        pick_rows = []
+        for leg in sorted(plan.legs, key=lambda l: l.race_number):
+            race = game_round.get_race(leg.race_number)
+            dist = race.distance if race else 0
+            method = (race.start_method.value if race else "?")[:4]
+            conf_cls = "high" if leg.confidence >= 60 else ("medium" if leg.confidence >= 30 else "low")
+            upset_icon = "\U0001f7e2" if leg.upset_risk < 25 else ("\U0001f7e1" if leg.upset_risk < 50 else "\U0001f534")
+
+            picks_str = ", ".join(
+                f"<strong>{p}</strong>"
+                for p in leg.picks[:leg.num_picks]
+            )
+
+            type_badge = {
+                "spik": '\U0001f512 SPIK',
+                "kort": '2-val',
+                "medel": '3-val',
+                "bred": 'Bred',
+            }.get(leg.leg_type, leg.leg_type)
+
+            pick_rows.append(
+                f'<tr>'
+                f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
+                f'<td>{dist}m {method}</td>'
+                f'<td><span class="conf-badge {conf_cls}">{leg.confidence:.0f}</span></td>'
+                f'<td>{upset_icon} {leg.upset_risk:.0f}%</td>'
+                f'<td class="system-picks">{picks_str}</td>'
+                f'<td>{leg.num_picks}</td>'
+                f'</tr>'
+            )
+
+        rows_str = "".join(pick_rows)
+        cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
+
+        cards.append(
+            f'<div class="system-card" style="border-left:3px solid #f59e0b">'
+            f'<div class="system-header">'
+            f'<h3>\U0001f451 Dennis-metoden ({budget} kr)</h3>'
+            f'<span class="system-meta">Intelligent breddning: spik sakra lopp, bred i skralllopp</span>'
+            f'</div>'
+            f'<div class="system-stats">'
+            f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
+            f'<div class="sys-stat"><span class="sys-val">{plan.num_spikes}</span><span class="sys-lbl">Spikar</span></div>'
+            f'<div class="sys-stat"><span class="sys-val">{plan.num_wide}</span><span class="sys-lbl">Breda</span></div>'
+            f'</div>'
+            f'<div class="table-wrap">'
+            f'<table class="system-table">'
+            f'<thead><tr>'
+            f'<th>Lopp</th><th>Info</th><th>Konf</th><th>Risk</th><th>Picks</th><th>#</th>'
+            f'</tr></thead>'
+            f'<tbody>{rows_str}</tbody>'
+            f'</table></div>'
+            f'</div>'
+        )
+
+    return "".join(cards)
 
 
 def _stats_html(backlog_data: dict | None = None) -> str:

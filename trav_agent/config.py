@@ -141,8 +141,9 @@ class FactorWeights:
     form_curve: float = 0.049          # Formkurva
     gallop_risk: float = 0.035          # Galopphistorik + voltspårsinteraktion
     equipment: float = 0.005           # Barfot/sulky (Am/Va)
-    driver_trainer: float = 0.005      # Kusk-tranar kombination
+    driver_trainer: float = 0.005      # Kusk-tranar kombination + utlandsk edge
     layoff: float = 0.003              # Uppehall
+    proffs_consensus: float = 0.000    # Viktat proffsstreck (aktiveras efter 50+ omgangar data)
 
     # Interaktionstermer borttagna
     interaction_track_post: float = 0.0
@@ -165,6 +166,7 @@ class FactorWeights:
             "equipment": self.equipment,
             "age": self.age,
             "gallop_risk": self.gallop_risk,
+            "proffs_consensus": self.proffs_consensus,
         }
 
     def interactions(self) -> list[tuple[str, str, float]]:

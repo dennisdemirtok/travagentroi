@@ -1,0 +1,1025 @@
+{
+  "metadata": {
+    "num_rounds": 97,
+    "v75_rounds": 81,
+    "v85_rounds": 16,
+    "period_start": "2024-02-10",
+    "period_end": "2026-02-14",
+    "total_races": 695,
+    "elapsed_seconds": 33.5
+  },
+  "super_score_accuracy": {
+    "top1": 0.3712230215827338,
+    "top2": 0.5697841726618705,
+    "top3": 0.6748201438848921
+  },
+  "best_formula": {
+    "formula": "I_streck_1st",
+    "budget": 3000,
+    "roi": -0.06945317703030152
+  },
+  "formula_ranking": [
+    {
+      "formula": "I_streck_1st",
+      "budget": 3000,
+      "roi": -0.06945317703030152,
+      "hits": 8,
+      "netto": -16485.788092386036
+    },
+    {
+      "formula": "D_market_gap",
+      "budget": 3000,
+      "roi": -0.08313096276802186,
+      "hits": 10,
+      "netto": -20294.80350603856
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "budget": 3000,
+      "roi": -0.09755323903436909,
+      "hits": 5,
+      "netto": -23348.148347388313
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "budget": 3000,
+      "roi": -0.1151091354991902,
+      "hits": 7,
+      "netto": -27940.49801428619
+    },
+    {
+      "formula": "B_gap_x_streck",
+      "budget": 3000,
+      "roi": -0.13368479420711152,
+      "hits": 4,
+      "netto": -32211.685376189038
+    },
+    {
+      "formula": "T_composite_gap",
+      "budget": 3000,
+      "roi": -0.48536022393341544,
+      "hits": 5,
+      "netto": -116508.78031432064
+    },
+    {
+      "formula": "Y_low_entropy",
+      "budget": 3000,
+      "roi": -0.6443687255026144,
+      "hits": 9,
+      "netto": -156803.2631387082
+    },
+    {
+      "formula": "N_streck_std",
+      "budget": 3000,
+      "roi": -0.9551531466986751,
+      "hits": 6,
+      "netto": -227094.82427621025
+    },
+    {
+      "formula": "L_streck_gap_product",
+      "budget": 3000,
+      "roi": -0.9746297898337788,
+      "hits": 7,
+      "netto": -237907.1316984254
+    },
+    {
+      "formula": "V_dual_gap",
+      "budget": 3000,
+      "roi": -0.9746297898337788,
+      "hits": 7,
+      "netto": -237907.1316984254
+    },
+    {
+      "formula": "E_model_dominance",
+      "budget": 3000,
+      "roi": -0.9818676971710527,
+      "hits": 1,
+      "netto": -245793.88623592115
+    },
+    {
+      "formula": "G_gap_auto",
+      "budget": 3000,
+      "roi": -0.9823012235047693,
+      "hits": 5,
+      "netto": -238611.28135215526
+    },
+    {
+      "formula": "S_gap_x_safety",
+      "budget": 3000,
+      "roi": -0.9860460476042234,
+      "hits": 4,
+      "netto": -237615.40445957056
+    },
+    {
+      "formula": "U_kitchen_sink",
+      "budget": 4000,
+      "roi": -0.9873915324691145,
+      "hits": 4,
+      "netto": -332344.6348264805
+    },
+    {
+      "formula": "X_weighted_sum",
+      "budget": 3000,
+      "roi": -0.9874797947253813,
+      "hits": 4,
+      "netto": -239007.14081584447
+    },
+    {
+      "formula": "M_original",
+      "budget": 3000,
+      "roi": -0.9874814239569895,
+      "hits": 4,
+      "netto": -239038.64081584447
+    },
+    {
+      "formula": "K_gap_div_upset",
+      "budget": 3000,
+      "roi": -0.9875190623348715,
+      "hits": 4,
+      "netto": -239768.64081584447
+    },
+    {
+      "formula": "A_super_gap",
+      "budget": 3000,
+      "roi": -0.9876487056760084,
+      "hits": 4,
+      "netto": -242317.14081584447
+    },
+    {
+      "formula": "F_super_gap_scaled",
+      "budget": 3000,
+      "roi": -0.9876487056760084,
+      "hits": 4,
+      "netto": -242317.14081584447
+    },
+    {
+      "formula": "P_gap_squared",
+      "budget": 3000,
+      "roi": -0.9876487056760084,
+      "hits": 4,
+      "netto": -242317.14081584447
+    },
+    {
+      "formula": "O_multifeature",
+      "budget": 3000,
+      "roi": -0.9909542737084632,
+      "hits": 3,
+      "netto": -236530.38011433624
+    },
+    {
+      "formula": "J_combined",
+      "budget": 3000,
+      "roi": -0.9910001421987622,
+      "hits": 3,
+      "netto": -237746.88011433624
+    },
+    {
+      "formula": "H_agreement_gap",
+      "budget": 3000,
+      "roi": -0.9913342863367836,
+      "hits": 3,
+      "netto": -239517.76392325977
+    },
+    {
+      "formula": "R_inv_upset",
+      "budget": 3000,
+      "roi": -0.9949195783623401,
+      "hits": 2,
+      "netto": -239406.50322175154
+    },
+    {
+      "formula": "W_favorite_binary",
+      "budget": 3000,
+      "roi": -0.9971419640582806,
+      "hits": 1,
+      "netto": -245188.23468425468
+    }
+  ],
+  "selective_results": {
+    "ALL": {
+      "played": 97,
+      "hits": 8,
+      "total_cost": 237365.5,
+      "total_payout": 220879.71190761396,
+      "roi": -0.06945317703030152,
+      "netto": -16485.788092386036
+    },
+    "avg_conf_gt_median": {
+      "played": 48,
+      "hits": 7,
+      "total_cost": 117408.0,
+      "total_payout": 14298.017169466782,
+      "roi": -0.8782193958719442,
+      "netto": -103109.98283053322
+    },
+    "avg_conf_gt_p60": {
+      "played": 58,
+      "hits": 7,
+      "total_cost": 141612.0,
+      "total_payout": 14298.017169466782,
+      "roi": -0.8990338589281502,
+      "netto": -127313.98283053322
+    },
+    "avg_conf_gt_p75": {
+      "played": 72,
+      "hits": 7,
+      "total_cost": 175613.0,
+      "total_payout": 14298.017169466782,
+      "roi": -0.9185822395297227,
+      "netto": -161314.9828305332
+    },
+    "agreement_gte_half": {
+      "played": 46,
+      "hits": 5,
+      "total_cost": 115367.0,
+      "total_payout": 209298.84699087116,
+      "roi": 0.8142003085013145,
+      "netto": 93931.84699087116
+    },
+    "agreement_gte_5": {
+      "played": 9,
+      "hits": 0,
+      "total_cost": 20283.0,
+      "total_payout": 0,
+      "roi": -1.0,
+      "netto": -20283.0
+    },
+    "no_big_field_volt": {
+      "played": 20,
+      "hits": 1,
+      "total_cost": 49686.5,
+      "total_payout": 3646.046372137164,
+      "roi": -0.9266189735212349,
+      "netto": -46040.45362786284
+    },
+    "max_avg_starters_11": {
+      "played": 11,
+      "hits": 0,
+      "total_cost": 28589.5,
+      "total_payout": 0,
+      "roi": -1.0,
+      "netto": -28589.5
+    },
+    "avg_upset_lt_35": {
+      "played": 59,
+      "hits": 6,
+      "total_cost": 145124.5,
+      "total_payout": 216915.26983356682,
+      "roi": 0.4946840115457199,
+      "netto": 71790.76983356682
+    },
+    "avg_upset_lt_40": {
+      "played": 80,
+      "hits": 7,
+      "total_cost": 196979.5,
+      "total_payout": 217233.6655354768,
+      "roi": 0.10282372295328593,
+      "netto": 20254.165535476786
+    },
+    "no_very_high_upset": {
+      "played": 67,
+      "hits": 4,
+      "total_cost": 166750.5,
+      "total_payout": 9189.837353930918,
+      "roi": -0.9448886968618929,
+      "netto": -157560.66264606907
+    },
+    "est_payout_lt_500k": {
+      "played": 97,
+      "hits": 8,
+      "total_cost": 237365.5,
+      "total_payout": 220879.71190761396,
+      "roi": -0.06945317703030152,
+      "netto": -16485.788092386036
+    },
+    "agreement_5_upset_40": {
+      "played": 8,
+      "hits": 0,
+      "total_cost": 18267.0,
+      "total_payout": 0,
+      "roi": -1.0,
+      "netto": -18267.0
+    },
+    "agreement_5_no_bigvolt": {
+      "played": 5,
+      "hits": 0,
+      "total_cost": 11724.0,
+      "total_payout": 0,
+      "roi": -1.0,
+      "netto": -11724.0
+    },
+    "conf_med_upset_40": {
+      "played": 41,
+      "hits": 6,
+      "total_cost": 101144.0,
+      "total_payout": 10651.97079732962,
+      "roi": -0.8946850945451078,
+      "netto": -90492.02920267038
+    },
+    "V75_only": {
+      "played": 81,
+      "hits": 6,
+      "total_cost": 205407.5,
+      "total_payout": 212944.89336300833,
+      "roi": 0.036694830339731185,
+      "netto": 7537.393363008334
+    },
+    "V85_only": {
+      "played": 16,
+      "hits": 2,
+      "total_cost": 31958.0,
+      "total_payout": 7934.818544605628,
+      "roi": -0.751711041222679,
+      "netto": -24023.181455394373
+    }
+  },
+  "best_selective": {
+    "filter": "agreement_gte_half",
+    "roi": 0.8142003085013145
+  },
+  "exhaustive_top30": [
+    {
+      "formula": "Y_low_entropy",
+      "filter": "no_big_field_volt",
+      "budget": 2500,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 42441.5,
+      "total_payout": 80347.86855971722,
+      "roi": 0.8931439407117376,
+      "netto": 37906.368559717215
+    },
+    {
+      "formula": "Y_low_entropy",
+      "filter": "no_big_field_volt",
+      "budget": 3000,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 51208.0,
+      "total_payout": 80347.86855971722,
+      "roi": 0.5690491438782459,
+      "netto": 29139.868559717215
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "avg_upset_lt_40",
+      "budget": 2500,
+      "played": 80,
+      "hits": 7,
+      "hit_rate": 0.0875,
+      "total_cost": 165735.0,
+      "total_payout": 217345.53670631518,
+      "roi": 0.31140396842136653,
+      "netto": 51610.53670631518
+    },
+    {
+      "formula": "I_streck_1st",
+      "filter": "avg_upset_lt_40",
+      "budget": 2500,
+      "played": 80,
+      "hits": 7,
+      "hit_rate": 0.0875,
+      "total_cost": 166065.0,
+      "total_payout": 217233.6655354768,
+      "roi": 0.30812432201533607,
+      "netto": 51168.665535476786
+    },
+    {
+      "formula": "Y_low_entropy",
+      "filter": "no_big_field_volt",
+      "budget": 3500,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 61506.5,
+      "total_payout": 80347.86855971722,
+      "roi": 0.30633133993508355,
+      "netto": 18841.368559717215
+    },
+    {
+      "formula": "B_gap_x_streck",
+      "filter": "avg_upset_lt_40",
+      "budget": 2500,
+      "played": 80,
+      "hits": 4,
+      "hit_rate": 0.05,
+      "total_cost": 163151.5,
+      "total_payout": 208740.81462381096,
+      "roi": 0.27942933177942564,
+      "netto": 45589.31462381096
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "filter": "V75_only",
+      "budget": 2500,
+      "played": 81,
+      "hits": 6,
+      "hit_rate": 0.07407407407407407,
+      "total_cost": 168084.5,
+      "total_payout": 214270.27052321067,
+      "roi": 0.2747770943972268,
+      "netto": 46185.77052321067
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "filter": "avg_upset_lt_40",
+      "budget": 2500,
+      "played": 80,
+      "hits": 5,
+      "hit_rate": 0.0625,
+      "total_cost": 164358.0,
+      "total_payout": 209059.21032572092,
+      "roi": 0.27197465487363515,
+      "netto": 44701.210325720924
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "V75_only",
+      "budget": 2500,
+      "played": 81,
+      "hits": 7,
+      "hit_rate": 0.08641975308641975,
+      "total_cost": 169273.0,
+      "total_payout": 215141.50982170244,
+      "roi": 0.27097357417723106,
+      "netto": 45868.509821702435
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "filter": "V75_only",
+      "budget": 2500,
+      "played": 81,
+      "hits": 3,
+      "hit_rate": 0.037037037037037035,
+      "total_cost": 167264.5,
+      "total_payout": 210930.5064260297,
+      "roi": 0.2610596177074615,
+      "netto": 43666.00642602969
+    },
+    {
+      "formula": "I_streck_1st",
+      "filter": "V75_only",
+      "budget": 2500,
+      "played": 81,
+      "hits": 6,
+      "hit_rate": 0.07407407407407407,
+      "total_cost": 170030.5,
+      "total_payout": 212944.89336300833,
+      "roi": 0.2523923258651144,
+      "netto": 42914.393363008334
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "filter": "avg_upset_lt_40",
+      "budget": 2500,
+      "played": 80,
+      "hits": 3,
+      "hit_rate": 0.0375,
+      "total_cost": 166514.5,
+      "total_payout": 207804.19151639566,
+      "roi": 0.24796454072405502,
+      "netto": 41289.69151639566
+    },
+    {
+      "formula": "B_gap_x_streck",
+      "filter": "V75_only",
+      "budget": 2500,
+      "played": 81,
+      "hits": 3,
+      "hit_rate": 0.037037037037037035,
+      "total_cost": 167899.0,
+      "total_payout": 208221.08316130782,
+      "roi": 0.24015677973846072,
+      "netto": 40322.08316130782
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "ALL",
+      "budget": 2500,
+      "played": 97,
+      "hits": 9,
+      "hit_rate": 0.09278350515463918,
+      "total_cost": 200613.0,
+      "total_payout": 223076.32836630807,
+      "roi": 0.11197344322804637,
+      "netto": 22463.328366308066
+    },
+    {
+      "formula": "I_streck_1st",
+      "filter": "avg_upset_lt_40",
+      "budget": 3000,
+      "played": 80,
+      "hits": 7,
+      "hit_rate": 0.0875,
+      "total_cost": 196979.5,
+      "total_payout": 217233.6655354768,
+      "roi": 0.10282372295328593,
+      "netto": 20254.165535476786
+    },
+    {
+      "formula": "I_streck_1st",
+      "filter": "ALL",
+      "budget": 2500,
+      "played": 97,
+      "hits": 8,
+      "hit_rate": 0.08247422680412371,
+      "total_cost": 201460.5,
+      "total_payout": 220879.71190761396,
+      "roi": 0.09639215582019287,
+      "netto": 19419.211907613964
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "no_big_field_volt",
+      "budget": 4000,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 73332.0,
+      "total_payout": 80347.86855971722,
+      "roi": 0.09567267440840581,
+      "netto": 7015.868559717215
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "filter": "no_big_field_volt",
+      "budget": 4000,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 73332.0,
+      "total_payout": 80347.86855971722,
+      "roi": 0.09567267440840581,
+      "netto": 7015.868559717215
+    },
+    {
+      "formula": "Y_low_entropy",
+      "filter": "no_big_field_volt",
+      "budget": 4000,
+      "played": 20,
+      "hits": 2,
+      "hit_rate": 0.1,
+      "total_cost": 73591.5,
+      "total_payout": 80347.86855971722,
+      "roi": 0.09180908881755659,
+      "netto": 6756.368559717215
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "avg_upset_lt_40",
+      "budget": 3000,
+      "played": 80,
+      "hits": 8,
+      "hit_rate": 0.1,
+      "total_cost": 201575.0,
+      "total_payout": 218104.90483396855,
+      "roi": 0.08200374468048396,
+      "netto": 16529.904833968554
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "filter": "ALL",
+      "budget": 2500,
+      "played": 97,
+      "hits": 7,
+      "hit_rate": 0.07216494845360824,
+      "total_cost": 198704.5,
+      "total_payout": 214790.0019857138,
+      "roi": 0.08095187570343808,
+      "netto": 16085.50198571381
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "filter": "avg_upset_lt_40",
+      "budget": 3000,
+      "played": 80,
+      "hits": 4,
+      "hit_rate": 0.05,
+      "total_cost": 197907.5,
+      "total_payout": 212343.3052804745,
+      "roi": 0.07294218400249869,
+      "netto": 14435.80528047451
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "filter": "ALL",
+      "budget": 2500,
+      "played": 97,
+      "hits": 4,
+      "hit_rate": 0.041237113402061855,
+      "total_cost": 199314.5,
+      "total_payout": 211450.23788853284,
+      "roi": 0.060887380940838905,
+      "netto": 12135.737888532836
+    },
+    {
+      "formula": "B_gap_x_streck",
+      "filter": "ALL",
+      "budget": 2500,
+      "played": 97,
+      "hits": 4,
+      "hit_rate": 0.041237113402061855,
+      "total_cost": 197657.0,
+      "total_payout": 208740.81462381096,
+      "roi": 0.05607600350005799,
+      "netto": 11083.814623810962
+    },
+    {
+      "formula": "B_gap_x_streck",
+      "filter": "avg_upset_lt_40",
+      "budget": 3000,
+      "played": 80,
+      "hits": 4,
+      "hit_rate": 0.05,
+      "total_cost": 198602.0,
+      "total_payout": 208740.81462381096,
+      "roi": 0.05105091904316655,
+      "netto": 10138.814623810962
+    },
+    {
+      "formula": "Q_dom_x_mktgap",
+      "filter": "avg_upset_lt_40",
+      "budget": 3000,
+      "played": 80,
+      "hits": 5,
+      "hit_rate": 0.0625,
+      "total_cost": 199787.0,
+      "total_payout": 209059.21032572092,
+      "roi": 0.046410478788514384,
+      "netto": 9272.210325720924
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "avg_upset_lt_40",
+      "budget": 4000,
+      "played": 80,
+      "hits": 9,
+      "hit_rate": 0.1125,
+      "total_cost": 283579.5,
+      "total_payout": 294806.7270215486,
+      "roi": 0.039591109447433985,
+      "netto": 11227.227021548606
+    },
+    {
+      "formula": "I_streck_1st",
+      "filter": "V75_only",
+      "budget": 3000,
+      "played": 81,
+      "hits": 6,
+      "hit_rate": 0.07407407407407407,
+      "total_cost": 205407.5,
+      "total_payout": 212944.89336300833,
+      "roi": 0.036694830339731185,
+      "netto": 7537.393363008334
+    },
+    {
+      "formula": "D_market_gap",
+      "filter": "V75_only",
+      "budget": 3000,
+      "played": 81,
+      "hits": 8,
+      "hit_rate": 0.09876543209876543,
+      "total_cost": 209382.5,
+      "total_payout": 215900.8779493558,
+      "roi": 0.03113143624398319,
+      "netto": 6518.37794935581
+    },
+    {
+      "formula": "C_gap3_div_starters",
+      "filter": "V75_only",
+      "budget": 3000,
+      "played": 81,
+      "hits": 3,
+      "hit_rate": 0.037037037037037035,
+      "total_cost": 204951.5,
+      "total_payout": 210930.5064260297,
+      "roi": 0.02917278685947501,
+      "netto": 5979.006426029693
+    }
+  ],
+  "dynamic_results": {
+    "fixed_3000": {
+      "played": 97,
+      "hits": 9,
+      "total_cost": 243344.0,
+      "total_payout": 86540.73686129182,
+      "roi": -0.6443687255026144,
+      "netto": -156803.2631387082,
+      "avg_bet": 2508.701030927835
+    },
+    "fixed_3500": {
+      "played": 97,
+      "hits": 9,
+      "total_cost": 288687.5,
+      "total_payout": 86540.73686129182,
+      "roi": -0.7002269344488701,
+      "netto": -202146.7631387082,
+      "avg_bet": 2976.159793814433
+    },
+    "fixed_4000": {
+      "played": 97,
+      "hits": 9,
+      "total_cost": 342038.5,
+      "total_payout": 86540.73686129182,
+      "roi": -0.7469853924008795,
+      "netto": -255497.7631387082,
+      "avg_bet": 3526.1701030927834
+    },
+    "high_conf_4000_else_2000": {
+      "played": 97,
+      "hits": 8,
+      "total_cost": 240623.0,
+      "total_payout": 9838.914673711766,
+      "roi": -0.9591106640939904,
+      "netto": -230784.08532628824,
+      "avg_bet": 2480.6494845360826
+    },
+    "high_payout_4000_else_2000": {
+      "played": 97,
+      "hits": 4,
+      "total_cost": 154114.0,
+      "total_payout": 5739.782448877388,
+      "roi": -0.9627562554415733,
+      "netto": -148374.21755112262,
+      "avg_bet": 1588.8041237113403
+    },
+    "agree_4000_else_2500": {
+      "played": 97,
+      "hits": 8,
+      "total_cost": 213346.5,
+      "total_payout": 85781.36873363845,
+      "roi": -0.5979246496490993,
+      "netto": -127565.13126636155,
+      "avg_bet": 2199.4484536082473
+    },
+    "upset_based": {
+      "played": 97,
+      "hits": 9,
+      "total_cost": 296241.5,
+      "total_payout": 86540.73686129182,
+      "roi": -0.707870987483888,
+      "netto": -209700.7631387082,
+      "avg_bet": 3054.036082474227
+    },
+    "combined_dynamic": {
+      "played": 97,
+      "hits": 7,
+      "total_cost": 238007.5,
+      "total_payout": 7754.1693858560575,
+      "roi": -0.9674204830274002,
+      "netto": -230253.33061414395,
+      "avg_bet": 2453.685567010309
+    },
+    "skip_or_4000": {
+      "played": 9,
+      "hits": 0,
+      "total_cost": 32586.0,
+      "total_payout": 0,
+      "roi": -1.0,
+      "netto": -32586.0,
+      "avg_bet": 3620.6666666666665
+    },
+    "skip_or_3500": {
+      "played": 80,
+      "hits": 7,
+      "total_cost": 238110.5,
+      "total_payout": 80809.94520129895,
+      "roi": -0.6606199844135435,
+      "netto": -157300.55479870105,
+      "avg_bet": 2976.38125
+    },
+    "sniper_4000": {
+      "played": 0,
+      "hits": 0,
+      "total_cost": 0,
+      "total_payout": 0,
+      "roi": 0,
+      "netto": 0,
+      "avg_bet": 0
+    }
+  },
+  "best_dynamic": {
+    "strategy": "sniper_4000",
+    "roi": 0
+  },
+  "monthly_breakdown": [
+    {
+      "month": "2024-02",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 2376.0,
+      "payout": 0,
+      "netto": -2376.0,
+      "roi": -1.0,
+      "cumulative": -2376.0
+    },
+    {
+      "month": "2024-03",
+      "rounds": 2,
+      "hits": 0,
+      "cost": 4627.5,
+      "payout": 0,
+      "netto": -4627.5,
+      "roi": -1.0,
+      "cumulative": -7003.5
+    },
+    {
+      "month": "2024-04",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 2016.0,
+      "payout": 0,
+      "netto": -2016.0,
+      "roi": -1.0,
+      "cumulative": -9019.5
+    },
+    {
+      "month": "2024-05",
+      "rounds": 2,
+      "hits": 1,
+      "cost": 4338.0,
+      "payout": 76701.82218758005,
+      "netto": 72363.82218758005,
+      "roi": 16.681379019728,
+      "cumulative": 63344.32218758005
+    },
+    {
+      "month": "2024-07",
+      "rounds": 1,
+      "hits": 1,
+      "cost": 2016.0,
+      "payout": 3646.046372137164,
+      "netto": 1630.0463721371639,
+      "roi": 0.8085547480839107,
+      "cumulative": 64974.368559717215
+    },
+    {
+      "month": "2024-08",
+      "rounds": 2,
+      "hits": 0,
+      "cost": 4416.5,
+      "payout": 0,
+      "netto": -4416.5,
+      "roi": -1.0,
+      "cumulative": 60557.868559717215
+    },
+    {
+      "month": "2024-09",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 1728.0,
+      "payout": 0,
+      "netto": -1728.0,
+      "roi": -1.0,
+      "cumulative": 58829.868559717215
+    },
+    {
+      "month": "2024-11",
+      "rounds": 2,
+      "hits": 0,
+      "cost": 4410.0,
+      "payout": 0,
+      "netto": -4410.0,
+      "roi": -1.0,
+      "cumulative": 54419.868559717215
+    },
+    {
+      "month": "2025-02",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 2160.0,
+      "payout": 0,
+      "netto": -2160.0,
+      "roi": -1.0,
+      "cumulative": 52259.868559717215
+    },
+    {
+      "month": "2025-03",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 1980.0,
+      "payout": 0,
+      "netto": -1980.0,
+      "roi": -1.0,
+      "cumulative": 50279.868559717215
+    },
+    {
+      "month": "2025-06",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 2160.0,
+      "payout": 0,
+      "netto": -2160.0,
+      "roi": -1.0,
+      "cumulative": 48119.868559717215
+    },
+    {
+      "month": "2025-08",
+      "rounds": 3,
+      "hits": 0,
+      "cost": 6138.0,
+      "payout": 0,
+      "netto": -6138.0,
+      "roi": -1.0,
+      "cumulative": 41981.868559717215
+    },
+    {
+      "month": "2025-10",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 2227.5,
+      "payout": 0,
+      "netto": -2227.5,
+      "roi": -1.0,
+      "cumulative": 39754.368559717215
+    },
+    {
+      "month": "2026-02",
+      "rounds": 1,
+      "hits": 0,
+      "cost": 1848.0,
+      "payout": 0,
+      "netto": -1848.0,
+      "roi": -1.0,
+      "cumulative": 37906.368559717215
+    }
+  ],
+  "hit_details": [
+    {
+      "date": "2024-05-25",
+      "game_type": "V75",
+      "track": "",
+      "cost": 2178.0,
+      "payout": 76701.82218758005,
+      "profit": 74523.82218758005,
+      "picks": [
+        1,
+        3,
+        11,
+        1,
+        12,
+        11,
+        1
+      ],
+      "rows": 4356,
+      "winner_strecks": [
+        0.4086,
+        0.0995,
+        0.1403,
+        0.3269,
+        0.0582,
+        0.04,
+        0.5256
+      ]
+    },
+    {
+      "date": "2024-07-20",
+      "game_type": "V75",
+      "track": "",
+      "cost": 2016.0,
+      "payout": 3646.046372137164,
+      "profit": 1630.0463721371639,
+      "picks": [
+        1,
+        1,
+        12,
+        14,
+        1,
+        12,
+        2
+      ],
+      "rows": 4032,
+      "winner_strecks": [
+        0.6484,
+        0.4568,
+        0.1116,
+        0.0352,
+        0.6116,
+        0.1926,
+        0.3502
+      ]
+    }
+  ],
+  "expert_analysis": {
+    "2026-02-14": {
+      "file": "/Users/dennisdemirtok/Downloads/v85_komplett_40system.xlsx",
+      "round_date": "2026-02-14",
+      "game_type": "V85",
+      "note": "Expert data parsed — structure analysis above. Detailed consensus scoring would require race-specific parsing of each expert system format."
+    },
+    "2026-01-24": {
+      "file": "/Users/dennisdemirtok/Downloads/v85_kalmar_30system.xlsx",
+      "round_date": "2026-01-24",
+      "game_type": "V85",
+      "note": "Expert data parsed — structure analysis above. Detailed consensus scoring would require race-specific parsing of each expert system format."
+    },
+    "2026-01-31": {
+      "file": "/Users/dennisdemirtok/Downloads/V85_Komplett_33system.xlsx",
+      "round_date": "2026-01-31",
+      "game_type": "V85",
+      "note": "Expert data parsed — structure analysis above. Detailed consensus scoring would require race-specific parsing of each expert system format."
+    }
+  }
+}

@@ -491,7 +491,7 @@ def _horse_detail_html(entry: RaceEntry, race: Race) -> str:
     )
 
 
-def _race_table_html(race: Race) -> str:
+def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -> str:
     sorted_entries = sorted(
         race.active_entries,
         key=lambda e: e.super_score,
@@ -550,12 +550,32 @@ def _race_table_html(race: Race) -> str:
             else:
                 result_cell = '<td class="result-cell" style="color:#6b7280">-</td>'
 
+        # Proffs cell
+        proffs_cell = ""
+        if proffs_horses:
+            ph = proffs_horses.get(e.post_position)
+            if ph and ph.get("proffs_weighted_pct", 0) > 0:
+                pp = ph["proffs_weighted_pct"]
+                edge = ph.get("edge_pp", 0)
+                edge_color = "#22c55e" if edge > 10 else "#f59e0b" if edge > 0 else "#ef4444"
+                proffs_cell = (
+                    f'<td class="proffs-cell">'
+                    f'{pp:.0f}%'
+                    f'<span style="color:{edge_color};font-size:0.7em;margin-left:3px">'
+                    f'{edge:+.0f}'
+                    f'</span>'
+                    f'</td>'
+                )
+            else:
+                proffs_cell = '<td class="proffs-cell" style="color:#6b7280">-</td>'
+
         rows.append(
             f'<tr class="horse-row{toggle_class}" data-horse="{e.post_position}">'
             f'<td class="pos">{e.post_position}</td>'
             f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}</td>'
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
             f'<td class="bet">{bet_str}</td>'
+            f'{proffs_cell}'
             f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_esc(rec)}</span></td>'
             f'{result_cell}'
             f'<td class="driver">{_esc(e.driver_name)}</td>'
@@ -643,6 +663,7 @@ def _race_table_html(race: Race) -> str:
         f'<table>'
         f'<thead><tr>'
         f'<th>#</th><th>Hast</th><th>Poang</th><th>Streck</th>'
+        f'{"<th>Proffs</th>" if proffs_horses else ""}'
         f'<th>Rek</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
         f'</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
@@ -2208,6 +2229,7 @@ def generate_dashboard_html(
     available_rounds: list[tuple[str, str, str, bool]] | list[tuple[str, str, str, bool, str]] | None = None,
     premium: bool = True,
     tips_raw: dict | None = None,
+    proffs_data: dict | None = None,
 ) -> str:
     """Generera en komplett HTML-dashboard for en analyserad spelomgang.
 
@@ -2229,8 +2251,17 @@ def generate_dashboard_html(
             else:
                 norm_rounds.append((r[0], r[1], r[2], r[3], ""))
 
+    # Build proffs lookup per race
+    proffs_by_race: dict[int, dict[int, dict]] = {}
+    if proffs_data and "races" in proffs_data:
+        for pr in proffs_data["races"]:
+            rn = pr.get("race_number", 0)
+            proffs_by_race[rn] = {
+                h["number"]: h for h in pr.get("horses", [])
+            }
+
     # Generera sektioner
-    race_htmls = {r.race_number: _race_table_html(r) for r in game_round.races}
+    race_htmls = {r.race_number: _race_table_html(r, proffs_by_race.get(r.race_number)) for r in game_round.races}
     summary = _summary_html(game_round)
     ranking = _ranking_html(game_round)
     consensus_ranking = _consensus_ranking_html(game_round, tips_raw)
@@ -2547,6 +2578,7 @@ font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
 text-transform:uppercase;letter-spacing:.04em}}
 .value-picks{{background:rgba(245,166,35,0.04);border:1px solid rgba(245,166,35,0.12);border-radius:10px;
 padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#b45309}}
+.proffs-cell{{font-size:.8rem;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding:4px 6px !important}}
 .factor-cell{{position:relative;width:44px;min-width:44px;padding:12px 4px !important}}
 .factor-bar{{position:absolute;left:4px;bottom:6px;height:3px;background:#f59e0b;opacity:.25;
 border-radius:2px;top:auto;transition:width .3s ease}}

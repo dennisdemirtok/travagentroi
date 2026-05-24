@@ -278,11 +278,28 @@ async def dashboard(game_type: str, day: str):
     except Exception:
         pass
 
+    # Load proffs consensus data if available
+    proffs_data = None
+    try:
+        from pathlib import Path
+        proffs_dir = Path("proffs_cache")
+        if proffs_dir.exists():
+            date_str = str(d)
+            # Find matching pre-race file
+            candidates = list(proffs_dir.glob(f"{game_type}*{date_str}*_pre.json"))
+            if candidates:
+                import json as _json
+                with open(candidates[0]) as _pf:
+                    proffs_data = _json.load(_pf)
+    except Exception:
+        pass
+
     html = generate_dashboard_html(
         game_round,
         available_rounds=available_rounds,
         backlog_data=backlog_data,
         tips_raw=tips_raw,
+        proffs_data=proffs_data,
     )
     return html
 

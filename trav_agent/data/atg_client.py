@@ -474,8 +474,9 @@ class ATGClient:
             sire=horse_data.get("pedigree", {}).get("father", {}).get("name", ""),
             dam=horse_data.get("pedigree", {}).get("mother", {}).get("name", ""),
             dam_sire=horse_data.get("pedigree", {}).get("mother", {}).get("father", {}).get("name", ""),
-            trainer_name=data.get("trainer", {}).get("name", "") if isinstance(data.get("trainer"), dict) else "",
-            trainer_id=data.get("trainer", {}).get("id") if isinstance(data.get("trainer"), dict) else None,
+            trainer_name=self._parse_person_name(horse_data.get("trainer", {})),
+            trainer_id=horse_data.get("trainer", {}).get("id") if isinstance(horse_data.get("trainer"), dict) else None,
+            trainer_location=horse_data.get("trainer", {}).get("location", "") if isinstance(horse_data.get("trainer"), dict) else "",
             owner_name=horse_data.get("owner", {}).get("name", ""),
             career=career,
             past_starts=past_starts,
@@ -562,8 +563,9 @@ class ATGClient:
             horse=horse,
             post_position=data.get("number", 0),
             distance=data.get("distance", 0),
-            driver_name=driver_data.get("name", "") if isinstance(driver_data, dict) else "",
+            driver_name=self._parse_person_name(driver_data) if isinstance(driver_data, dict) else "",
             driver_id=driver_data.get("id") if isinstance(driver_data, dict) else None,
+            driver_location=driver_data.get("location", "") if isinstance(driver_data, dict) else "",
             shoes=shoes_str,
             scratched=data.get("scratched", False),
             odds=odds_val,
@@ -575,6 +577,17 @@ class ATGClient:
             shoe_changed=shoe_changed,
             sulky_changed=sulky_changed,
         )
+
+    @staticmethod
+    def _parse_person_name(data: dict) -> str:
+        """Bygg fullständigt namn från ATG:s firstName+lastName-format."""
+        if not isinstance(data, dict):
+            return ""
+        first = data.get("firstName", "")
+        last = data.get("lastName", "")
+        if first and last:
+            return f"{first} {last}"
+        return first or last or data.get("name", "") or data.get("shortName", "")
 
     def _parse_past_start(self, data: dict) -> PastStart:
         """Parsa en historisk start."""
@@ -615,7 +628,7 @@ class ATGClient:
             galloped=bool(data.get("galloped", False)),
             km_time=km_time_val,
             prize_money=data.get("prizeMoney", 0),
-            driver_name=data.get("driver", {}).get("name", "") if isinstance(data.get("driver"), dict) else "",
+            driver_name=self._parse_person_name(data.get("driver", {})) if isinstance(data.get("driver"), dict) else "",
             num_starters=data.get("starters", 0),
             odds=data.get("odds"),
             comment=data.get("comment", ""),

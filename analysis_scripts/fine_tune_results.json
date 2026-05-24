@@ -1,0 +1,304 @@
+{
+  "best_weights": {
+    "time_analysis": 0.115,
+    "prize_index": 0.36,
+    "form_curve": 0.115,
+    "track_profile": 0.115,
+    "category_profile": 0.1,
+    "driver_trainer": 0.115,
+    "post_position": 0.08
+  },
+  "interaction_track_post": 0.15,
+  "interaction_track_category": 0.1,
+  "top1": 0.2446,
+  "top3": 0.505,
+  "avg_rank": 4.427,
+  "cv_top1_mean": 0.2388,
+  "cv_top1_std": 0.0259,
+  "cv_top3_mean": 0.5079,
+  "cv_top3_std": 0.045,
+  "num_races": 695,
+  "num_candidates_tested": 1294,
+  "top20": [
+    {
+      "weights": {
+        "time_analysis": 0.115,
+        "prize_index": 0.36,
+        "form_curve": 0.115,
+        "track_profile": 0.115,
+        "category_profile": 0.1,
+        "driver_trainer": 0.115,
+        "post_position": 0.08
+      },
+      "top1": 0.2446,
+      "top3": 0.505,
+      "rank": 4.427
+    },
+    {
+      "weights": {
+        "time_analysis": 0.1225,
+        "prize_index": 0.33,
+        "form_curve": 0.1225,
+        "track_profile": 0.1225,
+        "category_profile": 0.1,
+        "driver_trainer": 0.1225,
+        "post_position": 0.08
+      },
+      "top1": 0.2446,
+      "top3": 0.5007,
+      "rank": 4.433
+    },
+    {
+      "weights": {
+        "time_analysis": 0.115,
+        "prize_index": 0.33,
+        "form_curve": 0.115,
+        "track_profile": 0.115,
+        "category_profile": 0.13,
+        "driver_trainer": 0.115,
+        "post_position": 0.08
+      },
+      "top1": 0.2432,
+      "top3": 0.505,
+      "rank": 4.414
+    },
+    {
+      "weights": {
+        "time_analysis": 0.1225,
+        "prize_index": 0.3,
+        "form_curve": 0.1225,
+        "track_profile": 0.1225,
+        "category_profile": 0.13,
+        "driver_trainer": 0.1225,
+        "post_position": 0.08
+      },
+      "top1": 0.2432,
+      "top3": 0.505,
+      "rank": 4.429
+    },
+    {
+      "weights": {
+        "time_analysis": 0.13,
+        "prize_index": 0.3,
+        "form_curve": 0.13,
+        "track_profile": 0.13,
+        "category_profile": 0.1,
+        "driver_trainer": 0.13,
+        "post_position": 0.08
+      },
+      "top1": 0.2432,
+      "top3": 0.4993,
+      "rank": 4.44
+    },
+    {
+      "weights": {
+        "time_analysis": 0.04,
+        "prize_index": 0.18,
+        "form_curve": 0.04,
+        "track_profile": 0.04,
+        "category_profile": 0.4,
+        "driver_trainer": 0.04,
+        "post_position": 0.26
+      },
+      "top1": 0.2417,
+      "top3": 0.5223,
+      "rank": 4.302
+    },
+    {
+      "weights": {
+        "time_analysis": 0.085,
+        "prize_index": 0.42,
+        "form_curve": 0.085,
+        "track_profile": 0.085,
+        "category_profile": 0.1,
+        "driver_trainer": 0.085,
+        "post_position": 0.14
+      },
+      "top1": 0.2417,
+      "top3": 0.5079,
+      "rank": 4.417
+    },
+    {
+      "weights": {
+        "time_analysis": 0.0925,
+        "prize_index": 0.42,
+        "form_curve": 0.0925,
+        "track_profile": 0.0925,
+        "category_profile": 0.1,
+        "driver_trainer": 0.0925,
+        "post_position": 0.11
+      },
+      "top1": 0.2417,
+      "top3": 0.5079,
+      "rank": 4.423
+    },
+    {
+      "weights": {
+        "time_analysis": 0.055,
+        "prize_index": 0.18,
+        "form_curve": 0.055,
+        "track_profile": 0.055,
+        "category_profile": 0.37,
+        "driver_trainer": 0.055,
+        "post_position": 0.23
+      },
+      "top1": 0.2403,
+      "top3": 0.5223,
+      "rank": 4.321
+    },
+    {
+      "weights": {
+        "time_analysis": 0.0625,
+        "prize_index": 0.18,
+        "form_curve": 0.0625,
+        "track_profile": 0.0625,
+        "category_profile": 0.37,
+        "driver_trainer": 0.0625,
+        "post_position": 0.2
+      },
+      "top1": 0.2403,
+      "top3": 0.5223,
+      "rank": 4.334
+    },
+    {
+      "weights": {
+        "time_analysis": 0.055,
+        "prize_index": 0.21,
+        "form_curve": 0.055,
+        "track_profile": 0.055,
+        "category_profile": 0.37,
+        "driver_trainer": 0.055,
+        "post_position": 0.2
+      },
+      "top1": 0.2403,
+      "top3": 0.5223,
+      "rank": 4.335
+    },
+    {
+      "weights": {
+        "time_analysis": 0.04,
+        "prize_index": 0.15,
+        "form_curve": 0.04,
+        "track_profile": 0.04,
+        "category_profile": 0.4,
+        "driver_trainer": 0.04,
+        "post_position": 0.29
+      },
+      "top1": 0.2403,
+      "top3": 0.5194,
+      "rank": 4.301
+    },
+    {
+      "weights": {
+        "time_analysis": 0.055,
+        "prize_index": 0.21,
+        "form_curve": 0.055,
+        "track_profile": 0.055,
+        "category_profile": 0.34,
+        "driver_trainer": 0.055,
+        "post_position": 0.23
+      },
+      "top1": 0.2403,
+      "top3": 0.518,
+      "rank": 4.318
+    },
+    {
+      "weights": {
+        "time_analysis": 0.11,
+        "prize_index": 0.2,
+        "form_curve": 0.06,
+        "track_profile": 0.06,
+        "category_profile": 0.25,
+        "driver_trainer": 0.06,
+        "post_position": 0.26
+      },
+      "top1": 0.2403,
+      "top3": 0.5151,
+      "rank": 4.278
+    },
+    {
+      "weights": {
+        "time_analysis": 0.085,
+        "prize_index": 0.45,
+        "form_curve": 0.085,
+        "track_profile": 0.085,
+        "category_profile": 0.1,
+        "driver_trainer": 0.085,
+        "post_position": 0.11
+      },
+      "top1": 0.2403,
+      "top3": 0.5122,
+      "rank": 4.432
+    },
+    {
+      "weights": {
+        "time_analysis": 0.0925,
+        "prize_index": 0.45,
+        "form_curve": 0.0925,
+        "track_profile": 0.0925,
+        "category_profile": 0.1,
+        "driver_trainer": 0.0925,
+        "post_position": 0.08
+      },
+      "top1": 0.2403,
+      "top3": 0.5108,
+      "rank": 4.439
+    },
+    {
+      "weights": {
+        "time_analysis": 0.085,
+        "prize_index": 0.39,
+        "form_curve": 0.085,
+        "track_profile": 0.085,
+        "category_profile": 0.13,
+        "driver_trainer": 0.085,
+        "post_position": 0.14
+      },
+      "top1": 0.2403,
+      "top3": 0.5094,
+      "rank": 4.409
+    },
+    {
+      "weights": {
+        "time_analysis": 0.1,
+        "prize_index": 0.42,
+        "form_curve": 0.1,
+        "track_profile": 0.1,
+        "category_profile": 0.1,
+        "driver_trainer": 0.1,
+        "post_position": 0.08
+      },
+      "top1": 0.2403,
+      "top3": 0.5094,
+      "rank": 4.427
+    },
+    {
+      "weights": {
+        "time_analysis": 0.1075,
+        "prize_index": 0.36,
+        "form_curve": 0.1075,
+        "track_profile": 0.1075,
+        "category_profile": 0.13,
+        "driver_trainer": 0.1075,
+        "post_position": 0.08
+      },
+      "top1": 0.2403,
+      "top3": 0.5079,
+      "rank": 4.413
+    },
+    {
+      "weights": {
+        "time_analysis": 0.13,
+        "prize_index": 0.24,
+        "form_curve": 0.13,
+        "track_profile": 0.13,
+        "category_profile": 0.16,
+        "driver_trainer": 0.13,
+        "post_position": 0.08
+      },
+      "top1": 0.2403,
+      "top3": 0.5079,
+      "rank": 4.422
+    }
+  ]
+}

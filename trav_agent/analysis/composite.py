@@ -33,6 +33,7 @@ from .time_analysis import TimeAnalysis
 from .track_profile import TrackProfile
 from .recent_form_signals import LastWinFactor, CompetitionStrength, LayoffFactor
 from .gallop_risk import GallopRisk
+from .proffs_consensus import ProffsFactor
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,8 @@ class CompositeAnalyzer:
             LayoffFactor(),
             # v8.1: Galopprisksignal
             GallopRisk(),
+            # v9: Viktat proffsstreck (vikt 0.0 tills data samlats in)
+            ProffsFactor(),
         ]
 
     def analyze_race(self, race: Race) -> list[RaceEntry]:

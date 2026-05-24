@@ -112,6 +112,7 @@ class Horse(BaseModel):
     dam_sire: str = ""  # morfar
     trainer_name: str = ""
     trainer_id: Optional[int] = None
+    trainer_location: str = ""  # Stad/land, t.ex. "Halmstad" eller "Italien"
     owner_name: str = ""
 
     career: CareerStats = Field(default_factory=CareerStats)
@@ -195,6 +196,7 @@ class RaceEntry(BaseModel):
     distance: int = 0  # individuell distans (kan variera vid volt)
     driver_name: str = ""
     driver_id: Optional[int] = None
+    driver_location: str = ""  # Kuskens hemort
     trainer_name: str = ""
     weight: Optional[float] = None  # galopp
     shoes: str = ""  # skoinfo: "alla", "utan bak" etc.

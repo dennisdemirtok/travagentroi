@@ -1,0 +1,1969 @@
+{
+  "metadata": {
+    "num_rounds": 97,
+    "v75_rounds": 81,
+    "v85_rounds": 16,
+    "period_start": "2024-02-10",
+    "period_end": "2026-02-14",
+    "budgets": [
+      50,
+      100,
+      200,
+      500,
+      1000,
+      2000,
+      5000
+    ],
+    "strategies": [
+      "snal",
+      "balanserad",
+      "brett",
+      "skrall",
+      "value"
+    ]
+  },
+  "results": {
+    "snal": {
+      "50": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 2820.0,
+        "total_payout": 0.0,
+        "netto": -2820.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "100": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 4580.0,
+        "total_payout": 0.0,
+        "netto": -4580.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "200": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5348.0,
+        "total_payout": 0.0,
+        "netto": -5348.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "500": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5988.0,
+        "total_payout": 0.0,
+        "netto": -5988.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "1000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5988.0,
+        "total_payout": 0.0,
+        "netto": -5988.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "2000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5988.0,
+        "total_payout": 0.0,
+        "netto": -5988.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "5000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5988.0,
+        "total_payout": 0.0,
+        "netto": -5988.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      }
+    },
+    "balanserad": {
+      "50": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 2900.0,
+        "total_payout": 0.0,
+        "netto": -2900.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "100": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 4692.0,
+        "total_payout": 0.0,
+        "netto": -4692.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "200": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 5492.0,
+        "total_payout": 0.0,
+        "netto": -5492.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "500": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 6132.0,
+        "total_payout": 0.0,
+        "netto": -6132.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "1000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 6132.0,
+        "total_payout": 0.0,
+        "netto": -6132.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "2000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 6132.0,
+        "total_payout": 0.0,
+        "netto": -6132.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "5000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 6132.0,
+        "total_payout": 0.0,
+        "netto": -6132.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      }
+    },
+    "brett": {
+      "50": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 3459.0,
+        "total_payout": 0.0,
+        "netto": -3459.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "100": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 6915.0,
+        "total_payout": 0.0,
+        "netto": -6915.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "200": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 14106.0,
+        "total_payout": 0.0,
+        "netto": -14106.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "500": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 42349.5,
+        "total_payout": 0.0,
+        "netto": -42349.5,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "1000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 68877.0,
+        "total_payout": 0.0,
+        "netto": -68877.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "2000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 96849.0,
+        "total_payout": 0.0,
+        "netto": -96849.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "5000": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 133461.0,
+        "total_payout": 0.0,
+        "netto": -133461.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      }
+    },
+    "skrall": {
+      "50": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 3891.5,
+        "total_payout": 0.0,
+        "netto": -3891.5,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "100": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 7763.0,
+        "total_payout": 0.0,
+        "netto": -7763.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "200": {
+        "roi": -0.8935,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 15323.0,
+        "total_payout": 1631.78,
+        "netto": -13691.22,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      },
+      "500": {
+        "roi": -0.959,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 39848.0,
+        "total_payout": 1631.78,
+        "netto": -38216.22,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      },
+      "1000": {
+        "roi": -0.9793,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 78960.0,
+        "total_payout": 1631.78,
+        "netto": -77328.22,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      },
+      "2000": {
+        "roi": -0.3805,
+        "hit_rate": 0.0206,
+        "num_hits": 2,
+        "num_rounds": 97,
+        "total_cost": 160772.0,
+        "total_payout": 99603.75,
+        "netto": -61168.25,
+        "best_payout": 97971.97,
+        "worst_streak": 41,
+        "hit_dates": [
+          "2024-05-18",
+          "2025-03-29"
+        ]
+      },
+      "5000": {
+        "roi": -0.6139,
+        "hit_rate": 0.0412,
+        "num_hits": 4,
+        "num_rounds": 97,
+        "total_cost": 408901.0,
+        "total_payout": 157866.99,
+        "netto": -251034.01,
+        "best_payout": 97971.97,
+        "worst_streak": 41,
+        "hit_dates": [
+          "2024-03-09",
+          "2024-05-18",
+          "2024-10-26",
+          "2025-03-29"
+        ]
+      }
+    },
+    "value": {
+      "50": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 4094.5,
+        "total_payout": 0.0,
+        "netto": -4094.5,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "100": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 8553.0,
+        "total_payout": 0.0,
+        "netto": -8553.0,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "200": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 16309.5,
+        "total_payout": 0.0,
+        "netto": -16309.5,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "500": {
+        "roi": -1.0,
+        "hit_rate": 0.0,
+        "num_hits": 0,
+        "num_rounds": 97,
+        "total_cost": 40612.5,
+        "total_payout": 0.0,
+        "netto": -40612.5,
+        "best_payout": 0.0,
+        "worst_streak": 97,
+        "hit_dates": []
+      },
+      "1000": {
+        "roi": -0.9795,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 79481.0,
+        "total_payout": 1631.78,
+        "netto": -77849.22,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      },
+      "2000": {
+        "roi": -0.9898,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 160009.5,
+        "total_payout": 1631.78,
+        "netto": -158377.72,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      },
+      "5000": {
+        "roi": -0.9961,
+        "hit_rate": 0.0103,
+        "num_hits": 1,
+        "num_rounds": 97,
+        "total_cost": 422635.0,
+        "total_payout": 1631.78,
+        "netto": -421003.22,
+        "best_payout": 1631.78,
+        "worst_streak": 55,
+        "hit_dates": [
+          "2025-03-29"
+        ]
+      }
+    }
+  },
+  "selective_results": {
+    "minst_2_spikar": {
+      "snal": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 324.0,
+          "total_payout": 0.0,
+          "netto": -324.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 420.0,
+          "total_payout": 0.0,
+          "netto": -420.0
+        }
+      },
+      "balanserad": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 340.0,
+          "total_payout": 0.0,
+          "netto": -340.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 452.0,
+          "total_payout": 0.0,
+          "netto": -452.0
+        }
+      },
+      "brett": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 771.0,
+          "total_payout": 0.0,
+          "netto": -771.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 1326.0,
+          "total_payout": 0.0,
+          "netto": -1326.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 2496.0,
+          "total_payout": 0.0,
+          "netto": -2496.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 8100.0,
+          "total_payout": 0.0,
+          "netto": -8100.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 9828.0,
+          "total_payout": 0.0,
+          "netto": -9828.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 13500.0,
+          "total_payout": 0.0,
+          "netto": -13500.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 18036.0,
+          "total_payout": 0.0,
+          "netto": -18036.0
+        }
+      },
+      "skrall": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 782.0,
+          "total_payout": 0.0,
+          "netto": -782.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 1487.0,
+          "total_payout": 0.0,
+          "netto": -1487.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 3062.0,
+          "total_payout": 0.0,
+          "netto": -3062.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 7607.0,
+          "total_payout": 0.0,
+          "netto": -7607.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 15832.0,
+          "total_payout": 0.0,
+          "netto": -15832.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 32520.0,
+          "total_payout": 0.0,
+          "netto": -32520.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 73528.0,
+          "total_payout": 0.0,
+          "netto": -73528.0
+        }
+      },
+      "value": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 809.0,
+          "total_payout": 0.0,
+          "netto": -809.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 1683.0,
+          "total_payout": 0.0,
+          "netto": -1683.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 3233.5,
+          "total_payout": 0.0,
+          "netto": -3233.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 7922.5,
+          "total_payout": 0.0,
+          "netto": -7922.5
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 15807.0,
+          "total_payout": 0.0,
+          "netto": -15807.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 31739.5,
+          "total_payout": 0.0,
+          "netto": -31739.5
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 19,
+          "total_cost": 82990.0,
+          "total_payout": 0.0,
+          "netto": -82990.0
+        }
+      }
+    },
+    "minst_1_spik": {
+      "snal": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 1380.0,
+          "total_payout": 0.0,
+          "netto": -1380.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 1700.0,
+          "total_payout": 0.0,
+          "netto": -1700.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2148.0,
+          "total_payout": 0.0,
+          "netto": -2148.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2148.0,
+          "total_payout": 0.0,
+          "netto": -2148.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2148.0,
+          "total_payout": 0.0,
+          "netto": -2148.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2148.0,
+          "total_payout": 0.0,
+          "netto": -2148.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2148.0,
+          "total_payout": 0.0,
+          "netto": -2148.0
+        }
+      },
+      "balanserad": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 1460.0,
+          "total_payout": 0.0,
+          "netto": -1460.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 1812.0,
+          "total_payout": 0.0,
+          "netto": -1812.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2292.0,
+          "total_payout": 0.0,
+          "netto": -2292.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2292.0,
+          "total_payout": 0.0,
+          "netto": -2292.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2292.0,
+          "total_payout": 0.0,
+          "netto": -2292.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2292.0,
+          "total_payout": 0.0,
+          "netto": -2292.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2292.0,
+          "total_payout": 0.0,
+          "netto": -2292.0
+        }
+      },
+      "brett": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 1929.0,
+          "total_payout": 0.0,
+          "netto": -1929.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 3594.0,
+          "total_payout": 0.0,
+          "netto": -3594.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 7464.0,
+          "total_payout": 0.0,
+          "netto": -7464.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 23274.0,
+          "total_payout": 0.0,
+          "netto": -23274.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 35343.0,
+          "total_payout": 0.0,
+          "netto": -35343.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 45819.0,
+          "total_payout": 0.0,
+          "netto": -45819.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 67851.0,
+          "total_payout": 0.0,
+          "netto": -67851.0
+        }
+      },
+      "skrall": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2117.0,
+          "total_payout": 0.0,
+          "netto": -2117.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 4155.0,
+          "total_payout": 0.0,
+          "netto": -4155.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 8382.0,
+          "total_payout": 0.0,
+          "netto": -8382.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 21334.0,
+          "total_payout": 0.0,
+          "netto": -21334.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 41468.0,
+          "total_payout": 0.0,
+          "netto": -41468.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 86222.0,
+          "total_payout": 0.0,
+          "netto": -86222.0
+        },
+        "5000": {
+          "roi": -0.9967,
+          "hit_rate": 0.0192,
+          "num_hits": 1,
+          "num_rounds": 52,
+          "total_cost": 214097.0,
+          "total_payout": 702.77,
+          "netto": -213394.23
+        }
+      },
+      "value": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 2220.0,
+          "total_payout": 0.0,
+          "netto": -2220.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 4636.0,
+          "total_payout": 0.0,
+          "netto": -4636.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 8623.5,
+          "total_payout": 0.0,
+          "netto": -8623.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 21518.5,
+          "total_payout": 0.0,
+          "netto": -21518.5
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 42921.5,
+          "total_payout": 0.0,
+          "netto": -42921.5
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 85204.5,
+          "total_payout": 0.0,
+          "netto": -85204.5
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 52,
+          "total_cost": 226040.0,
+          "total_payout": 0.0,
+          "netto": -226040.0
+        }
+      }
+    },
+    "snitt_risk_under_30": {
+      "snal": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 884.0,
+          "total_payout": 0.0,
+          "netto": -884.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1364.0,
+          "total_payout": 0.0,
+          "netto": -1364.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1556.0,
+          "total_payout": 0.0,
+          "netto": -1556.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1684.0,
+          "total_payout": 0.0,
+          "netto": -1684.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1684.0,
+          "total_payout": 0.0,
+          "netto": -1684.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1684.0,
+          "total_payout": 0.0,
+          "netto": -1684.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1684.0,
+          "total_payout": 0.0,
+          "netto": -1684.0
+        }
+      },
+      "balanserad": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 932.0,
+          "total_payout": 0.0,
+          "netto": -932.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1444.0,
+          "total_payout": 0.0,
+          "netto": -1444.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1668.0,
+          "total_payout": 0.0,
+          "netto": -1668.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1796.0,
+          "total_payout": 0.0,
+          "netto": -1796.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1796.0,
+          "total_payout": 0.0,
+          "netto": -1796.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1796.0,
+          "total_payout": 0.0,
+          "netto": -1796.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1796.0,
+          "total_payout": 0.0,
+          "netto": -1796.0
+        }
+      },
+      "brett": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1254.0,
+          "total_payout": 0.0,
+          "netto": -1254.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 2472.0,
+          "total_payout": 0.0,
+          "netto": -2472.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 4756.5,
+          "total_payout": 0.0,
+          "netto": -4756.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 14566.5,
+          "total_payout": 0.0,
+          "netto": -14566.5
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 22383.0,
+          "total_payout": 0.0,
+          "netto": -22383.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 30996.0,
+          "total_payout": 0.0,
+          "netto": -30996.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 42336.0,
+          "total_payout": 0.0,
+          "netto": -42336.0
+        }
+      },
+      "skrall": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1377.0,
+          "total_payout": 0.0,
+          "netto": -1377.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 2702.0,
+          "total_payout": 0.0,
+          "netto": -2702.0
+        },
+        "200": {
+          "roi": -0.6853,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 5186.0,
+          "total_payout": 1631.78,
+          "netto": -3554.22
+        },
+        "500": {
+          "roi": -0.8827,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 13909.0,
+          "total_payout": 1631.78,
+          "netto": -12277.22
+        },
+        "1000": {
+          "roi": -0.9403,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 27354.0,
+          "total_payout": 1631.78,
+          "netto": -25722.22
+        },
+        "2000": {
+          "roi": -0.9719,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 58038.0,
+          "total_payout": 1631.78,
+          "netto": -56406.22
+        },
+        "5000": {
+          "roi": -0.9825,
+          "hit_rate": 0.0588,
+          "num_hits": 2,
+          "num_rounds": 34,
+          "total_cost": 133080.0,
+          "total_payout": 2334.55,
+          "netto": -130745.45
+        }
+      },
+      "value": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 1450.0,
+          "total_payout": 0.0,
+          "netto": -1450.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 2990.5,
+          "total_payout": 0.0,
+          "netto": -2990.5
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 5672.5,
+          "total_payout": 0.0,
+          "netto": -5672.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 34,
+          "total_cost": 14735.0,
+          "total_payout": 0.0,
+          "netto": -14735.0
+        },
+        "1000": {
+          "roi": -0.9436,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 28939.5,
+          "total_payout": 1631.78,
+          "netto": -27307.72
+        },
+        "2000": {
+          "roi": -0.9707,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 55747.0,
+          "total_payout": 1631.78,
+          "netto": -54115.22
+        },
+        "5000": {
+          "roi": -0.989,
+          "hit_rate": 0.0294,
+          "num_hits": 1,
+          "num_rounds": 34,
+          "total_cost": 147865.0,
+          "total_payout": 1631.78,
+          "netto": -146233.22
+        }
+      }
+    },
+    "snitt_risk_under_40": {
+      "snal": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 2276.0,
+          "total_payout": 0.0,
+          "netto": -2276.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 3684.0,
+          "total_payout": 0.0,
+          "netto": -3684.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4324.0,
+          "total_payout": 0.0,
+          "netto": -4324.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4708.0,
+          "total_payout": 0.0,
+          "netto": -4708.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4708.0,
+          "total_payout": 0.0,
+          "netto": -4708.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4708.0,
+          "total_payout": 0.0,
+          "netto": -4708.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4708.0,
+          "total_payout": 0.0,
+          "netto": -4708.0
+        }
+      },
+      "balanserad": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 2340.0,
+          "total_payout": 0.0,
+          "netto": -2340.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 3780.0,
+          "total_payout": 0.0,
+          "netto": -3780.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4452.0,
+          "total_payout": 0.0,
+          "netto": -4452.0
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4836.0,
+          "total_payout": 0.0,
+          "netto": -4836.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4836.0,
+          "total_payout": 0.0,
+          "netto": -4836.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4836.0,
+          "total_payout": 0.0,
+          "netto": -4836.0
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 4836.0,
+          "total_payout": 0.0,
+          "netto": -4836.0
+        }
+      },
+      "brett": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 2883.0,
+          "total_payout": 0.0,
+          "netto": -2883.0
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 5664.0,
+          "total_payout": 0.0,
+          "netto": -5664.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 11527.5,
+          "total_payout": 0.0,
+          "netto": -11527.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 34857.0,
+          "total_payout": 0.0,
+          "netto": -34857.0
+        },
+        "1000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 55998.0,
+          "total_payout": 0.0,
+          "netto": -55998.0
+        },
+        "2000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 79474.5,
+          "total_payout": 0.0,
+          "netto": -79474.5
+        },
+        "5000": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 110254.5,
+          "total_payout": 0.0,
+          "netto": -110254.5
+        }
+      },
+      "skrall": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 3211.5,
+          "total_payout": 0.0,
+          "netto": -3211.5
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 6375.0,
+          "total_payout": 0.0,
+          "netto": -6375.0
+        },
+        "200": {
+          "roi": -0.869,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 12453.0,
+          "total_payout": 1631.78,
+          "netto": -10821.22
+        },
+        "500": {
+          "roi": -0.9509,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 33202.0,
+          "total_payout": 1631.78,
+          "netto": -31570.22
+        },
+        "1000": {
+          "roi": -0.9749,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 65096.0,
+          "total_payout": 1631.78,
+          "netto": -63464.22
+        },
+        "2000": {
+          "roi": -0.2702,
+          "hit_rate": 0.025,
+          "num_hits": 2,
+          "num_rounds": 80,
+          "total_cost": 136486.0,
+          "total_payout": 99603.75,
+          "netto": -36882.25
+        },
+        "5000": {
+          "roi": -0.53,
+          "hit_rate": 0.05,
+          "num_hits": 4,
+          "num_rounds": 80,
+          "total_cost": 335894.0,
+          "total_payout": 157866.99,
+          "netto": -178027.01
+        }
+      },
+      "value": {
+        "50": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 3403.5,
+          "total_payout": 0.0,
+          "netto": -3403.5
+        },
+        "100": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 7079.0,
+          "total_payout": 0.0,
+          "netto": -7079.0
+        },
+        "200": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 13511.5,
+          "total_payout": 0.0,
+          "netto": -13511.5
+        },
+        "500": {
+          "roi": -1.0,
+          "hit_rate": 0.0,
+          "num_hits": 0,
+          "num_rounds": 80,
+          "total_cost": 33552.5,
+          "total_payout": 0.0,
+          "netto": -33552.5
+        },
+        "1000": {
+          "roi": -0.9748,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 64851.0,
+          "total_payout": 1631.78,
+          "netto": -63219.22
+        },
+        "2000": {
+          "roi": -0.9875,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 130809.5,
+          "total_payout": 1631.78,
+          "netto": -129177.72
+        },
+        "5000": {
+          "roi": -0.9954,
+          "hit_rate": 0.0125,
+          "num_hits": 1,
+          "num_rounds": 80,
+          "total_cost": 351947.5,
+          "total_payout": 1631.78,
+          "netto": -350315.72
+        }
+      }
+    }
+  },
+  "best_combos": [
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "skrall",
+      "budget": 2000,
+      "roi": -0.2702,
+      "hits": 2,
+      "rounds": 80,
+      "netto": -36882.25
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "skrall",
+      "budget": 2000,
+      "roi": -0.3805,
+      "hits": 2,
+      "rounds": 97,
+      "netto": -61168.25
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "skrall",
+      "budget": 5000,
+      "roi": -0.53,
+      "hits": 4,
+      "rounds": 80,
+      "netto": -178027.01
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "skrall",
+      "budget": 5000,
+      "roi": -0.6139,
+      "hits": 4,
+      "rounds": 97,
+      "netto": -251034.01
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "skrall",
+      "budget": 200,
+      "roi": -0.6853,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -3554.22
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "skrall",
+      "budget": 200,
+      "roi": -0.869,
+      "hits": 1,
+      "rounds": 80,
+      "netto": -10821.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "skrall",
+      "budget": 500,
+      "roi": -0.8827,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -12277.22
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "skrall",
+      "budget": 200,
+      "roi": -0.8935,
+      "hits": 1,
+      "rounds": 97,
+      "netto": -13691.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "skrall",
+      "budget": 1000,
+      "roi": -0.9403,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -25722.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "value",
+      "budget": 1000,
+      "roi": -0.9436,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -27307.72
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "skrall",
+      "budget": 500,
+      "roi": -0.9509,
+      "hits": 1,
+      "rounds": 80,
+      "netto": -31570.22
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "skrall",
+      "budget": 500,
+      "roi": -0.959,
+      "hits": 1,
+      "rounds": 97,
+      "netto": -38216.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "value",
+      "budget": 2000,
+      "roi": -0.9707,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -54115.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "skrall",
+      "budget": 2000,
+      "roi": -0.9719,
+      "hits": 1,
+      "rounds": 34,
+      "netto": -56406.22
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "value",
+      "budget": 1000,
+      "roi": -0.9748,
+      "hits": 1,
+      "rounds": 80,
+      "netto": -63219.22
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "skrall",
+      "budget": 1000,
+      "roi": -0.9749,
+      "hits": 1,
+      "rounds": 80,
+      "netto": -63464.22
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "skrall",
+      "budget": 1000,
+      "roi": -0.9793,
+      "hits": 1,
+      "rounds": 97,
+      "netto": -77328.22
+    },
+    {
+      "filter": "alla_omgangar",
+      "strategy": "value",
+      "budget": 1000,
+      "roi": -0.9795,
+      "hits": 1,
+      "rounds": 97,
+      "netto": -77849.22
+    },
+    {
+      "filter": "snitt_risk_under_30",
+      "strategy": "skrall",
+      "budget": 5000,
+      "roi": -0.9825,
+      "hits": 2,
+      "rounds": 34,
+      "netto": -130745.45
+    },
+    {
+      "filter": "snitt_risk_under_40",
+      "strategy": "value",
+      "budget": 2000,
+      "roi": -0.9875,
+      "hits": 1,
+      "rounds": 80,
+      "netto": -129177.72
+    }
+  ]
+}

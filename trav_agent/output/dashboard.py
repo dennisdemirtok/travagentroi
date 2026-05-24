@@ -16,23 +16,38 @@ def _esc(s: str) -> str:
     return html.escape(str(s))
 
 
+# A/B/C/D ranking display — maps internal recommendation to tier label
+RANK_LABEL = {
+    "spik": "A",
+    "2-val": "B",
+    "3-val": "B",
+    "gardering": "C",
+    "strykning": "D",
+}
+
+
+def _rank_label(rec: str) -> str:
+    """Map recommendation to A/B/C/D tier label for display."""
+    return RANK_LABEL.get(rec, "D")
+
+
 def _rec_color(rec: str) -> str:
     return {
-        "spik": "#92400e",
-        "2-val": "#1e40af",
-        "3-val": "#6b21a8",
-        "gardering": "#475569",
-        "strykning": "#991b1b",
+        "spik": "#15803d",       # A = green
+        "2-val": "#1e40af",      # B = blue
+        "3-val": "#1e40af",      # B = blue
+        "gardering": "#b45309",  # C = amber
+        "strykning": "#991b1b",  # D = red
     }.get(rec, "#64748b")
 
 
 def _rec_bg(rec: str) -> str:
     return {
-        "spik": "#fef3c7",
-        "2-val": "#dbeafe",
-        "3-val": "#f3e8ff",
-        "gardering": "#f1f5f9",
-        "strykning": "#fee2e2",
+        "spik": "#dcfce7",       # A = green bg
+        "2-val": "#dbeafe",      # B = blue bg
+        "3-val": "#dbeafe",      # B = blue bg
+        "gardering": "#fef3c7",  # C = amber bg
+        "strykning": "#fee2e2",  # D = red bg
     }.get(rec, "rgba(0,0,0,0.04)")
 
 
@@ -586,7 +601,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
-            f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_esc(rec)}</span></td>'
+            f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}</span></td>'
             f'{result_cell}'
             f'<td class="driver">{_esc(e.driver_name)}</td>'
             f'<td class="trend-cell">{trend_cell}{sparkline}</td>'
@@ -674,7 +689,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         f'<thead><tr>'
         f'<th>#</th><th>Hast</th><th>Poang</th><th>Streck</th>'
         f'{"<th>Proffs</th>" if proffs_horses else ""}'
-        f'<th>Rek</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
+        f'<th>Rank</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
         f'</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
@@ -700,7 +715,7 @@ def _summary_html(game_round: GameRound) -> str:
         top = sorted_entries[0]
         gardering = [
             e for e in sorted_entries[1:]
-            if e.recommendation in ("2-val", "3-val")
+            if e.recommendation in ("2-val", "3-val", "gardering")
         ]
         gard_str = ", ".join(
             f"{e.post_position} {_esc(e.horse.name[:10])}"
@@ -739,9 +754,9 @@ def _summary_html(game_round: GameRound) -> str:
             if winner_entry:
                 rec_w = winner_entry.recommendation
                 if rec_w == "spik" or (top.recommendation == "spik" and top.post_position == winner_num):
-                    result_badge = '<span class="hit-badge" style="font-size:.7rem">&#10003;</span>'
+                    result_badge = '<span class="hit-badge" style="font-size:.7rem">&#10003;</span>'  # A-rank hit
                 elif rec_w in ("2-val", "3-val", "gardering"):
-                    result_badge = '<span class="partial-badge" style="font-size:.7rem">~</span>'
+                    result_badge = '<span class="partial-badge" style="font-size:.7rem">~</span>'  # B/C-rank
                 else:
                     result_badge = '<span class="miss-badge" style="font-size:.7rem">&#10007;</span>'
 
@@ -774,7 +789,7 @@ def _summary_html(game_round: GameRound) -> str:
             f'<div class="orc-pick">'
             f'<div class="orc-pick-main">'
             f'<strong>{top.post_position} {_esc(top.horse.name[:16])}</strong>'
-            f' <span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem;padding:.15rem .5rem">{_esc(top.recommendation)}</span>'
+            f' <span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem;padding:.15rem .5rem">{_rank_label(top.recommendation)}</span>'
             f'{result_badge}'
             f'</div>'
             f'<div class="orc-driver">{driver}</div>'
@@ -1006,6 +1021,214 @@ def _sidebar_html(game_round: GameRound, has_system: bool = False, has_backlog: 
     )
 
 
+def _bet_view_html(game_round: GameRound) -> str:
+    """Build the Bet recommendations view with vinnarspel candidates and result tracking.
+
+    Shows:
+    1. Active vinnarspel candidates for current round (model rank≤2, streck 5-20%)
+    2. Result tracking for finished rounds
+    3. Running P&L summary
+    """
+    gt = _esc(game_round.game_type)
+    date_str = str(game_round.round_date) if game_round.round_date else ""
+    is_finished = game_round.is_finished
+
+    # Collect vinnarspel candidates
+    candidates = []
+    for race in game_round.races:
+        sorted_entries = sorted(
+            race.active_entries,
+            key=lambda e: e.super_score,
+            reverse=True,
+        )
+        for rank_idx, e in enumerate(sorted_entries):
+            model_rank = rank_idx + 1
+            if model_rank > 2:
+                break
+            if (
+                e.bet_percentage is not None
+                and 0.05 <= e.bet_percentage <= 0.20
+            ):
+                odds_est = round(1 / e.bet_percentage, 1) if e.bet_percentage > 0 else 0
+
+                # Check result if finished
+                won = False
+                actual_odds = 0.0
+                placement = "-"
+                if is_finished and race.result_order:
+                    plac = 0
+                    for pos, num in enumerate(race.result_order, 1):
+                        if num == e.post_position:
+                            plac = pos
+                            break
+                    if plac > 0:
+                        placement = str(plac)
+                    else:
+                        placement = "-"
+                    won = plac == 1
+                    if won:
+                        # Try to get actual final odds
+                        actual_odds = odds_est  # fallback to estimated
+
+                candidates.append({
+                    "race_num": race.race_number,
+                    "name": e.horse.name,
+                    "post": e.post_position,
+                    "score": e.super_score,
+                    "streck": e.bet_percentage,
+                    "rank": model_rank,
+                    "odds_est": odds_est,
+                    "driver": e.driver_name or "",
+                    "won": won,
+                    "placement": placement,
+                    "actual_odds": actual_odds,
+                })
+
+    # Build candidate rows
+    rows = []
+    total_bet = 0
+    total_return = 0
+    wins = 0
+    for c in candidates:
+        total_bet += 500
+        rank_badge = "🥇" if c["rank"] == 1 else "🥈"
+        streck_pct = c["streck"] * 100
+
+        if is_finished:
+            if c["won"]:
+                wins += 1
+                win_amount = 500 * c["actual_odds"]
+                total_return += win_amount
+                result_cell = f'<td class="bet-result bet-win">✅ 1:a — +{win_amount - 500:,.0f}kr</td>'
+                row_class = " bet-row-win"
+            else:
+                result_cell = f'<td class="bet-result bet-loss">❌ {c["placement"]}</td>'
+                row_class = " bet-row-loss"
+        else:
+            result_cell = '<td class="bet-result bet-pending">⏳ Väntar</td>'
+            row_class = ""
+
+        rows.append(
+            f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+            f'<td class="bet-race"><strong>Avd {c["race_num"]}</strong></td>'
+            f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
+            f'<td class="bet-score">{c["score"]:.0f}</td>'
+            f'<td class="bet-streck">{streck_pct:.0f}%</td>'
+            f'<td class="bet-odds">~{c["odds_est"]:.1f}x</td>'
+            f'<td class="bet-driver">{_esc(c["driver"][:15])}</td>'
+            f'{result_cell}'
+            f'</tr>'
+        )
+
+    count = len(candidates)
+
+    # P&L summary
+    if is_finished and count > 0:
+        pnl = total_return - total_bet
+        roi = (pnl / total_bet * 100) if total_bet > 0 else 0
+        pnl_color = "#15803d" if pnl >= 0 else "#dc2626"
+        pnl_html = (
+            f'<div class="bet-pnl">'
+            f'<div class="bet-pnl-item">'
+            f'<span class="bet-pnl-label">Satsat</span>'
+            f'<span class="bet-pnl-val">{total_bet:,}kr</span>'
+            f'</div>'
+            f'<div class="bet-pnl-item">'
+            f'<span class="bet-pnl-label">Tillbaka</span>'
+            f'<span class="bet-pnl-val">{total_return:,.0f}kr</span>'
+            f'</div>'
+            f'<div class="bet-pnl-item">'
+            f'<span class="bet-pnl-label">Resultat</span>'
+            f'<span class="bet-pnl-val" style="color:{pnl_color};font-weight:800">'
+            f'{pnl:+,.0f}kr ({roi:+.0f}%)</span>'
+            f'</div>'
+            f'<div class="bet-pnl-item">'
+            f'<span class="bet-pnl-label">Vinster</span>'
+            f'<span class="bet-pnl-val">{wins}/{count}</span>'
+            f'</div>'
+            f'</div>'
+        )
+    else:
+        pnl_html = ""
+
+    # Status banner
+    if is_finished:
+        status_icon = "✅"
+        status_text = "Avslutad"
+        status_class = "finished"
+    else:
+        status_icon = "🔴"
+        status_text = "Live — spela innan start!"
+        status_class = "live"
+
+    # Strategy info box
+    strategy_info = (
+        f'<div class="bet-strategy-card">'
+        f'<div class="bet-strategy-header">'
+        f'<span class="bet-strategy-title">Chansspik Vinnarspel</span>'
+        f'<span class="bet-strategy-badge">+48% ROI</span>'
+        f'</div>'
+        f'<div class="bet-strategy-desc">'
+        f'Modell rank A-B + streck 5-20%. Flat bet 500kr vinnare per kandidat.'
+        f'</div>'
+        f'<div class="bet-strategy-stats">'
+        f'<div class="bet-strategy-stat">'
+        f'<span class="bet-strategy-num">72/343</span>'
+        f'<span class="bet-strategy-lbl">Vinster (12 mån)</span>'
+        f'</div>'
+        f'<div class="bet-strategy-stat">'
+        f'<span class="bet-strategy-num">+82 053kr</span>'
+        f'<span class="bet-strategy-lbl">Total vinst</span>'
+        f'</div>'
+        f'<div class="bet-strategy-stat">'
+        f'<span class="bet-strategy-num">21.0%</span>'
+        f'<span class="bet-strategy-lbl">Vinstfrekvens</span>'
+        f'</div>'
+        f'<div class="bet-strategy-stat">'
+        f'<span class="bet-strategy-num">7.0x</span>'
+        f'<span class="bet-strategy-lbl">Snittodds</span>'
+        f'</div>'
+        f'</div>'
+        f'</div>'
+    )
+
+    if not candidates:
+        return (
+            f'{strategy_info}'
+            f'<div class="bet-empty">'
+            f'<div style="font-size:2rem;margin-bottom:8px">🎰</div>'
+            f'<h3>Inga vinnarspel denna omgång</h3>'
+            f'<p>Ingen häst kvalificerar (modell rank 1-2 + streck 5-20%)</p>'
+            f'</div>'
+        )
+
+    return (
+        f'{strategy_info}'
+        f'<div class="bet-round-card">'
+        f'<div class="bet-round-header">'
+        f'<div class="bet-round-title">'
+        f'<span class="bet-round-icon {status_class}">{status_icon}</span>'
+        f'<h3>{gt} — {date_str}</h3>'
+        f'<span class="bet-status-badge {status_class}">{status_text}</span>'
+        f'</div>'
+        f'<div class="bet-round-summary">'
+        f'{count} vinnarspel &middot; Insats: {count * 500:,}kr'
+        f'</div>'
+        f'</div>'
+        f'{pnl_html}'
+        f'<div class="table-wrap">'
+        f'<table class="bet-table">'
+        f'<thead><tr>'
+        f'<th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th>'
+        f'<th>Odds</th><th>Kusk</th><th>Resultat</th>'
+        f'</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table>'
+        f'</div>'
+        f'</div>'
+    )
+
+
 def _round_dropdown_html(
     current_key: str,
     available_rounds: list[tuple[str, str, str, bool, str]] | None = None,
@@ -1054,7 +1277,7 @@ def _accuracy_html(game_round: GameRound) -> str:
         actual_top3 = set(race.result_order[:3])
         our_top3_nums = {e.post_position for e in sorted_entries[:3]}
 
-        # Spik check
+        # A-rank check (former "spik")
         spik_entries = [e for e in sorted_entries if e.recommendation == "spik"]
         if spik_entries:
             spik_attempts += 1
@@ -1069,7 +1292,7 @@ def _accuracy_html(game_round: GameRound) -> str:
         winner_entry = next(
             (e for e in sorted_entries if e.post_position == winner_num), None
         )
-        if winner_entry and winner_entry.recommendation != "strykning":
+        if winner_entry and winner_entry.recommendation != "strykning":  # Not D-rank
             covered_winners += 1
 
         # Top 3 overlap
@@ -1110,7 +1333,7 @@ def _accuracy_html(game_round: GameRound) -> str:
         f'<div class="accuracy-grid">'
         f'<div class="accuracy-stat">'
         f'<div class="big-num">{spik_wins}/{spik_attempts}</div>'
-        f'<div class="label">Spikar rätt</div>'
+        f'<div class="label">A-rank rätt</div>'
         f'<div class="sub">{spik_pct}</div></div>'
         f'<div class="accuracy-stat">'
         f'<div class="big-num">{top1_in_top3}/{total_races}</div>'
@@ -1130,7 +1353,7 @@ def _accuracy_html(game_round: GameRound) -> str:
     )
 
 
-def _system_html(game_round: GameRound) -> str:
+def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
     """Generera system-rekommendation baserat på SystemGenerator."""
     try:
         from ..betting.system_generator import SystemGenerator
@@ -1176,7 +1399,7 @@ def _system_html(game_round: GameRound) -> str:
                 for n, name in zip(rp.picks, rp.pick_names)
             )
 
-            spik_badge = ' <span class="spik-badge">🔒 SPIK</span>' if rp.num_picks == 1 else ''
+            spik_badge = ' <span class="spik-badge">🔒 A</span>' if rp.num_picks == 1 else ''
 
             pick_rows.append(
                 f'<tr>'
@@ -1216,7 +1439,7 @@ def _system_html(game_round: GameRound) -> str:
         )
 
     # ── Dennis-method system builder ──
-    dennis_html = _dennis_system_html(game_round)
+    dennis_html = _dennis_system_html(game_round, proffs_data=proffs_data)
 
     return (
         f'<div id="system" class="summary-card system-section">'
@@ -1230,7 +1453,7 @@ def _system_html(game_round: GameRound) -> str:
     )
 
 
-def _dennis_system_html(game_round: GameRound) -> str:
+def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
     """System-rekommendationer — Spike Easiest (säker) + Chansspik (25-100k)."""
     try:
         from ..analysis.system_builder import build_system
@@ -1316,7 +1539,7 @@ def _dennis_system_html(game_round: GameRound) -> str:
     cards = []
 
     for budget in budgets:
-        plan = build_system(game_round, budget=budget, strategy="optimal")
+        plan = build_system(game_round, budget=budget, strategy="optimal", proffs_data=proffs_data)
 
         pick_rows = []
         for leg in sorted(plan.legs, key=lambda l: l.race_number):
@@ -1332,9 +1555,9 @@ def _dennis_system_html(game_round: GameRound) -> str:
             )
 
             type_badge = {
-                "spik": '\U0001f512 SPIK',
-                "kort": '2-val',
-                "medel": '3-val',
+                "spik": '\U0001f512 A',
+                "kort": 'B',
+                "medel": 'C',
                 "bred": f'{leg.num_picks}-val',
             }.get(leg.leg_type, leg.leg_type)
 
@@ -2054,17 +2277,17 @@ def _backlog_html(
 
 
 def _ranking_html(game_round: GameRound) -> str:
-    """Create compact ranking table grouping horses by tier (A/B/BC/C/D) per race."""
+    """Create compact ranking table grouping horses by tier (A/B/C/D) per race."""
     import json as _json
 
     TIER_MAP = {
         "spik": "A",
         "2-val": "B",
-        "3-val": "BC",
+        "3-val": "B",
         "gardering": "C",
         "strykning": "D",
     }
-    TIER_ORDER = ["A", "B", "BC", "C", "D"]
+    TIER_ORDER = ["A", "B", "C", "D"]
     gt = _esc(game_round.game_type)
 
     rows = []
@@ -2101,7 +2324,6 @@ def _ranking_html(game_round: GameRound) -> str:
             "race": f"{gt}-{race.race_number}",
             "A": tiers["A"],
             "B": tiers["B"],
-            "BC": tiers["BC"],
             "C": tiers["C"],
             "D": tiers["D"],
         }
@@ -2118,7 +2340,6 @@ def _ranking_html(game_round: GameRound) -> str:
         f'<th class="rank-th-race">Lopp</th>'
         f'<th class="rank-th rank-th-a">A</th>'
         f'<th class="rank-th rank-th-b">B</th>'
-        f'<th class="rank-th rank-th-bc">BC</th>'
         f'<th class="rank-th rank-th-c">C</th>'
         f'<th class="rank-th rank-th-d">D</th>'
         f'</tr></thead>'
@@ -2144,7 +2365,7 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
     if not sources:
         return ""
 
-    TIER_POINTS = {"A": 4, "B": 3, "BC": 2, "C": 1, "D": 0}
+    TIER_POINTS = {"A": 4, "B": 3, "C": 2, "D": 0}
     SOURCE_WEIGHTS = {
         "model": 3.0, "sharps_berglund": 2.5, "sharps_jensa": 2.0,
         "expressen_edholm": 2.0, "travcash": 1.5,
@@ -2156,7 +2377,7 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
     for src_key in sources:
         if src_key not in SOURCE_WEIGHTS and src_key != "expressen_tranarsnack":
             SOURCE_WEIGHTS[src_key] = 1.5
-    TIER_ORDER = ["A", "B", "BC", "C", "D"]
+    TIER_ORDER = ["A", "B", "C", "D"]
     gt = _esc(game_round.game_type)
 
     # -- Weight legend computation --
@@ -2195,11 +2416,9 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
             if pct < 0.15:
                 tier = "A"
                 model_a_picks.add(num)
-            elif pct < 0.35:
+            elif pct < 0.40:
                 tier = "B"
-            elif pct < 0.55:
-                tier = "BC"
-            elif pct < 0.80:
+            elif pct < 0.70:
                 tier = "C"
             else:
                 tier = "D"
@@ -2227,11 +2446,9 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
                         p = j / tot if tot else 0
                         if p < 0.15:
                             tier_map[num] = "A"
-                        elif p < 0.35:
+                        elif p < 0.40:
                             tier_map[num] = "B"
-                        elif p < 0.55:
-                            tier_map[num] = "BC"
-                        elif p < 0.80:
+                        elif p < 0.70:
                             tier_map[num] = "C"
                         else:
                             tier_map[num] = "D"
@@ -2274,11 +2491,9 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
             p = j / tot_h if tot_h else 0
             if p < 0.15:
                 tiers["A"].append(num)
-            elif p < 0.35:
+            elif p < 0.40:
                 tiers["B"].append(num)
-            elif p < 0.55:
-                tiers["BC"].append(num)
-            elif p < 0.80:
+            elif p < 0.70:
                 tiers["C"].append(num)
             else:
                 tiers["D"].append(num)
@@ -2380,7 +2595,6 @@ def _consensus_ranking_html(game_round: GameRound, tips_raw: dict | None = None)
         f'<th class="rank-th-race">Lopp</th>'
         f'<th class="rank-th rank-th-a">A</th>'
         f'<th class="rank-th rank-th-b">B</th>'
-        f'<th class="rank-th rank-th-bc">BC</th>'
         f'<th class="rank-th rank-th-c">C</th>'
         f'<th class="rank-th rank-th-d">D</th>'
         f'<th class="rank-th rank-th-agree" title="Modell vs experter: enas eller oeniga om A-tier">'
@@ -2436,12 +2650,13 @@ def generate_dashboard_html(
     summary = _summary_html(game_round)
     ranking = _ranking_html(game_round)
     consensus_ranking = _consensus_ranking_html(game_round, tips_raw)
-    system_section = _system_html(game_round)
+    system_section = _system_html(game_round, proffs_data=proffs_data)
     stats_section = _stats_html(backlog_data)
     backlog_section = _backlog_html(game_round, backlog_data)
     accuracy = _accuracy_html(game_round)
     risk_bar = _risk_summary_bar(game_round)
     winbet_summary = _vinnarspel_summary_html(game_round)
+    bet_view = _bet_view_html(game_round)
 
     current_key = f"{game_round.game_type}/{game_round.round_date}"
 
@@ -2771,6 +2986,67 @@ text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:2px
 .winbet-footnote{{margin-top:10px;font-size:.75rem;color:#94a3b8;font-style:italic}}
 .orc-winbet{{background:rgba(139,92,246,0.08);color:#7c3aed;font-size:.72rem;font-weight:600;
 padding:4px 8px;border-radius:6px;margin-top:6px;border:1px solid rgba(139,92,246,0.15)}}
+
+/* ═══ Bet View ═══ */
+.bet-view-container{{max-width:900px;margin:0 auto;padding:0 8px}}
+.bet-strategy-card{{background:#fff;border-radius:12px;border:1px solid #e5e7eb;
+padding:20px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.bet-strategy-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}}
+.bet-strategy-title{{font-weight:800;font-size:1.1rem;color:#1e293b}}
+.bet-strategy-badge{{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;
+padding:.3rem 1rem;border-radius:20px;font-size:.82rem;font-weight:700}}
+.bet-strategy-desc{{font-size:.85rem;color:#6b7280;margin-bottom:14px}}
+.bet-strategy-stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
+.bet-strategy-stat{{text-align:center;background:#f8f9fb;border-radius:8px;padding:10px 6px}}
+.bet-strategy-num{{display:block;font-weight:800;font-size:1.05rem;color:#1e293b;
+font-family:'JetBrains Mono',monospace}}
+.bet-strategy-lbl{{display:block;font-size:.7rem;color:#6b7280;margin-top:2px;text-transform:uppercase;
+letter-spacing:.04em}}
+
+.bet-round-card{{background:#fff;border-radius:12px;border:1px solid #e5e7eb;
+padding:20px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}
+.bet-round-header{{margin-bottom:16px}}
+.bet-round-title{{display:flex;align-items:center;gap:10px}}
+.bet-round-title h3{{font-size:1.1rem;font-weight:700;color:#1e293b;margin:0}}
+.bet-round-icon{{font-size:1.2rem}}
+.bet-round-icon.live{{animation:pulse-glow 2s ease-in-out infinite}}
+.bet-status-badge{{padding:.2rem .7rem;border-radius:20px;font-size:.72rem;font-weight:600}}
+.bet-status-badge.live{{background:#fef2f2;color:#dc2626;border:1px solid rgba(239,68,68,0.2)}}
+.bet-status-badge.finished{{background:#f0fdf4;color:#15803d;border:1px solid rgba(34,197,94,0.2)}}
+.bet-round-summary{{font-size:.85rem;color:#6b7280;margin-top:6px}}
+
+.bet-pnl{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;
+padding:14px;background:#f8f9fb;border-radius:10px}}
+.bet-pnl-item{{text-align:center}}
+.bet-pnl-label{{display:block;font-size:.7rem;color:#6b7280;text-transform:uppercase;
+letter-spacing:.04em;margin-bottom:2px}}
+.bet-pnl-val{{display:block;font-weight:700;font-size:.95rem;color:#1e293b;
+font-family:'JetBrains Mono',monospace}}
+
+.bet-table{{width:100%;border-collapse:collapse;font-size:.85rem}}
+.bet-table thead th{{text-align:left;font-weight:600;color:#6b7280;font-size:.72rem;
+text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:2px solid #e5e7eb}}
+.bet-table tbody td{{padding:10px;border-bottom:1px solid #f3f4f6}}
+.bet-candidate-row:hover{{background:#f8f9fb}}
+.bet-row-win{{background:rgba(34,197,94,0.04)}}
+.bet-row-loss{{background:rgba(239,68,68,0.02)}}
+.bet-result{{font-weight:600;white-space:nowrap}}
+.bet-win{{color:#15803d}}
+.bet-loss{{color:#94a3b8}}
+.bet-pending{{color:#6b7280}}
+.bet-horse{{font-weight:500}}
+.bet-score{{font-weight:700;font-family:'JetBrains Mono',monospace}}
+.bet-streck{{color:#6b7280}}
+.bet-odds{{font-family:'JetBrains Mono',monospace;font-weight:600;color:#7c3aed}}
+.bet-driver{{color:#6b7280;font-size:.8rem}}
+.bet-empty{{text-align:center;padding:60px 20px;color:#94a3b8}}
+.bet-empty h3{{color:#1e293b;margin-bottom:8px}}
+.bet-empty p{{font-size:.85rem;max-width:400px;margin:0 auto}}
+
+@media(max-width:768px){{
+  .bet-strategy-stats{{grid-template-columns:repeat(2,1fr)}}
+  .bet-pnl{{grid-template-columns:repeat(2,1fr)}}
+}}
 .value-picks{{background:rgba(245,166,35,0.04);border:1px solid rgba(245,166,35,0.12);border-radius:10px;
 padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#b45309}}
 .proffs-cell{{font-size:.8rem;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding:4px 6px !important}}
@@ -2959,7 +3235,7 @@ letter-spacing:.07em;text-align:center;border-bottom:2px solid #e5e7eb}}
 .rank-th-race{{text-align:left !important;color:#64748b}}
 .rank-th-a{{color:#92400e;background:rgba(254,243,199,0.5)}}
 .rank-th-b{{color:#1e40af;background:rgba(219,234,254,0.5)}}
-.rank-th-bc{{color:#6b21a8;background:rgba(243,232,255,0.5)}}
+/* removed BC tier */
 .rank-th-c{{color:#475569;background:rgba(241,245,249,0.5)}}
 .rank-th-d{{color:#991b1b;background:rgba(254,226,226,0.4)}}
 .ranking-table td{{padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;vertical-align:middle}}
@@ -2971,10 +3247,9 @@ font-family:'JetBrains Mono',monospace;white-space:nowrap}}
 .rank-pill{{display:inline-flex;align-items:center;justify-content:center;
 min-width:24px;height:22px;padding:0 6px;border-radius:20px;font-size:.72rem;
 font-weight:600;margin:1px 2px;font-family:'JetBrains Mono',monospace}}
-.rank-pill.rank-a{{background:#fef3c7;color:#92400e}}
+.rank-pill.rank-a{{background:#dcfce7;color:#15803d}}
 .rank-pill.rank-b{{background:#dbeafe;color:#1e40af}}
-.rank-pill.rank-bc{{background:#f3e8ff;color:#6b21a8}}
-.rank-pill.rank-c{{background:#f1f5f9;color:#475569}}
+.rank-pill.rank-c{{background:#fef3c7;color:#b45309}}
 .rank-pill.rank-d{{background:#fee2e2;color:#991b1b}}
 
 /* Weight legend & agreement indicator */
@@ -3393,6 +3668,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   <div class="nav-brand">Kungens <span>Trav</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="nav-tab" data-view="bet" onclick="showView('bet')">Bet</button>
     <button class="nav-tab" data-view="agent" onclick="showView('agent')">Agent</button>
     <button class="nav-tab" data-view="backtest" onclick="showView('backtest')">Backtest</button>
   </div>
@@ -3458,6 +3734,13 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
     {summary}
   </section>
   {race_sections}
+</div>
+
+<!-- ═══ Bet View ═══ -->
+<div class="view" id="view-bet">
+  <div class="bet-view-container">
+    {bet_view}
+  </div>
 </div>
 
 <!-- ═══ Agent View ═══ -->
@@ -4092,7 +4375,7 @@ function formatChatMsg(text){{
       html+='<tr>';
       cells.forEach(c=>{{
         let cv=c.trim();
-        const tierMatch=cv.match(/^([A-D]|BC)$/);
+        const tierMatch=cv.match(/^([A-D])$/);
         if(tierMatch){{cv='<span class="rank-pill rank-'+tierMatch[1].toLowerCase()+'">'+cv+'</span>';}}
         html+='<td>'+cv+'</td>';
       }});
@@ -4268,12 +4551,12 @@ function renderTipsPreview(data){{
   const container=document.getElementById('tips-preview-data');
   let html='<h4>Rankings</h4>';
   if(data.rankings){{
-    html+='<table class="tips-preview-table"><thead><tr><th>Lopp</th><th>A</th><th>B</th><th>BC</th><th>C</th><th>D</th></tr></thead><tbody>';
+    html+='<table class="tips-preview-table"><thead><tr><th>Lopp</th><th>A</th><th>B</th><th>C</th><th>D</th></tr></thead><tbody>';
     for(const[race,tiers] of Object.entries(data.rankings)){{
       html+='<tr><td><strong>'+race+'</strong></td>';
       html+='<td>'+(tiers.A||'—')+'</td>';
       html+='<td>'+(tiers.B||'—')+'</td>';
-      html+='<td>'+(tiers.BC||'—')+'</td>';
+      /* BC tier removed */
       html+='<td>'+(tiers.C||'—')+'</td>';
       html+='<td>'+(tiers.D||'—')+'</td></tr>';
     }}
@@ -4390,6 +4673,10 @@ function removeCustomSource(sourceKey){{
   <button class="active" data-view="dashboard" onclick="showView('dashboard');updateMobileNav(this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     Dashboard
+  </button>
+  <button data-view="bet" onclick="showView('bet');updateMobileNav(this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12m-4-8h8"/></svg>
+    Bet
   </button>
   <button data-view="agent" onclick="showView('agent');updateMobileNav(this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>

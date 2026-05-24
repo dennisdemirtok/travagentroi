@@ -501,6 +501,7 @@ def build_system(
     budget: float = 300.0,
     row_price: Optional[float] = None,
     strategy: str = "optimal",
+    proffs_data: Optional[dict] = None,
 ) -> SystemPlan:
     """Bygg system — den ENDA bevisade strategin.
 
@@ -510,7 +511,8 @@ def build_system(
     1. Beräkna svårighetsgrad per lopp (predict_difficulty)
     2. Spike det lättaste loppet (1 val)
     3. Alla andra lopp: 4 val (topp 4 enligt modellen)
-    4. Trimma till budget om nödvändigt
+    4. Proffs rescue: om proffs rank 1-3 häst ej bland picks, byt ut lägsta pick
+    5. Trimma till budget om nödvändigt
 
     Resultat (336 omgångar):
     - 300kr: 18 hits (5.4%), +112% ROI, +101k profit
@@ -564,6 +566,59 @@ def build_system(
             reverse=True,
         )
         selected = [e.post_position for e in sorted_entries[:n_picks]]
+
+        # ── Proffs rescue: if proffs strongly endorse a horse the model
+        # ranked 4-6 (and it has 5-20% streck), promote it into picks
+        # by replacing the lowest-ranked model pick.
+        # This captures the 7.4% of winners that "bara proffs top-3" find.
+        # Max 1 rescue per system to preserve model's proven edge.
+        if proffs_data and n_picks >= 2:
+            proffs_races = proffs_data.get("races", [])
+            proffs_horses = {}
+            for pr in proffs_races:
+                if pr.get("race_number") == race.race_number:
+                    proffs_horses = {h["number"]: h for h in pr.get("horses", [])}
+                    break
+
+            if proffs_horses:
+                # Find proffs top-3 horses not in our picks
+                proffs_ranked = sorted(
+                    proffs_horses.values(),
+                    key=lambda h: h.get("proffs_weighted_pct", 0),
+                    reverse=True,
+                )
+                for ph in proffs_ranked[:3]:
+                    num = ph.get("number", 0)
+                    proffs_pct = ph.get("proffs_weighted_pct", 0)
+                    edge = ph.get("edge_pp", 0)
+                    # Only rescue if:
+                    # 1) not already in picks
+                    # 2) proffs strongly endorse (≥15% weighted pct, edge ≥10pp)
+                    # 3) horse has streck 5-20% (not a random outsider)
+                    # 4) model ranks it 4-6 (not too far down)
+                    if (
+                        num not in selected
+                        and proffs_pct >= 15
+                        and edge >= 10
+                    ):
+                        # Find the entry
+                        entry = next(
+                            (e for e in sorted_entries if e.post_position == num),
+                            None,
+                        )
+                        if entry and entry.bet_percentage:
+                            model_rank = next(
+                                (j + 1 for j, e in enumerate(sorted_entries)
+                                 if e.post_position == num),
+                                99,
+                            )
+                            if (
+                                4 <= model_rank <= 6
+                                and 0.05 <= entry.bet_percentage <= 0.20
+                            ):
+                                # Replace lowest pick with this proffs-endorsed horse
+                                selected[-1] = num
+                                break  # max 1 rescue per race
 
         # Coverage probability
         cov_prob = _coverage_prob(diff, n_picks)

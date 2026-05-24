@@ -1022,19 +1022,30 @@ def _sidebar_html(game_round: GameRound, has_system: bool = False, has_backlog: 
 
 
 def _bet_view_html(game_round: GameRound) -> str:
-    """Build the Bet recommendations view with vinnarspel candidates and result tracking.
+    """Build the Bet recommendations view with multiple vinnarspel profiles.
 
-    Shows:
-    1. Active vinnarspel candidates for current round (model rank≤2, streck 5-20%)
-    2. Result tracking for finished rounds
-    3. Running P&L summary
+    Profiles (from backtest, walk-forward validated):
+    1. Bred (rank≤2, 5-20%) — +48% ROI, 343 spel, 21% vinst
+    2. Sweet Spot (rank≤2, 5-15%) — +85% ROI, 141 spel, 20% vinst
+    3. Sniper (rank≤2, 3-10%) — +95% ROI, 50 spel, 14% vinst
+    4. Elite (score≥P90, 5-20%) — +87% ROI, 30 spel, 33% vinst
+    5. Alpha (rank=1, 5-20%) — +96% ROI, 12 spel, 33% vinst
     """
     gt = _esc(game_round.game_type)
     date_str = str(game_round.round_date) if game_round.round_date else ""
     is_finished = game_round.is_finished
 
-    # Collect vinnarspel candidates
-    candidates = []
+    # Collect ALL potential candidates with full metadata
+    all_candidates = []
+    # Compute P90 threshold across all entries in round
+    all_scores = []
+    for race in game_round.races:
+        for e in race.active_entries:
+            if e.bet_percentage is not None and 0.03 <= e.bet_percentage <= 0.25:
+                all_scores.append(e.super_score)
+    all_scores.sort()
+    p90_threshold = all_scores[int(len(all_scores) * 0.90)] if len(all_scores) >= 10 else 999
+
     for race in game_round.races:
         sorted_entries = sorted(
             race.active_entries,
@@ -1043,152 +1054,230 @@ def _bet_view_html(game_round: GameRound) -> str:
         )
         for rank_idx, e in enumerate(sorted_entries):
             model_rank = rank_idx + 1
-            if model_rank > 2:
+            if model_rank > 3:
                 break
-            if (
-                e.bet_percentage is not None
-                and 0.05 <= e.bet_percentage <= 0.20
-            ):
-                odds_est = round(1 / e.bet_percentage, 1) if e.bet_percentage > 0 else 0
+            if e.bet_percentage is None:
+                continue
+            streck = e.bet_percentage
+            if not (0.03 <= streck <= 0.25):
+                continue
 
-                # Check result if finished
-                won = False
-                actual_odds = 0.0
-                placement = "-"
-                if is_finished and race.result_order:
-                    plac = 0
-                    for pos, num in enumerate(race.result_order, 1):
-                        if num == e.post_position:
-                            plac = pos
-                            break
-                    if plac > 0:
-                        placement = str(plac)
-                    else:
-                        placement = "-"
-                    won = plac == 1
-                    if won:
-                        # Try to get actual final odds
-                        actual_odds = odds_est  # fallback to estimated
+            odds_est = round(1 / streck, 1) if streck > 0 else 0
 
-                candidates.append({
-                    "race_num": race.race_number,
-                    "name": e.horse.name,
-                    "post": e.post_position,
-                    "score": e.super_score,
-                    "streck": e.bet_percentage,
-                    "rank": model_rank,
-                    "odds_est": odds_est,
-                    "driver": e.driver_name or "",
-                    "won": won,
-                    "placement": placement,
-                    "actual_odds": actual_odds,
-                })
+            # Check result if finished
+            won = False
+            actual_odds = 0.0
+            placement = "-"
+            if is_finished and race.result_order:
+                plac = 0
+                for pos, num in enumerate(race.result_order, 1):
+                    if num == e.post_position:
+                        plac = pos
+                        break
+                if plac > 0:
+                    placement = str(plac)
+                won = plac == 1
+                if won:
+                    actual_odds = odds_est
 
-    # Build candidate rows
-    rows = []
-    total_bet = 0
-    total_return = 0
-    wins = 0
-    for c in candidates:
-        total_bet += 500
-        rank_badge = "🥇" if c["rank"] == 1 else "🥈"
-        streck_pct = c["streck"] * 100
+            all_candidates.append({
+                "race_num": race.race_number,
+                "name": e.horse.name,
+                "post": e.post_position,
+                "score": e.super_score,
+                "streck": streck,
+                "rank": model_rank,
+                "odds_est": odds_est,
+                "driver": e.driver_name or "",
+                "won": won,
+                "placement": placement,
+                "actual_odds": actual_odds,
+                "is_p90": e.super_score >= p90_threshold,
+            })
 
+    # Define profiles
+    PROFILES = [
+        {
+            "id": "bred",
+            "name": "Bred",
+            "desc": "Rank A-B + streck 5-20%",
+            "badge_roi": "+48%",
+            "badge_color": "#7c3aed",
+            "bt_wins": "72/343",
+            "bt_winrate": "21.0%",
+            "bt_odds": "7.0x",
+            "bt_profit": "+82 053kr",
+            "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20,
+        },
+        {
+            "id": "sweet",
+            "name": "Sweet Spot",
+            "desc": "Rank A-B + streck 5-15%",
+            "badge_roi": "+85%",
+            "badge_color": "#15803d",
+            "bt_wins": "28/141",
+            "bt_winrate": "19.9%",
+            "bt_odds": "9.3x",
+            "bt_profit": "+59 699kr",
+            "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.15,
+        },
+        {
+            "id": "sniper",
+            "name": "Sniper",
+            "desc": "Rank A-B + streck 3-10%",
+            "badge_roi": "+95%",
+            "badge_color": "#b45309",
+            "bt_wins": "7/50",
+            "bt_winrate": "14.0%",
+            "bt_odds": "13.9x",
+            "bt_profit": "+23 680kr",
+            "filter": lambda c: c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10,
+        },
+        {
+            "id": "elite",
+            "name": "Elite",
+            "desc": "Score topp-10% + streck 5-20%",
+            "badge_roi": "+87%",
+            "badge_color": "#0369a1",
+            "bt_wins": "10/30",
+            "bt_winrate": "33.3%",
+            "bt_odds": "5.6x",
+            "bt_profit": "+13 110kr",
+            "filter": lambda c: c["is_p90"] and 0.05 <= c["streck"] <= 0.20,
+        },
+        {
+            "id": "alpha",
+            "name": "Alpha",
+            "desc": "Rank A (topp-1) + streck 5-20%",
+            "badge_roi": "+96%",
+            "badge_color": "#dc2626",
+            "bt_wins": "4/12",
+            "bt_winrate": "33.3%",
+            "bt_odds": "5.9x",
+            "bt_profit": "+5 783kr",
+            "filter": lambda c: c["rank"] == 1 and 0.05 <= c["streck"] <= 0.20,
+        },
+    ]
+
+    def _build_profile_card(profile: dict, candidates: list) -> str:
+        """Build one profile card with candidates and P&L."""
+        pid = profile["id"]
+        filtered = [c for c in candidates if profile["filter"](c)]
+        count = len(filtered)
+
+        # Compute P&L
+        total_bet = count * 500
+        total_return = sum(500 * c["actual_odds"] for c in filtered if c["won"])
+        wins = sum(1 for c in filtered if c["won"])
+
+        # Strategy header (always shown)
+        header = (
+            f'<div class="bet-profile-header" data-profile="{pid}">'
+            f'<div class="bet-profile-left">'
+            f'<span class="bet-profile-badge" style="background:{profile["badge_color"]}">'
+            f'{profile["badge_roi"]} ROI</span>'
+            f'<span class="bet-profile-name">{profile["name"]}</span>'
+            f'<span class="bet-profile-desc">{profile["desc"]}</span>'
+            f'</div>'
+            f'<div class="bet-profile-right">'
+            f'<span class="bet-profile-bt">{profile["bt_wins"]} vinster'
+            f' &middot; {profile["bt_odds"]} odds'
+            f' &middot; {profile["bt_profit"]}</span>'
+            f'</div>'
+            f'</div>'
+        )
+
+        if count == 0:
+            return (
+                f'<div class="bet-profile-card" id="profile-{pid}">'
+                f'{header}'
+                f'<div class="bet-profile-empty">Inga kandidater denna omgång</div>'
+                f'</div>'
+            )
+
+        # Status
         if is_finished:
-            if c["won"]:
-                wins += 1
-                win_amount = 500 * c["actual_odds"]
-                total_return += win_amount
-                result_cell = f'<td class="bet-result bet-win">✅ 1:a — +{win_amount - 500:,.0f}kr</td>'
-                row_class = " bet-row-win"
-            else:
-                result_cell = f'<td class="bet-result bet-loss">❌ {c["placement"]}</td>'
-                row_class = " bet-row-loss"
+            pnl = total_return - total_bet
+            roi = (pnl / total_bet * 100) if total_bet > 0 else 0
+            pnl_color = "#15803d" if pnl >= 0 else "#dc2626"
+            pnl_sign = "+" if pnl >= 0 else ""
+            status_html = (
+                f'<div class="bet-profile-pnl">'
+                f'<span>{count} spel</span>'
+                f'<span>{wins} vinst</span>'
+                f'<span style="color:{pnl_color};font-weight:700">'
+                f'{pnl_sign}{pnl:,.0f}kr ({pnl_sign}{roi:.0f}%)</span>'
+                f'</div>'
+            )
         else:
-            result_cell = '<td class="bet-result bet-pending">⏳ Väntar</td>'
-            row_class = ""
+            status_html = (
+                f'<div class="bet-profile-pnl">'
+                f'<span>{count} spel &middot; Insats: {total_bet:,}kr</span>'
+                f'</div>'
+            )
 
-        rows.append(
-            f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
-            f'<td class="bet-race"><strong>Avd {c["race_num"]}</strong></td>'
-            f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
-            f'<td class="bet-score">{c["score"]:.0f}</td>'
-            f'<td class="bet-streck">{streck_pct:.0f}%</td>'
-            f'<td class="bet-odds">~{c["odds_est"]:.1f}x</td>'
-            f'<td class="bet-driver">{_esc(c["driver"][:15])}</td>'
-            f'{result_cell}'
-            f'</tr>'
+        # Candidate rows
+        rows = []
+        for c in filtered:
+            rank_badge = "\U0001f947" if c["rank"] == 1 else "\U0001f948"
+            streck_pct = c["streck"] * 100
+
+            if is_finished:
+                if c["won"]:
+                    win_amt = 500 * c["actual_odds"]
+                    result_cell = f'<td class="bet-result bet-win">✅ +{win_amt - 500:,.0f}kr</td>'
+                    row_class = " bet-row-win"
+                else:
+                    result_cell = f'<td class="bet-result bet-loss">❌ {c["placement"]}</td>'
+                    row_class = " bet-row-loss"
+            else:
+                result_cell = '<td class="bet-result bet-pending">⏳</td>'
+                row_class = ""
+
+            rows.append(
+                f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+                f'<td class="bet-race">Avd {c["race_num"]}</td>'
+                f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
+                f'<td class="bet-score">{c["score"]:.0f}</td>'
+                f'<td class="bet-streck">{streck_pct:.0f}%</td>'
+                f'<td class="bet-odds">~{c["odds_est"]:.1f}x</td>'
+                f'<td class="bet-driver">{_esc(c["driver"][:15])}</td>'
+                f'{result_cell}'
+                f'</tr>'
+            )
+
+        return (
+            f'<div class="bet-profile-card" id="profile-{pid}">'
+            f'{header}'
+            f'{status_html}'
+            f'<div class="table-wrap">'
+            f'<table class="bet-table">'
+            f'<thead><tr>'
+            f'<th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th>'
+            f'<th>Odds</th><th>Kusk</th><th>Resultat</th>'
+            f'</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody>'
+            f'</table>'
+            f'</div>'
+            f'</div>'
         )
 
-    count = len(candidates)
-
-    # P&L summary
-    if is_finished and count > 0:
-        pnl = total_return - total_bet
-        roi = (pnl / total_bet * 100) if total_bet > 0 else 0
-        pnl_color = "#15803d" if pnl >= 0 else "#dc2626"
-        pnl_html = (
-            f'<div class="bet-pnl">'
-            f'<div class="bet-pnl-item">'
-            f'<span class="bet-pnl-label">Satsat</span>'
-            f'<span class="bet-pnl-val">{total_bet:,}kr</span>'
-            f'</div>'
-            f'<div class="bet-pnl-item">'
-            f'<span class="bet-pnl-label">Tillbaka</span>'
-            f'<span class="bet-pnl-val">{total_return:,.0f}kr</span>'
-            f'</div>'
-            f'<div class="bet-pnl-item">'
-            f'<span class="bet-pnl-label">Resultat</span>'
-            f'<span class="bet-pnl-val" style="color:{pnl_color};font-weight:800">'
-            f'{pnl:+,.0f}kr ({roi:+.0f}%)</span>'
-            f'</div>'
-            f'<div class="bet-pnl-item">'
-            f'<span class="bet-pnl-label">Vinster</span>'
-            f'<span class="bet-pnl-val">{wins}/{count}</span>'
-            f'</div>'
-            f'</div>'
-        )
-    else:
-        pnl_html = ""
+    # Build all profile cards
+    profile_cards = "\n".join(_build_profile_card(p, all_candidates) for p in PROFILES)
 
     # Status banner
     if is_finished:
         status_icon = "✅"
         status_text = "Avslutad"
-        status_class = "finished"
     else:
-        status_icon = "🔴"
+        status_icon = "\U0001f534"
         status_text = "Live — spela innan start!"
-        status_class = "live"
 
-    # Strategy info box
-    strategy_info = (
-        f'<div class="bet-strategy-card">'
-        f'<div class="bet-strategy-header">'
-        f'<span class="bet-strategy-title">Chansspik Vinnarspel</span>'
-        f'<span class="bet-strategy-badge">+48% ROI</span>'
-        f'</div>'
-        f'<div class="bet-strategy-desc">'
-        f'Modell rank A-B + streck 5-20%. Flat bet 500kr vinnare per kandidat.'
-        f'</div>'
-        f'<div class="bet-strategy-stats">'
-        f'<div class="bet-strategy-stat">'
-        f'<span class="bet-strategy-num">72/343</span>'
-        f'<span class="bet-strategy-lbl">Vinster (12 mån)</span>'
-        f'</div>'
-        f'<div class="bet-strategy-stat">'
-        f'<span class="bet-strategy-num">+82 053kr</span>'
-        f'<span class="bet-strategy-lbl">Total vinst</span>'
-        f'</div>'
-        f'<div class="bet-strategy-stat">'
-        f'<span class="bet-strategy-num">21.0%</span>'
-        f'<span class="bet-strategy-lbl">Vinstfrekvens</span>'
-        f'</div>'
-        f'<div class="bet-strategy-stat">'
-        f'<span class="bet-strategy-num">7.0x</span>'
-        f'<span class="bet-strategy-lbl">Snittodds</span>'
-        f'</div>'
-        f'</div>'
+    round_header = (
+        f'<div class="bet-round-header-top">'
+        f'<span>{status_icon}</span>'
+        f'<h2>{gt} — {date_str}</h2>'
+        f'<span class="bet-status-badge {"finished" if is_finished else "live"}">{status_text}</span>'
         f'</div>'
     )
 
@@ -1209,43 +1298,7 @@ def _bet_view_html(game_round: GameRound) -> str:
         '</div>'
     )
 
-    if not candidates:
-        return (
-            f'{strategy_info}'
-            f'<div class="bet-empty">'
-            f'<div style="font-size:2rem;margin-bottom:8px">🎰</div>'
-            f'<h3>Inga vinnarspel denna omgång</h3>'
-            f'<p>Ingen häst kvalificerar (modell rank 1-2 + streck 5-20%)</p>'
-            f'</div>'
-            f'{history_section}'
-        )
-
-    return (
-        f'{strategy_info}'
-        f'<div class="bet-round-card">'
-        f'<div class="bet-round-header">'
-        f'<div class="bet-round-title">'
-        f'<span class="bet-round-icon {status_class}">{status_icon}</span>'
-        f'<h3>{gt} — {date_str}</h3>'
-        f'<span class="bet-status-badge {status_class}">{status_text}</span>'
-        f'</div>'
-        f'<div class="bet-round-summary">'
-        f'{count} vinnarspel &middot; Insats: {count * 500:,}kr'
-        f'</div>'
-        f'</div>'
-        f'{pnl_html}'
-        f'<div class="table-wrap">'
-        f'<table class="bet-table">'
-        f'<thead><tr>'
-        f'<th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th>'
-        f'<th>Odds</th><th>Kusk</th><th>Resultat</th>'
-        f'</tr></thead>'
-        f'<tbody>{"".join(rows)}</tbody>'
-        f'</table>'
-        f'</div>'
-        f'</div>'
-        f'{history_section}'
-    )
+    return f'{round_header}\n{profile_cards}\n{history_section}'
 
 
 def _round_dropdown_html(
@@ -3061,6 +3114,34 @@ text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:2px
 .bet-empty{{text-align:center;padding:60px 20px;color:#94a3b8}}
 .bet-empty h3{{color:#1e293b;margin-bottom:8px}}
 .bet-empty p{{font-size:.85rem;max-width:400px;margin:0 auto}}
+
+/* ═══ Multi-profile cards ═══ */
+.bet-round-header-top{{display:flex;align-items:center;gap:12px;margin-bottom:20px}}
+.bet-round-header-top h2{{margin:0;font-size:1.3rem;font-weight:800;color:#1e293b}}
+.bet-profile-card{{background:#fff;border-radius:12px;border:1px solid #e5e7eb;
+margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:hidden}}
+.bet-profile-header{{display:flex;align-items:center;justify-content:space-between;
+padding:16px 20px;cursor:pointer;transition:background .15s;gap:12px;flex-wrap:wrap}}
+.bet-profile-header:hover{{background:#f9fafb}}
+.bet-profile-left{{display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
+.bet-profile-right{{display:flex;align-items:center}}
+.bet-profile-badge{{color:#fff;padding:.25rem .75rem;border-radius:20px;font-size:.78rem;
+font-weight:700;white-space:nowrap}}
+.bet-profile-name{{font-weight:700;font-size:1rem;color:#1e293b}}
+.bet-profile-desc{{font-size:.8rem;color:#6b7280}}
+.bet-profile-bt{{font-size:.78rem;color:#94a3b8;font-family:'JetBrains Mono',monospace}}
+.bet-profile-pnl{{display:flex;align-items:center;gap:16px;padding:8px 20px;
+background:#f8f9fb;border-top:1px solid #f3f4f6;font-size:.85rem;color:#6b7280}}
+.bet-profile-empty{{padding:20px;text-align:center;color:#94a3b8;font-size:.84rem;
+border-top:1px solid #f3f4f6}}
+.bet-profile-card .table-wrap{{padding:0 12px 12px}}
+.bet-profile-card .bet-table{{margin-top:0}}
+
+@media(max-width:768px){{
+  .bet-profile-header{{flex-direction:column;align-items:flex-start;gap:8px}}
+  .bet-profile-right{{width:100%}}
+  .bet-round-header-top{{flex-wrap:wrap}}
+}}
 
 .bet-history-section{{margin-top:24px;background:#fff;border-radius:12px;border:1px solid #e5e7eb;
 padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}}

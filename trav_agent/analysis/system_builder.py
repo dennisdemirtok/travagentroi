@@ -1,34 +1,37 @@
-"""Empiriskt optimerad systembyggare — baserad på 144 historiska V75/V85-omgångar.
+"""Systembyggare — empiriskt optimerad på 194 V75/V85-omgångar.
 
-Empiriska fynd (system_optimizer.py, 360 strategikonfigurationer):
+Testat: 360+ strategikonfigurationer, 3 allokeringsmetoder, 4 budgetnivåer.
 
-1. OPTIMALT ANTAL SPIKAR: 3 (ibland 4)
-   - 0 spikar: träffar aldrig
-   - 1-2 spikar: träffar sällan
-   - 3 spikar: bäst ROI (+2427% vid 100kr budget)
-   - 4 spikar: bra hitrate men lägre ROI
+EMPIRISKA FYND (system_optimizer.py + winner_depth_analysis.py):
 
-2. SPIKE-URVAL: "upset_low" vinner
-   - Spika de lopp med LÄGST skrällrisk (= tryggast)
-   - upset_low: 45/116 configs träffade
+1. BASSTRUKTUR: 3 spikar + 4 val i resten = bäst ROI
+   - 3S+rest4 vid 200kr: 4 träffar/194 = 2.1%, +1267% ROI
+   - 2S+rest4 vid 1000kr: 7 träffar = 3.6%, +238% ROI
+
+2. SPIKE-URVAL: "upset_low" — spika de 3 tryggaste loppen
+   - upset_low: 45/116 configs träffade (bäst)
    - gap: 42/116
-   - confidence: 34/116
+   - confidence: 34/116 (sämst)
 
-3. ENKLA STRATEGIER VINNER
-   - "N spikar + fast bredd i resten" slår komplexa variabla approaches
-   - Inget behov av gap-baserad eller upset-variabel breddning
+3. VARIABEL BREDD: Testades men slog INTE fast bredd
+   - Smart variabel: 3 träffar vid 500kr vs fixed 5 träffar
+   - Anledning: multiplicativ kostnad — bredare i ett lopp
+     fördubblar rader, vinsten i täckning kompenserar inte
+   - MEN: variabel ger fler partiella (n-1) träffar
 
-4. BÄSTA STRATEGIER PER BUDGET:
-   - 100kr: 3S+rest4|upset_low → +2427% ROI, 2.8% hitrate
-   - 200kr: 3S+rest4|upset_low → bäst ROI
-   - 500kr: 3S+rest5|upset_low → balans ROI/hitrate
-   - 1000kr: 3S+rest6|upset_low → 4.9% hitrate, +271% ROI
+4. LOPPSVÅRIGHETSMODELL (1 371 lopp analyserade):
+   Vinnarens modellranking beror på:
+   - Antal startande: r=+0.196 (starkaste signalen)
+   - Tillägg: r=+0.158
+   - Modellspridning: r=-0.157
+   - Volt: r=+0.147
+   - Spårtrappa: r=+0.137
 
-5. BREAKEVEN lätt att nå — mediandividend ~49 700 kr, breakeven
-   vid 1 750-3 500 kr per träff.
+5. BREAKEVEN: Mediandividend ~49 700kr, breakeven vid ~1 750-3 500kr.
 
-Dennis: "ofta nar jag har vunnit stort sa har jag behövt spika 1-2-3 lopp"
-Empirin visar: 3 spikar, alltid de tryggaste loppen, sedan bredda resten.
+Dennis: "alla lopp har olika svårighet eller lätthet"
+Empirin: Ja, men intelligensen sitter i VILKA lopp som spikas (variabelt
+per omgång), inte i variabel bredd bland non-spike-benen.
 """
 
 from __future__ import annotations
@@ -45,10 +48,11 @@ class LegAssignment:
     """Tilldelning för en avdelning i systemet."""
     race_number: int
     leg_type: str  # "spik", "kort", "medel", "bred"
-    num_picks: int  # antal hästar att ta med
-    picks: list[int] = field(default_factory=list)  # spärnummer i ordning
-    confidence: float = 0.0  # 0-100, hur säkra vi är
-    upset_risk: float = 0.0  # 0-100 från analysen
+    num_picks: int
+    picks: list[int] = field(default_factory=list)
+    confidence: float = 0.0
+    upset_risk: float = 0.0
+    difficulty: float = 0.0
     reasoning: str = ""
 
     @property
@@ -81,7 +85,6 @@ class SystemPlan:
         return sum(1 for leg in self.legs if leg.leg_type in ("medel", "bred"))
 
     def calc_rows(self) -> int:
-        """Beräkna totalt antal systemrader."""
         rows = 1
         for leg in self.legs:
             rows *= leg.num_picks
@@ -90,14 +93,12 @@ class SystemPlan:
         return rows
 
     def summary(self) -> str:
-        """Mänskligt läsbar systemsammanfattning."""
         parts = []
         for leg in sorted(self.legs, key=lambda l: l.race_number):
             picks_str = ",".join(str(p) for p in leg.picks[:leg.num_picks])
             parts.append(
                 f"Avd {leg.race_number}: {leg.leg_type} ({leg.num_picks}) [{picks_str}]"
             )
-
         return (
             f"{self.strategy_name}\n"
             f"{'=' * 50}\n"
@@ -108,35 +109,113 @@ class SystemPlan:
         )
 
 
-# ── Empiriska strategikonfigurationer ──────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# Loppsvårighetsmodell — kalibrerad på 1 371 lopp
+# ═══════════════════════════════════════════════════════════════════════════
 
-# Optimala konfigurationer baserade på 144 historiska V75/V85-omgångar.
-# Format: (n_spikes, rest_width, strategy_label)
-OPTIMAL_CONFIGS: dict[int, tuple[int, int, str]] = {
-    # budget → (n_spikes, rest_width, label)
-    100:  (3, 4, "Empirisk optimal — 100kr"),
-    200:  (3, 4, "Empirisk optimal — 200kr"),
-    500:  (3, 5, "Empirisk optimal — 500kr"),
-    1000: (3, 6, "Empirisk optimal — 1000kr"),
-}
+def predict_difficulty(race: Race) -> float:
+    """Beräkna loppets svårighetsgrad (0-100).
 
+    Baserat på empiriska korrelationer med vinnarens modellranking.
+    Används för att bestämma VILKA lopp som ska spikas.
 
-def _compute_upset_risk(race: Race) -> float:
-    """Beräkna skrällrisk för ett lopp (0-100).
-
-    Kombinerar analysens upset_risk med egna signaler.
-    Lägre = tryggare = bättre spike-kandidat.
+    Hög svårighetsgrad = vinnaren hamnar djupt i modellrankingen
+    → bör INTE spikas, behöver bredare täckning.
     """
     entries = race.active_entries
     if not entries:
-        return 80.0
+        return 70.0
 
-    risk = 0.0
+    difficulty = 0.0
 
-    # Bas: modellens upset_risk
-    risk += race.upset_risk * 0.40
+    # 1. Antal startande (r=+0.196 — starkaste signalen)
+    n = len(entries)
+    if n <= 8:
+        difficulty += 5.0
+    elif n <= 10:
+        difficulty += 15.0
+    elif n <= 11:
+        difficulty += 22.0
+    elif n <= 13:
+        difficulty += 30.0
+    elif n <= 14:
+        difficulty += 38.0
+    else:
+        difficulty += 45.0
 
-    # Stolopp/storlopp/final
+    # 2. Tillägg (r=+0.158)
+    has_tillagg = any(
+        e.distance > race.distance
+        for e in entries
+        if e.distance > 0 and race.distance > 0
+    )
+    if has_tillagg:
+        difficulty += 14.0
+
+    # 3. Modellspridning (r=-0.157)
+    sorted_entries = sorted(entries, key=lambda e: e.super_score, reverse=True)
+    scores = [e.super_score for e in sorted_entries]
+
+    if len(scores) >= 5:
+        top5_spread = scores[0] - scores[4]
+    elif len(scores) >= 3:
+        top5_spread = scores[0] - scores[2]
+    else:
+        top5_spread = scores[0] - scores[-1] if len(scores) >= 2 else 30.0
+
+    if top5_spread < 10:
+        difficulty += 16.0
+    elif top5_spread < 15:
+        difficulty += 10.0
+    elif top5_spread < 20:
+        difficulty += 5.0
+    elif top5_spread >= 35:
+        difficulty -= 5.0
+
+    mean_s = sum(scores) / len(scores) if scores else 50.0
+    field_std = math.sqrt(
+        sum((s - mean_s) ** 2 for s in scores) / len(scores)
+    ) if scores else 10.0
+
+    if field_std < 8:
+        difficulty += 8.0
+    elif field_std < 12:
+        difficulty += 3.0
+    elif field_std > 20:
+        difficulty -= 3.0
+
+    # 4. Voltstart (r=+0.147)
+    if race.start_method == StartMethod.VOLT:
+        difficulty += 12.0
+
+    # 5. Spårtrappa (r=+0.137)
+    distances = set(e.distance for e in entries if e.distance > 0)
+    if len(distances) > 2:
+        difficulty += 12.0
+    elif len(distances) > 1:
+        difficulty += 8.0
+
+    # 6. Toppoäng (r=-0.109)
+    top_score = scores[0] if scores else 50.0
+    if top_score >= 85:
+        difficulty -= 5.0
+    elif top_score >= 75:
+        difficulty -= 2.0
+    elif top_score < 60:
+        difficulty += 5.0
+
+    # 7. Gap topp 1→2
+    gap_1_2 = scores[0] - scores[1] if len(scores) >= 2 else 0
+    if gap_1_2 < 3:
+        difficulty += 8.0
+    elif gap_1_2 < 5:
+        difficulty += 4.0
+    elif gap_1_2 >= 15:
+        difficulty -= 5.0
+    elif gap_1_2 >= 10:
+        difficulty -= 2.0
+
+    # 8. Stolopp
     race_type_lower = (race.race_type or "").lower()
     race_name_lower = (race.race_name or "").lower()
     is_stolopp = any(
@@ -145,61 +224,30 @@ def _compute_upset_risk(race: Race) -> float:
                      "derby", "grand", "elitlopp", "kriterium", "oaks")
     )
     if is_stolopp:
-        risk += 18.0
+        difficulty += 5.0
 
-    # Voltstart
-    if race.start_method == StartMethod.VOLT:
-        risk += 10.0 if race.num_starters < 12 else 15.0
-
-    # Spårtrappa (flera distanser)
-    distances = set(e.distance for e in entries if e.distance > 0)
-    if len(distances) > 1:
-        risk += 9.0
-
-    # Gap-analys — litet gap topp 1→2 = öppet
-    sorted_entries = sorted(entries, key=lambda e: e.super_score, reverse=True)
-    scores = [e.super_score for e in sorted_entries]
-    if len(scores) >= 2:
-        gap_1_2 = scores[0] - scores[1]
-        if gap_1_2 < 5:
-            risk += 15.0
-        elif gap_1_2 < 10:
-            risk += 8.0
-
-    # Ingen tydlig marknadsfavorit
-    max_bet = max((e.bet_percentage or 0 for e in entries), default=0)
-    if 0 < max_bet < 0.20:
-        risk += 12.0
-    elif 0 < max_bet < 0.25:
-        risk += 6.0
-
-    # Favorit från bakspår
+    # 9. Favorit bakspår
     if sorted_entries and sorted_entries[0].post_position >= 8:
-        risk += 10.0
+        difficulty += 6.0
 
-    # Stort fält
-    if race.num_starters >= 14:
-        risk += 8.0
-    elif race.num_starters >= 12:
-        risk += 4.0
+    # 10. Modellens upset_risk
+    difficulty += race.upset_risk * 0.15
 
-    return min(100.0, risk)
+    return max(0.0, min(100.0, difficulty))
 
 
-def _rank_legs_for_spiking(game_round: GameRound) -> list[tuple[Race, float]]:
-    """Ranka loppen efter lämplighet för spikning.
+# ═══════════════════════════════════════════════════════════════════════════
+# Optimala konfigurationer per budget
+# ═══════════════════════════════════════════════════════════════════════════
 
-    Empiriskt bäst: spika de med LÄGST upset_risk (upset_low).
-    Returnerar (race, upset_risk) sorterat stigande (bäst spik först).
-    """
-    ranked = []
-    for race in game_round.races:
-        risk = _compute_upset_risk(race)
-        ranked.append((race, risk))
-
-    # Sortera: lägst risk först = bäst spike-kandidat
-    ranked.sort(key=lambda x: x[1])
-    return ranked
+# Baserat på 194 historiska omgångar.
+# (n_spikes, rest_width, label)
+OPTIMAL_CONFIGS: dict[int, tuple[int, int, str]] = {
+    100:  (3, 4, "3 spikar + 4 val — 100kr"),
+    200:  (3, 4, "3 spikar + 4 val — 200kr"),
+    500:  (3, 4, "3 spikar + 4 val — 500kr"),
+    1000: (2, 4, "2 spikar + 4 val — 1000kr"),
+}
 
 
 def build_system(
@@ -208,19 +256,22 @@ def build_system(
     row_price: Optional[float] = None,
     strategy: str = "optimal",
 ) -> SystemPlan:
-    """Bygg ett empiriskt optimerat system för en spelomgång.
+    """Bygg ett empiriskt optimerat system.
 
-    Empirisk metod (baserad på 144 V75/V85-omgångar):
-    1. Ranka alla lopp efter skrällrisk (lägst = tryggast)
-    2. Spika de 3 tryggaste (empiriskt optimalt)
-    3. Bred i resten (4-6 val beroende på budget)
-    4. Budgetoptimera: minska bredaste om för dyrt
+    Bevisad metod:
+    1. Ranka lopp efter svårighetsgrad (predict_difficulty)
+    2. Spika de N lättaste (modellens bästa spikmöjligheter)
+    3. Ge resten uniform bredd (4 val — empiriskt bäst)
+    4. Budgetoptimera: minska lättaste non-spike om för dyrt,
+       expandera svåraste om under budget
+
+    Variationen sitter i VILKA lopp som spikas — det är unikt
+    per omgång baserat på loppens egenskaper.
 
     Strategier:
-    - "optimal": Empiriskt bäst ROI per budget (3S + upset_low)
-    - "hitrate": Maximera hitrate (3S + rest6, 1000kr budget)
-    - "aggressive": Fler spikar, lägre kostnad (4S + rest3)
-    - "safe": Färre spikar, bredare (2S + rest5)
+    - "optimal": Empiriskt bäst per budget (3S+rest4 / 2S+rest4)
+    - "aggressive": Fler spikar (4S+rest3)
+    - "safe": Färre spikar, bredare (2S+rest5)
     """
     if row_price is None:
         from ..config import ROW_PRICES
@@ -228,12 +279,8 @@ def build_system(
 
     num_races = len(game_round.races)
 
-    # Välj konfiguration baserat på strategi
-    if strategy == "hitrate":
-        n_spikes = 3
-        rest_width = 6
-        label = "Max hitrate — 3S+rest6"
-    elif strategy == "aggressive":
+    # Välj konfiguration
+    if strategy == "aggressive":
         n_spikes = min(4, num_races - 2)
         rest_width = 3
         label = "Aggressiv — 4S+rest3"
@@ -242,26 +289,29 @@ def build_system(
         rest_width = 5
         label = "Säker — 2S+rest5"
     else:
-        # Optimal: välj baserat på budget
         config = OPTIMAL_CONFIGS.get(
             budget,
-            # Närmaste budget
             OPTIMAL_CONFIGS[min(OPTIMAL_CONFIGS.keys(),
                                 key=lambda b: abs(b - budget))]
         )
         n_spikes, rest_width, label = config
 
-    # Begränsa spikar till max hälften av loppen
     n_spikes = min(n_spikes, num_races // 2 + 1)
 
-    # Ranka lopp för spikning (upset_low = empiriskt bäst)
-    ranked = _rank_legs_for_spiking(game_round)
+    # ── Steg 1: Ranka lopp efter svårighet ───────────────────────
+    race_diffs = []
+    for race in game_round.races:
+        diff = predict_difficulty(race)
+        race_diffs.append((race, diff))
 
-    # Bygg leg-tilldelningar
-    spike_races = set(id(race) for race, _ in ranked[:n_spikes])
+    # Sortera: lättast först = bäst spike-kandidater
+    race_diffs.sort(key=lambda x: x[1])
+
+    # ── Steg 2: Tilldela spikar + bredd ──────────────────────────
+    spike_set = set(id(race) for race, _ in race_diffs[:n_spikes])
     legs: list[LegAssignment] = []
 
-    for race, risk in ranked:
+    for race, diff in race_diffs:
         sorted_entries = sorted(
             race.active_entries,
             key=lambda e: e.super_score,
@@ -269,19 +319,18 @@ def build_system(
         )
         all_picks = [e.post_position for e in sorted_entries]
 
-        if id(race) in spike_races:
-            # Spik — modellens #1
+        if id(race) in spike_set:
             legs.append(LegAssignment(
                 race_number=race.race_number,
                 leg_type="spik",
                 num_picks=1,
                 picks=all_picks[:1],
-                confidence=min(95, 50 + (ranked[0][1] - risk) * 2 if ranked else 70),
-                upset_risk=risk,
-                reasoning=f"Spik (låg risk {risk:.0f})",
+                confidence=min(95, 70 - diff * 0.5),
+                upset_risk=race.upset_risk,
+                difficulty=diff,
+                reasoning=_build_reasoning(race, diff, 1),
             ))
         else:
-            # Bred — ta rest_width val
             width = min(rest_width, len(all_picks))
             leg_type = "kort" if width <= 2 else "medel" if width == 3 else "bred"
             legs.append(LegAssignment(
@@ -289,12 +338,12 @@ def build_system(
                 leg_type=leg_type,
                 num_picks=width,
                 picks=all_picks[:width],
-                confidence=max(15, 40 - risk * 0.3),
-                upset_risk=risk,
-                reasoning=f"Bred {width} val (risk {risk:.0f})",
+                confidence=max(15, 50 - diff * 0.4),
+                upset_risk=race.upset_risk,
+                difficulty=diff,
+                reasoning=_build_reasoning(race, diff, width),
             ))
 
-    # Bygg plan
     plan = SystemPlan(
         game_type=game_round.game_type,
         round_date=str(game_round.round_date),
@@ -305,79 +354,142 @@ def build_system(
     )
     plan.calc_rows()
 
-    # ── Budgetoptimering ────────────────────────────────────────────
-    # Om för dyrt: minska bredaste non-spike-benen
-    attempts = 0
-    while plan.total_cost > budget and attempts < 20:
-        non_spike = [l for l in legs if l.leg_type != "spik"]
-        if not non_spike:
-            break
-        widest = max(non_spike, key=lambda l: l.num_picks)
-        if widest.num_picks <= 2:
-            # Om vi inte kan minska mer: gör till spik
-            widest.leg_type = "spik"
-            widest.num_picks = 1
-            widest.picks = widest.picks[:1]
-        else:
-            widest.num_picks -= 1
-            widest.picks = widest.picks[:widest.num_picks]
-            if widest.num_picks == 2:
-                widest.leg_type = "kort"
-            elif widest.num_picks == 3:
-                widest.leg_type = "medel"
-        plan.calc_rows()
-        attempts += 1
-
-    # Om rejält under budget (< 40% utnyttjat): expandera
-    while plan.total_cost < budget * 0.40 and attempts < 30:
-        candidates = [l for l in legs if l.leg_type != "spik" and l.num_picks < 7]
-        if not candidates:
-            break
-        # Expandera det med högst skrällrisk
-        expandable = max(candidates, key=lambda l: l.upset_risk)
-        expandable.num_picks += 1
-        expandable.leg_type = "bred"
-        # Hämta alla picks för det loppet
-        race = next(
-            (r for r in game_round.races if r.race_number == expandable.race_number),
-            None,
-        )
-        if race:
-            all_entries = sorted(
-                race.active_entries, key=lambda e: e.super_score, reverse=True
-            )
-            expandable.picks = [e.post_position for e in all_entries][
-                : expandable.num_picks
-            ]
-        plan.calc_rows()
-        attempts += 1
+    # ── Steg 3: Budgetoptimering ─────────────────────────────────
+    _optimize_budget(plan, legs, game_round, budget, spike_set)
 
     plan.calc_rows()
     return plan
+
+
+def _optimize_budget(
+    plan: SystemPlan,
+    legs: list[LegAssignment],
+    game_round: GameRound,
+    budget: float,
+    spike_set: set,
+) -> None:
+    """Anpassa systemet till budgeten.
+
+    Över budget: minska LÄTTASTE non-spike-benen först.
+    Under budget (< 50%): expandera SVÅRASTE non-spike-benen.
+    """
+    for _ in range(30):
+        plan.calc_rows()
+        if plan.total_cost <= budget:
+            break
+
+        # Minska lättaste non-spike med flest picks
+        best_idx = -1
+        best_ease = float('inf')
+
+        for i, leg in enumerate(legs):
+            if id(next(r for r in game_round.races if r.race_number == leg.race_number)) in spike_set:
+                continue
+            if leg.num_picks <= 1:
+                continue
+            if leg.difficulty < best_ease or (
+                leg.difficulty == best_ease and best_idx >= 0 and leg.num_picks > legs[best_idx].num_picks
+            ):
+                best_ease = leg.difficulty
+                best_idx = i
+
+        if best_idx < 0:
+            # Alla non-spike redan vid 1 — kan inte minska mer
+            break
+
+        legs[best_idx].num_picks -= 1
+        legs[best_idx].picks = legs[best_idx].picks[:legs[best_idx].num_picks]
+        _update_leg_type(legs[best_idx])
+
+    # Expandera om under 50% budget
+    for _ in range(30):
+        plan.calc_rows()
+        if plan.total_cost >= budget * 0.50:
+            break
+
+        # Expandera svåraste non-spike
+        best_idx = -1
+        best_diff = -1.0
+
+        for i, leg in enumerate(legs):
+            if id(next(r for r in game_round.races if r.race_number == leg.race_number)) in spike_set:
+                continue
+            race = next(r for r in game_round.races if r.race_number == leg.race_number)
+            if leg.num_picks >= len(race.active_entries):
+                continue
+
+            new_rows = plan.total_rows * (leg.num_picks + 1) // leg.num_picks
+            if new_rows * plan.row_price > budget:
+                continue
+
+            if leg.difficulty > best_diff:
+                best_diff = leg.difficulty
+                best_idx = i
+
+        if best_idx < 0:
+            break
+
+        legs[best_idx].num_picks += 1
+        race = next(r for r in game_round.races if r.race_number == legs[best_idx].race_number)
+        all_entries = sorted(
+            race.active_entries, key=lambda e: e.super_score, reverse=True
+        )
+        legs[best_idx].picks = [e.post_position for e in all_entries][:legs[best_idx].num_picks]
+        _update_leg_type(legs[best_idx])
+
+
+def _update_leg_type(leg: LegAssignment) -> None:
+    """Uppdatera leg_type baserat på antal val."""
+    if leg.num_picks == 1:
+        leg.leg_type = "spik"
+    elif leg.num_picks == 2:
+        leg.leg_type = "kort"
+    elif leg.num_picks == 3:
+        leg.leg_type = "medel"
+    else:
+        leg.leg_type = "bred"
+
+
+def _build_reasoning(race: Race, difficulty: float, picks: int) -> str:
+    """Bygg förklaringstext."""
+    parts = []
+    n = len(race.active_entries)
+    if n <= 8:
+        parts.append(f"litet fält ({n})")
+    elif n >= 14:
+        parts.append(f"stort fält ({n})")
+    else:
+        parts.append(f"{n} startande")
+
+    if race.start_method == StartMethod.VOLT:
+        parts.append("volt")
+
+    if any(e.distance > race.distance for e in race.active_entries
+           if e.distance > 0 and race.distance > 0):
+        parts.append("tillägg")
+
+    distances = set(e.distance for e in race.active_entries if e.distance > 0)
+    if len(distances) > 1:
+        parts.append("spårtrappa")
+
+    features = ", ".join(parts) if parts else "standard"
+    return f"{picks} val (diff {difficulty:.0f} — {features})"
 
 
 def build_multiple_systems(
     game_round: GameRound,
     budgets: list[float] | None = None,
 ) -> list[SystemPlan]:
-    """Bygg system vid flera budgetnivåer med optimala strategier.
+    """Bygg system vid flera budgetnivåer.
 
-    Returnerar en lista med planer för jämförelse.
-    Alla använder den empiriskt bästa metoden (upset_low spiking).
+    Alla använder den empiriskt bästa metoden (upset_low + 3S+rest4).
+    Vid högsta budget används 2S+rest4 (empiriskt bäst vid 1000kr+).
     """
     if budgets is None:
-        budgets = [100, 200, 500]
+        budgets = [200, 500, 1000]
 
     plans = []
-
     for budget in budgets:
-        # Empiriskt optimal strategi per budget
         plan = build_system(game_round, budget=budget, strategy="optimal")
         plans.append(plan)
-
-    # Lägg till hitrate-varianten vid högsta budget
-    max_budget = max(budgets)
-    hitrate_plan = build_system(game_round, budget=max_budget, strategy="hitrate")
-    plans.append(hitrate_plan)
-
     return plans

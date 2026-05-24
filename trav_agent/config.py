@@ -112,37 +112,40 @@ def get_todays_game_types() -> list[str]:
 class FactorWeights:
     """Vikter for varje analysfaktor. Summerar till 1.0.
 
-    Version 7.1: 13 faktorer — Dennis's metod, omoptimerade.
+    Version 9: Optimerat for HYBRID edge (modell + marknad).
 
-    Forandringar vs v7.0:
-    - time_analysis uppgraderad: 5 primart + 6-10 med decay, tillagg
-    - equipment: barfot/sulkybyte (Am/Va) som skrall-signal
-    - Vikter omoptimerade efter alla forandringar
+    Insikt fran 1559 lopp (V75+V85+V86 2024-2026):
+    - Marknad ensam: 40.3% rank-1
+    - Full 14-faktor hybrid (20%): 40.3% (INGEN edge vs marknad!)
+    - Slim 2-faktor (pos+age) hybrid (25%): 41.2% (+0.9% edge)
+    - V86 specifikt: 43.3% (+1.7% edge med slim modell)
 
-    Optimerat med random search + hill climbing pa 424 V75/V85-lopp:
-    - top1: 24.3% (vinnare korrekt)
-    - top2: 37.7% (topp 2 ratt)
-    - top3: 54.0% (topp 3 ratt)
-    - spik: 30.7% traffsakerhet (150 spikar)
+    Bara 4 faktorer TILLFOR positivt till hybriden:
+    - post_position: +0.38% (strukturell fordel, insidespat)
+    - age: +0.32% (aldersprofiler som marknaden underprissatter)
+    - driver_class: +0.13% (kuskens kvalitet)
+    - category_profile: +0.13% (kategoripassning)
 
-    Utan data-leakage (temporal filtrering + neutraliserade closing odds).
+    Alla andra faktorer SKADAR hybriden (gor den samre an marknad).
+    De behalls med nara-noll vikt for analys/dashboard men paverkar inte ranking.
     """
 
-    # v7.1 optimerade vikter (hill climbing pa 424 V75/V85-lopp)
-    post_position: float = 0.157       # Sparprofil
-    prize_index: float = 0.156         # Prispengaindex
-    age: float = 0.146                 # Aldersfaktor
-    time_analysis: float = 0.130       # Dennis's tid (5+10 med decay, tillagg)
-    competition_strength: float = 0.102 # Motstandsstyrka (Dennis)
-    track_profile: float = 0.074       # Banerfarenhet
-    driver_class: float = 0.062        # Kuskens vinstprocent
-    category_profile: float = 0.062    # Kategoriprofil
-    last_win: float = 0.049            # Seger senast (Dennis)
-    form_curve: float = 0.049          # Formkurva
-    gallop_risk: float = 0.035          # Galopphistorik + voltspårsinteraktion
-    equipment: float = 0.005           # Barfot/sulky (Am/Va)
-    driver_trainer: float = 0.005      # Kusk-tranar kombination + utlandsk edge
-    layoff: float = 0.003              # Uppehall
+    # v9: Hybrid-optimerade vikter (maximerar edge mot marknad)
+    post_position: float = 0.350       # Sparprofil — starkt strukturell signal
+    age: float = 0.350                 # Aldersfaktor — marknaden underprissatter
+    driver_class: float = 0.150        # Kuskens vinstprocent
+    category_profile: float = 0.100    # Kategoriprofil
+    driver_trainer: float = 0.050      # Kusk-tranar kombination + utlandsk edge (Gocciadoro)
+    # Noll-viktade faktorer (visas i dashboard men paverkar ej ranking)
+    prize_index: float = 0.000         # Ej positivt bidrag till hybrid
+    time_analysis: float = 0.000       # Skadar hybrid (-0.38%)
+    competition_strength: float = 0.000 # Skadar hybrid (-0.06%)
+    track_profile: float = 0.000       # Skadar hybrid (-0.32%)
+    last_win: float = 0.000            # Skadar hybrid (-0.26%)
+    form_curve: float = 0.000          # Skadar hybrid (-0.38%)
+    gallop_risk: float = 0.000         # Skadar hybrid (-0.90%)
+    equipment: float = 0.000           # Ingen varians i backtest
+    layoff: float = 0.000              # Ingen tillracklig signal
     proffs_consensus: float = 0.000    # Viktat proffsstreck (aktiveras efter 50+ omgangar data)
 
     # Interaktionstermer borttagna
@@ -199,16 +202,16 @@ class AnalysisConfig:
     value_sweet_spot: tuple[float, float] = (0.05, 0.15)  # 5-15% streck = sweet spot
 
     # Super Score: blend av modell + marknad
-    # 20% modell + 80% streckprocent — optimerad vikt baserad på
+    # 25% modell + 75% streckprocent — optimerad vikt baserad på
     # 1559 lopp (V75+V85+V86 2024-2026):
-    #   Ren modell:  28.2% rank-1, avg rank 3.79
-    #   Ren marknad: 40.3% rank-1, avg rank 2.79
-    #   Hybrid 20/80: 40.5% rank-1, avg rank 2.87
-    # Modellen tillför edge vid upsets (outsiders <3%: modell avg 7.6 vs marknad 8.6)
-    # men marknaden dominerar för favoriter. Hybrid slår båda.
-    # OBS: I backtest används closing streck (betDistribution) som proxy.
-    # I live-läge används aktuell streck ~1h före start.
-    super_score_model_weight: float = 0.20  # 0.0 = ren marknad, 1.0 = ren modell
+    #   Ren marknad: 40.3% rank-1
+    #   Slim 2-faktor hybrid (25%): 41.2% rank-1 (+0.9% edge)
+    #   V86 specifikt: 43.3% rank-1 (+1.7% edge)
+    # Model tillfor edge via post_position + age (strukturella signaler
+    # som marknaden inte fullstandigt prissatter).
+    # OBS: I backtest anvands closing streck (betDistribution) som proxy.
+    # I live-lage anvands aktuell streck ~1h fore start.
+    super_score_model_weight: float = 0.25  # 0.0 = ren marknad, 1.0 = ren modell
 
     # Klassificeringströsklar (anpassade för mer modell-driven skala)
     spike_min_score: float = 75.0     # Minst poäng för "spik" (rank 1)

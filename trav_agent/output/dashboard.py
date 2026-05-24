@@ -1114,7 +1114,7 @@ def _system_html(game_round: GameRound) -> str:
 
 
 def _dennis_system_html(game_round: GameRound) -> str:
-    """Dennis-method system: intelligent breddning baserad pa skrallrisk."""
+    """Empiriskt optimerat system: upset_low spikning + fast bredd."""
     try:
         from ..analysis.system_builder import build_system
     except ImportError:
@@ -1124,7 +1124,7 @@ def _dennis_system_html(game_round: GameRound) -> str:
     cards = []
 
     for budget in budgets:
-        plan = build_system(game_round, budget=budget, strategy="dennis")
+        plan = build_system(game_round, budget=budget, strategy="optimal")
 
         pick_rows = []
         for leg in sorted(plan.legs, key=lambda l: l.race_number):

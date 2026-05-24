@@ -57,9 +57,17 @@ DISTANCE_BENCHMARKS = {
 }
 
 # Tillagg: 20m extra distans i voltlopp
-# Hasten springer langre OCH ute i ytterspar
-# Empirisk effekt: ~0.04-0.06 s/km per 20m tillagg
-TILLAGG_PENALTY_PER_20M = 0.05  # s/km slower per 20m tillagg
+# EMPIRISK INSIKT (95 lopp med tillagg):
+#   Utan tillagg: 6.9% vinst, 21.5% top3
+#   +20m: 6.5% vinst (nara oforandrat — handikappet ar litet)
+#   +40m: 10.9% vinst! (HOGRE — hasten ar sa bra att tillagget inte racker)
+#   +60m: 13.0% vinst! (annu hogre — de basta hastarna)
+#
+# Tillagg ar tvaeggat: hasten springer langre MEN det innebar ocksa
+# att hasten tjänat mest = ar bast i faltet. For TIDSANALYS justerar
+# vi nedåt for den extra distansen (korrekt fysiskt), men i den
+# SAMMANLAGDA modellen sa vags det upp av competition_strength.
+TILLAGG_TIME_ADJUSTMENT_PER_20M = 0.04  # s/km slower per 20m extra distance
 
 # Recency weights: 5 primary + 5 secondary (decay)
 # Dennis: "senaste 5 ar starkast, senaste 10 kan kollas men med decay"
@@ -141,15 +149,20 @@ def _get_benchmark_for_race(race: Race) -> float:
     return benchmark
 
 
-def _tillagg_penalty(entry: RaceEntry, race: Race) -> float:
-    """Berakna tillags-nackdel for hastar med extra distans.
+def _tillagg_time_adjustment(entry: RaceEntry, race: Race) -> float:
+    """Berakna tidsjustering for tillagg (extra distans).
 
     Dennis: "de som startar med tillagg maste springa mycket fortare
     ute i sparen for att hinna ikapp. de kan inte viktas pa samma
     satt i ett lopp nar det kommer till tid."
 
-    Entry.distance > race.distance = hasten har tillagg.
-    20m tillagg ar vanligast, 40m forekomemr.
+    For TIDSANALYS: tillagg gor att hasten springer langre,
+    sa km-tiden blir lite langsammare. Vi justerar for detta
+    sa att tidsbedomningen ar rattvis.
+
+    Notera: Empiriskt vinner tillaggs-hastar OFTARE (10.9% vid +40m
+    vs 6.9% utan) for att de ar de basta hastarna. Men det fangas
+    av competition_strength, inte av tidsanalysen.
     """
     if entry.distance <= 0 or race.distance <= 0:
         return 0.0
@@ -158,9 +171,11 @@ def _tillagg_penalty(entry: RaceEntry, race: Race) -> float:
     if tillagg_m <= 0:
         return 0.0
 
-    # Varje 20m tillagg = ~0.05 s/km extra (langre distans + yttre spar)
-    penalty = (tillagg_m / 20.0) * TILLAGG_PENALTY_PER_20M
-    return penalty
+    # Fysisk tidsjustering: langre distans = lite langsammare km-tid
+    # Men vi ar FORSIKTIG — 40m tillagg-hastar vinner 10.9% vs 6.9%
+    # sa vi vill inte straffa for hart
+    adjustment = (tillagg_m / 20.0) * TILLAGG_TIME_ADJUSTMENT_PER_20M
+    return adjustment
 
 
 class TimeAnalysis(AnalysisFactor):
@@ -204,7 +219,7 @@ class TimeAnalysis(AnalysisFactor):
         benchmark = _get_benchmark_for_race(race)
 
         # Tillagg-kompensation for denna hast
-        tillagg = _tillagg_penalty(entry, race)
+        tillagg = _tillagg_time_adjustment(entry, race)
 
         # Projicera alla tider till loppets distans/metod
         # Anvand HASTENS individuella distans (entry.distance) som maldistans

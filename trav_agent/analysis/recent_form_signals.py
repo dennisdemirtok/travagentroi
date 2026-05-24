@@ -186,10 +186,11 @@ class CompetitionStrength(AnalysisFactor):
         """Score 0-100 based on competition level of recent starts.
 
         Components:
-        1. Absolute prize level (35%) — recent avg purse (higher = tougher competition)
+        1. Absolute prize level (30%) — recent avg purse (higher = tougher)
         2. Relative prize ratio (25%) — recent purse vs current race purse
-        3. Recent earnings efficiency (25%) — prize money won / starts
-        4. Class drop detection (15%) — dropping from higher class = upset value
+        3. Recent earnings efficiency (20%) — prize money won / starts
+        4. Class drop detection (15%) — dropping from higher class = upset
+        5. Tillagg bonus (10%) — horse has tillagg = earned most = strongest
 
         Note: when race.purse is 0 (common in ATG data), we fall back
         to absolute prize level comparison across the field.
@@ -199,7 +200,7 @@ class CompetitionStrength(AnalysisFactor):
         if not recent:
             return 35.0
 
-        # ── 1. Absolute prize level (35%) ───────────────────────────────
+        # ── 1. Absolute prize level (30%) ───────────────────────────────
         abs_score = self._absolute_prize_score(recent)
 
         # ── 2. Relative prize ratio (25%) ───────────────────────────────
@@ -215,11 +216,15 @@ class CompetitionStrength(AnalysisFactor):
         # ── 4. Class drop detection (15%) ───────────────────────────────
         class_drop = self._class_drop_score(recent, race, entry)
 
+        # ── 5. Tillagg bonus (10%) ──────────────────────────────────────
+        tillagg_score = self._tillagg_score(entry, race)
+
         total = (
-            abs_score * 0.35
+            abs_score * 0.30
             + ratio_score * 0.25
-            + efficiency * 0.25
+            + efficiency * 0.20
             + class_drop * 0.15
+            + tillagg_score * 0.10
         )
         return min(100.0, max(0.0, total))
 
@@ -398,6 +403,44 @@ class CompetitionStrength(AnalysisFactor):
             drop_score += 8.0
 
         return min(100.0, max(0.0, drop_score))
+
+    @staticmethod
+    def _tillagg_score(entry: RaceEntry, race: Race) -> float:
+        """Tillagg-bonus: hast med tillagg = har tjanat mest = starkast.
+
+        Empirisk data (95 lopp):
+          Utan tillagg: 6.9% vinst, 21.5% top3
+          +20m: 6.5% vinst (nara lika)
+          +40m: 10.9% vinst! (hogre an utan)
+          +60m: 13.0% vinst! (hogst)
+
+        Dennis: "vart att analysera hur det ser ut nar det ar tillagg"
+        — tillagg ar en kvalitetssignal, inte bara en nackdel.
+        """
+        if entry.distance <= 0 or race.distance <= 0:
+            return 50.0  # No distance data
+
+        tillagg_m = entry.distance - race.distance
+        if tillagg_m <= 0:
+            # Check if OTHER horses have tillägg (this horse doesn't)
+            has_tillagg_race = any(
+                e.distance > race.distance
+                for e in race.active_entries
+                if e.distance > 0
+            )
+            if has_tillagg_race:
+                return 42.0  # In a tillägg race but no tillägg = weaker
+            return 50.0  # No tillägg race at all
+
+        # Horse has tillägg = quality signal
+        if tillagg_m >= 60:
+            return 82.0  # Best horse in field — 13% empirical win rate
+        elif tillagg_m >= 40:
+            return 72.0  # Very strong — 10.9% win rate
+        elif tillagg_m >= 20:
+            return 55.0  # Moderate — 6.5% (about same as without)
+        else:
+            return 50.0
 
 
 class LayoffFactor(AnalysisFactor):

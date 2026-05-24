@@ -2275,6 +2275,21 @@ def generate_dashboard_html(
     next_disabled = " disabled" if not next_key else ""
     prev_href = f' data-key="{prev_key}"' if prev_key else ""
     next_href = f' data-key="{next_key}"' if next_key else ""
+    # Build sidebar round select (always visible on desktop in sidebar)
+    sidebar_round_select = ""
+    if norm_rounds and len(norm_rounds) >= 2:
+        sb_options = []
+        for key, gt, d_str, is_finished, track in sorted(norm_rounds, key=lambda r: r[2], reverse=True):
+            sel = " selected" if key == current_key else ""
+            status = "✓" if is_finished else "⏳"
+            track_str = f" {track}" if track else ""
+            sb_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
+        sidebar_round_select = (
+            '<select class="sidebar-round-select" onchange="changeRound(this)">'
+            + "".join(sb_options)
+            + '</select>'
+        )
+
     round_navigator = (
         f'<div class="round-nav">'
         f'<button class="round-nav-btn"{prev_disabled}{prev_href} data-action="nav-round">'
@@ -2285,6 +2300,7 @@ def generate_dashboard_html(
         f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
         f'</button>'
         f'</div>'
+        f'{sidebar_round_select}'
     )
 
     # Race sections (all visible — no premium gating)
@@ -2382,7 +2398,7 @@ position:fixed;top:0;left:0;right:0;z-index:200}}
 .nav-brand{{font-size:17px;font-weight:800;color:#1e293b;letter-spacing:-0.03em;
 display:flex;align-items:center;gap:8px;flex-shrink:0}}
 .nav-brand span{{color:#f59e0b}}
-.nav-tabs{{display:flex;gap:0;position:relative}}
+.nav-tabs{{display:flex;gap:0;position:relative;min-width:0}}
 .nav-tab{{padding:8px 20px;border:none;background:transparent;
 cursor:pointer;font-size:13px;font-weight:500;color:#64748b;
 font-family:inherit;transition:all 0.2s;white-space:nowrap;
@@ -2391,11 +2407,11 @@ position:relative;border-radius:0}}
 .nav-tab.active{{color:#1e293b;font-weight:600}}
 .nav-tab.active::after{{content:'';position:absolute;bottom:-1px;left:8px;right:8px;
 height:2px;background:#f59e0b;border-radius:2px}}
-.nav-right{{display:flex;align-items:center;gap:14px}}
+.nav-right{{display:flex;align-items:center;gap:14px;flex-shrink:0}}
 .nav-clock{{font-family:'JetBrains Mono',monospace;font-size:12px;color:#94a3b8;font-weight:400}}
 .round-select{{padding:7px 14px;border-radius:10px;border:1px solid #e5e7eb;
 background:#ffffff;color:#1e293b;font-size:13px;cursor:pointer;outline:none;
-font-family:inherit;transition:border-color .2s,box-shadow .2s}}
+font-family:inherit;transition:border-color .2s,box-shadow .2s;flex-shrink:0;min-width:0}}
 .round-select:hover{{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
 
 /* ── App layout ── */
@@ -3002,6 +3018,10 @@ justify-content:center;transition:all .15s;flex-shrink:0;padding:0}}
 .round-nav-btn[disabled]{{opacity:.3;cursor:not-allowed}}
 .round-nav-label{{font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;
 letter-spacing:-0.01em;text-align:center;flex:1}}
+.sidebar-round-select{{width:100%;margin-top:8px;padding:6px 10px;border-radius:8px;
+border:1px solid #e5e7eb;background:#ffffff;color:#1e293b;font-size:12px;
+cursor:pointer;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
+.sidebar-round-select:hover{{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
 
 /* ── Strategy cards (ROI tab) ── */
 .sc-section{{margin-bottom:24px}}

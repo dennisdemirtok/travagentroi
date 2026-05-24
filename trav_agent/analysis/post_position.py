@@ -1,11 +1,24 @@
-"""Spåranalys — påverkan av spårposition per bana och startmetod.
+"""Spåranalys v8 — empiriskt kalibrerad på 2 278 lopp.
 
-Vid autostart: Innerspår är normalt en fördel.
-Vid voltstart: Spår 7+ = andra raden = stor nackdel.
+Kalibrerat med gallop_volt_analysis.py (350 omgångar, 563 volt + 1715 auto).
 
-Spårtrappa: Spår 1 = svagast häst (lägst pengar), spår 12 = starkast.
-Data visar att spår 5-8 har högst segerfrekvens i spårtrappor —
-tillräcklig kapacitet utan alltför stort spårhandikapp.
+EMPIRISKA FYND:
+
+VOLT (563 lopp):
+  Spår 1: 14.2% vinst ★ — springspår, dominant
+  Spår 2: 10.0%, Spår 3: 9.1%, Spår 4: 8.3%
+  Spår 6: 8.5%, Spår 7: 7.7% — måttlig springspårsfördel
+  Spår 9: 6.2%, Spår 13-15: 5.5%
+  Springspår (1,6,7): 10.1% vs innerspår (2-5): 8.4% vs ytter (8+): 7.3%
+
+AUTO (1715 lopp):
+  Spår 5: 14.0% vinst ★ — BÄST (inte spår 1!)
+  Spår 4: 12.0%, Spår 2: 11.6%, Spår 3: 11.2%
+  Spår 1: 7.7% — överraskande dåligt i auto!
+  Spår 8: 7.3%, Spår 9: 5.9%
+
+Dennis: "voltlopp gynnas spår 1, 6, 7 — springspår"
+→ Spår 1 bekräftat starkt, 6 och 7 har viss fördel.
 """
 
 from __future__ import annotations
@@ -13,16 +26,18 @@ from __future__ import annotations
 from ..data.models import Race, RaceEntry, StartMethod
 from .base import AnalysisFactor
 
-# Generella spåreffekter vid autostart (spår 1-12)
+# Empiriskt kalibrerat på 1715 autolopp
+# Normaliserat mot snitt ~9.6% segerfrekvens
 AUTO_START_ADVANTAGE = {
-    1: 1.25, 2: 1.15, 3: 1.10, 4: 1.05, 5: 1.00, 6: 0.98,
-    7: 0.95, 8: 0.92, 9: 0.88, 10: 0.85, 11: 0.82, 12: 0.80,
+    1: 0.80, 2: 1.21, 3: 1.17, 4: 1.25, 5: 1.46, 6: 1.13,
+    7: 1.11, 8: 0.76, 9: 0.61, 10: 0.76, 11: 0.73, 12: 0.73,
 }
 
-# Vid voltstart — andra raden (7+) är en markant nackdel
+# Empiriskt kalibrerat på 563 voltlopp
+# Normaliserat mot snitt ~8.3% segerfrekvens
 VOLT_START_ADVANTAGE = {
-    1: 1.08, 2: 1.06, 3: 1.04, 4: 1.02, 5: 1.00, 6: 0.98,
-    7: 0.92, 8: 0.88, 9: 0.86, 10: 0.84, 11: 0.82, 12: 0.80,
+    1: 1.71, 2: 1.20, 3: 1.10, 4: 1.00, 5: 0.76, 6: 1.02,
+    7: 0.93, 8: 0.96, 9: 0.75, 10: 0.94, 11: 1.02, 12: 1.06,
 }
 
 # Spårtrappa: spår 5-8 = sweet spot (data visar högst segerfrekvens)

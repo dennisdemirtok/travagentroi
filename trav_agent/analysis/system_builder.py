@@ -252,8 +252,17 @@ def predict_difficulty(race: Race) -> float:
         difficulty -= 3.0
 
     # 4. Voltstart (r=+0.147)
+    # Empiriskt: volt ökar oförutsägbarheten
+    # MEN: om favoriten har spår 1 i volt → lägre svårighet (14.2% vinst!)
     if race.start_method == StartMethod.VOLT:
         difficulty += 12.0
+        # Kompensera om favoriten har springspår i volt
+        if sorted_entries:
+            fav_pp = sorted_entries[0].post_position
+            if fav_pp == 1:
+                difficulty -= 8.0  # Spår 1 i volt = starkt (14.2% vinst)
+            elif fav_pp in (6, 7):
+                difficulty -= 3.0  # Springspår, måttlig fördel
 
     # 5. Spårtrappa (r=+0.137)
     distances = set(e.distance for e in entries if e.distance > 0)
@@ -293,12 +302,25 @@ def predict_difficulty(race: Race) -> float:
     if is_stolopp:
         difficulty += 5.0
 
-    # 9. Favorit bakspår
+    # 9. Favorit bakspår — med empirisk kalibrering
     if sorted_entries and sorted_entries[0].post_position >= 8:
-        difficulty += 6.0
+        if race.start_method == StartMethod.VOLT:
+            difficulty += 4.0  # Andra raden i volt, men data visar att det inte är så farligt (8.0% vinst spår 8)
+        else:
+            difficulty += 8.0  # Ytterspår i auto = markant nackdel (7.3% spår 8)
 
     # 10. Modellens upset_risk
     difficulty += race.upset_risk * 0.15
+
+    # 11. Galopphistorik hos favoriten → ökad skrällrisk
+    if sorted_entries:
+        fav_recent = sorted_entries[0].horse.recent_starts(5)
+        if fav_recent:
+            gallop_count = sum(1 for s in fav_recent if s.galloped)
+            if gallop_count >= 2:
+                difficulty += 8.0  # Favorit med upprepade galopperingar
+            elif fav_recent[0].galloped:
+                difficulty += 5.0  # Galopperade senast
 
     return max(0.0, min(100.0, difficulty))
 

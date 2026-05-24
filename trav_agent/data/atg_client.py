@@ -196,8 +196,8 @@ class ATGClient:
             driver_name = f"{fn} {ln}".strip()
 
         # Disk-status
-        is_disqualified = place_str in ("d", "dq", "dis")
-        is_galloped = "galopp" in str(data.get("place", "")).lower()
+        is_disqualified = data.get("disqualified", False) or place_str in ("d", "dq", "dis")
+        is_galloped = bool(data.get("galloped", False))
 
         return PastStart(
             start_date=race_date,
@@ -611,8 +611,8 @@ class ATGClient:
             start_method=StartMethod.VOLT if "volt" in str(data.get("startMethod", "")).lower() else StartMethod.AUTO,
             post_position=data.get("number", 0),
             placement=placement,
-            disqualified=data.get("disqualified", False),
-            galloped=data.get("gallpiRace", False) or data.get("galloped", False),
+            disqualified=bool(data.get("disqualified", False)),
+            galloped=bool(data.get("galloped", False)),
             km_time=km_time_val,
             prize_money=data.get("prizeMoney", 0),
             driver_name=data.get("driver", {}).get("name", "") if isinstance(data.get("driver"), dict) else "",

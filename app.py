@@ -786,6 +786,59 @@ async def api_system(game_type: str, day: str, budget: int = 2500):
         raise HTTPException(500, str(e))
 
 
+@app.get("/api/chansspik/{game_type}/{day}")
+async def api_chansspik(game_type: str, day: str, budget: int = 300):
+    """Chansspik-analys — upset-targeting system (mål: 25-100k utdelning)."""
+    game_type = game_type.upper()
+    key = f"{game_type}/{day}"
+
+    game_round = _round_cache.get(key)
+    if not game_round:
+        try:
+            d = date.fromisoformat(day)
+        except ValueError:
+            raise HTTPException(400, f"Ogiltigt datum: {day}")
+
+        client = ATGClient()
+        game_round = await client.fetch_full_round(game_type, d)
+        if not game_round:
+            raise HTTPException(404, f"Ingen {game_type} hittad för {day}")
+
+        analyzer = CompositeAnalyzer()
+        analyzer.analyze_round(game_round)
+
+    try:
+        from trav_agent.analysis.upset_system import analyze_upset_round, build_upset_system
+
+        analysis = analyze_upset_round(game_round)
+        plan = build_upset_system(game_round, budget=float(budget))
+
+        return {
+            "analysis": analysis,
+            "system": {
+                "strategy": plan.strategy_name,
+                "total_rows": plan.total_rows,
+                "total_cost": plan.total_cost,
+                "budget": budget,
+                "legs": [
+                    {
+                        "race_number": leg.race_number,
+                        "leg_type": leg.leg_type,
+                        "picks": leg.picks,
+                        "num_picks": leg.num_picks,
+                        "upset_risk": leg.upset_risk,
+                        "difficulty": leg.difficulty,
+                        "reasoning": leg.reasoning,
+                    }
+                    for leg in sorted(plan.legs, key=lambda l: l.race_number)
+                ],
+            },
+        }
+    except Exception as e:
+        logger.error(f"Chansspik error: {e}")
+        raise HTTPException(500, str(e))
+
+
 # ── Other API ────────────────────────────────────────────────────────────────
 
 @app.get("/api/analyze/{game_type}/{day}")

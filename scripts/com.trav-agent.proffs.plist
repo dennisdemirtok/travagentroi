@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.trav-agent.proffs</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/dennisdemirtok/trading/trav-agent/scripts/fetch_proffs.sh</string>
+    </array>
+
+    <!--
+        Pre-race fetches at 12:00 and 14:00 daily.
+        Captures viktat proffsstreck before races start.
+        Systems are ONLY available pre-race; historical games return empty.
+    -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>12</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>14</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/trav-proffs-fetch.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/trav-proffs-fetch.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

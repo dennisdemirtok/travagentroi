@@ -519,6 +519,7 @@ def build_system(
 
     Strategier:
     - "optimal": spike_easiest + rest4 (BEVISAT BÄST)
+    - "chansspik": Upset-targeting — siktar på 25-100k utdelning
     - "greedy": Balanced greedy (mer hits vid hög budget, lägre ROI)
     - "fixed": Legacy fast bredd (2S+rest4 etc)
     """
@@ -527,6 +528,10 @@ def build_system(
         row_price = ROW_PRICES.get(game_round.game_type, 0.50)
 
     max_rows = int(budget / row_price)
+
+    if strategy == "chansspik":
+        from .upset_system import build_upset_system
+        return build_upset_system(game_round, budget=budget, row_price=row_price)
 
     if strategy == "fixed":
         return _build_fixed_system(game_round, budget, row_price)
@@ -727,21 +732,31 @@ def build_multiple_systems(
     game_round: GameRound,
     budgets: list[float] | None = None,
 ) -> list[SystemPlan]:
-    """Bygg system vid flera budgetnivåer.
+    """Bygg system vid flera budgetnivåer — BÅDA strategierna.
 
-    Default: 300kr (bäst ROI), 500kr, 750kr.
-    Alla använder spike_easiest + rest4 (den ENDA bevisade strategin).
+    Inkluderar:
+    1. Spike Easiest (favorit-optimerad, bevisad +112% ROI)
+    2. Chansspik (upset-optimerad, siktar på 25-100k utdelning)
 
-    Resultat (336 omgångar):
-    - 300kr: 18 hits (5.4%), +112% ROI ★ REKOMMENDERAD
+    Resultat spike_easiest (336 omgångar):
+    - 300kr: 18 hits (5.4%), +112% ROI ★ SÄKRAST
     - 500kr: 20 hits (6.0%), +41% ROI
-    - 750kr: 25 hits (7.4%), +3% ROI
+
+    Chansspik (ny):
+    - Lägre hit rate men högre snitt-utdelning
+    - Mål: fånga 1-2 upsets per omgång
     """
     if budgets is None:
-        budgets = [300, 500, 750]
+        budgets = [300, 500]
 
     plans = []
     for budget in budgets:
+        # Strategy 1: Spike Easiest (proven, consistent)
         plan = build_system(game_round, budget=budget, strategy="optimal")
         plans.append(plan)
+
+        # Strategy 2: Chansspik (upset-targeting, higher payout)
+        plan_upset = build_system(game_round, budget=budget, strategy="chansspik")
+        plans.append(plan_upset)
+
     return plans

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.trav-agent.proffs-results</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/dennisdemirtok/trading/trav-agent/scripts/fetch_proffs.sh</string>
+        <string>--results</string>
+    </array>
+
+    <!--
+        Post-race results fetch at 22:00 daily.
+        Merges actual race outcomes (winner, placements, final odds)
+        into previously collected pre-race proffs data.
+    -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>22</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/trav-proffs-fetch.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/trav-proffs-fetch.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

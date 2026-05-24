@@ -1,6 +1,17 @@
-"""Spåranalys v8.2 — empiriskt kalibrerad på 2 278+ lopp.
+"""Spåranalys v9 — empiriskt kalibrerad på 15 255+ lopp.
 
 Kalibrerat med gallop_volt_analysis.py (350 omgångar, 563 volt + 1715 auto).
+Säsongseffekt kalibrerad på 15 255 lopp (alla V-spel 2015-2026).
+
+SÄSONGSEFFEKT (Dennis hypotes — BEKRÄFTAD):
+  Sommar (apr-sep): inner/outer ratio = 1.73x
+  Vinter (okt-mar): inner/outer ratio = 1.56x
+  → Framspår viktigare på sommaren (+11% relativ skillnad)
+
+  Specifikt:
+  Auto spår 4: 13.83% sommar vs 12.27% vinter (+1.55pp)
+  Spår 11: 5.94% sommar vs 7.04% vinter (-1.09pp)
+  Spår 12: 4.02% sommar vs 5.48% vinter (-1.46pp)
 
 EMPIRISKA FYND:
 
@@ -33,6 +44,8 @@ Dennis: "voltlopp gynnas spår 1, 6, 7 — springspår"
 """
 
 from __future__ import annotations
+
+from datetime import date as Date
 
 from ..data.models import Race, RaceEntry, StartMethod
 from .base import AnalysisFactor
@@ -96,6 +109,7 @@ class PostPosition(AnalysisFactor):
         2. Hästens historik från liknande spår → 30%
         3. Överprestationsbonus: bra resultat från dåligt spår → 30%
         + Tillägg-justering: position i andra volten (additiv, ±5 poäng)
+        + Säsongsjustering: framspår viktigare apr-sep (additiv, ±3 poäng)
         """
         general_score = self._general_position_score(entry, race) * 0.40
         history_score = self._position_history_score(entry, race) * 0.30
@@ -113,6 +127,11 @@ class PostPosition(AnalysisFactor):
         if is_tillagg and race.start_method == StartMethod.VOLT:
             tillagg_adj = self._tillagg_adjustment(entry, race)
             base += tillagg_adj
+
+        # Säsongsjustering: Dennis hypotes bekräftad på 15 255 lopp
+        # Sommar → framspår ännu bättre, bakspår ännu sämre
+        seasonal_adj = self._seasonal_adjustment(entry, race)
+        base += seasonal_adj
 
         return min(100.0, max(0.0, base))
 
@@ -206,6 +225,50 @@ class PostPosition(AnalysisFactor):
             scores.append(min(100.0, score))
 
         return sum(scores) / len(scores)
+
+    @staticmethod
+    def _seasonal_adjustment(entry: RaceEntry, race: Race) -> float:
+        """Säsongsjustering för startspår.
+
+        Bekräftad på 15 255 lopp (alla V-spel 2015-2026):
+        Sommar (apr-sep): inner/outer ratio = 1.73x
+        Vinter (okt-mar): inner/outer ratio = 1.56x
+
+        Autostart specifikt:
+        Spår 4 sommar: 13.83% vs 12.27% vinter (+1.55pp)
+        Spår 12 sommar: 4.02% vs 5.48% vinter (-1.46pp)
+
+        Returnerar ±3 poäng — liten men signifikant justering.
+        """
+        # Determine season from race date or current date
+        try:
+            race_date = race.date if hasattr(race, 'date') and race.date else None
+            if race_date and hasattr(race_date, 'month'):
+                month = race_date.month
+            else:
+                month = Date.today().month
+        except Exception:
+            month = Date.today().month
+
+        is_summer = month in [4, 5, 6, 7, 8, 9]
+
+        if not is_summer:
+            return 0.0  # No adjustment in winter (winter is baseline)
+
+        pos = entry.post_position
+
+        # Summer adjustments (empirical, relative to winter baseline)
+        # Inner posts: slightly better in summer
+        if pos <= 4:
+            return 2.0   # +2 points — framspår viktigare sommar
+        elif pos <= 6:
+            return 0.5   # Minimal effect
+        elif pos <= 8:
+            return -1.0  # Slight penalty
+        elif pos <= 10:
+            return -1.5  # Moderate penalty
+        else:
+            return -3.0  # Strong penalty — bakspår svårt sommar
 
     @staticmethod
     def _tillagg_adjustment(entry: RaceEntry, race: Race) -> float:

@@ -197,6 +197,65 @@ def analyze(game_type: str, day: str):
 @cli.command()
 @click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
 @click.argument("day", type=str)
+@click.option("--budget", "-b", type=float, default=300.0, help="Budget i kr")
+def chansspik(game_type: str, day: str, budget: float):
+    """Chansspik-analys — siktar på 25-100k utdelning."""
+
+    async def _run():
+        client = ATGClient()
+        d = parse_date(day)
+        click.echo(f"Chansspik-analys {game_type} {d} (budget {budget:.0f} kr)...")
+
+        game_round = await client.fetch_full_round(game_type.upper(), d)
+        if not game_round:
+            click.echo(f"✗ Ingen {game_type} hittad")
+            return
+
+        analyzer = CompositeAnalyzer()
+        analyzer.analyze_round(game_round)
+
+        from .analysis.upset_system import analyze_upset_round, build_upset_system
+
+        # Upset-analys
+        analysis = analyze_upset_round(game_round)
+        click.echo(f"\n{'='*60}")
+        click.echo(f"CHANSSPIK-ANALYS — {game_type} {d}")
+        click.echo(f"{'='*60}")
+        click.echo(f"Estimerad utdelningszon: {analysis['expected_payout']}")
+        click.echo(f"Rekommendation: {analysis['recommendation']}")
+        click.echo(f"Hög-skrällrisklonpp: {analysis['high_upset_races']}")
+        click.echo(f"Medium-skrällrisklopp: {analysis['medium_upset_races']}")
+
+        click.echo(f"\n{'─'*60}")
+        click.echo("SKRÄLLPOTENTIAL PER LOPP:")
+        click.echo(f"{'─'*60}")
+
+        for ra in analysis["race_analysis"]:
+            icon = "🔴" if ra["upset_potential"] >= 50 else ("🟡" if ra["upset_potential"] >= 30 else "🟢")
+            click.echo(
+                f"\n  Avd {ra['race_number']} ({ra['track']}, {ra['n_starters']} st) "
+                f"— {icon} Potential: {ra['upset_potential']:.0f}"
+            )
+            for c in ra["chansspik_candidates"]:
+                click.echo(
+                    f"    🎲 {c['horse']:<20} spår {c['post']:>2d} "
+                    f"({c['bet_pct']*100:.0f}%) — {c['upset_score']:.0f}p "
+                    f"[{', '.join(c['reasons'])}]"
+                )
+
+        # Bygg system
+        plan = build_upset_system(game_round, budget=budget)
+        click.echo(f"\n{'='*60}")
+        click.echo(f"CHANSSPIK-SYSTEM ({budget:.0f} kr)")
+        click.echo(f"{'='*60}")
+        click.echo(plan.summary())
+
+    asyncio.run(_run())
+
+
+@cli.command()
+@click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
+@click.argument("day", type=str)
 @click.option("--output", "-o", type=str, default=None, help="Output-fil (markdown)")
 def report(game_type: str, day: str, output: str):
     """Generera en fullständig analysrapport."""

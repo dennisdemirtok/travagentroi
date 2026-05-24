@@ -1135,13 +1135,88 @@ def _system_html(game_round: GameRound) -> str:
 
 
 def _dennis_system_html(game_round: GameRound) -> str:
-    """Greedy probability-maximizing system — adaptiv bredd per lopp."""
+    """System-rekommendationer — Spike Easiest (säker) + Chansspik (25-100k)."""
     try:
         from ..analysis.system_builder import build_system
     except ImportError:
         return ""
 
-    budgets = [300, 500, 750]
+    # ── CHANSSPIK-system (Dennis mål: 25-100k utdelning) ──
+    chansspik_cards = []
+    try:
+        from ..analysis.upset_system import build_upset_system, analyze_upset_round
+
+        # Upset analysis
+        upset_analysis = analyze_upset_round(game_round)
+
+        for budget in [300, 500]:
+            plan = build_system(game_round, budget=budget, strategy="chansspik")
+
+            pick_rows = []
+            for leg in sorted(plan.legs, key=lambda l: l.race_number):
+                race = game_round.get_race(leg.race_number)
+                dist = race.distance if race else 0
+                method = (race.start_method.value if race else "?")[:4]
+
+                is_upset_race = "CHANSSPIK" in leg.reasoning
+                is_spike_race = "SPIK-lopp" in leg.reasoning
+
+                if is_upset_race:
+                    type_badge = '\U0001f3b2 CHANSSPIK'
+                    border_style = 'border-left:3px solid #f59e0b'
+                elif is_spike_race:
+                    type_badge = '\U0001f512 SPIK'
+                    border_style = 'border-left:3px solid #22c55e'
+                else:
+                    type_badge = f'{leg.num_picks}-val'
+                    border_style = ''
+
+                picks_str = ", ".join(
+                    f"<strong>{p}</strong>"
+                    for p in leg.picks[:leg.num_picks]
+                )
+
+                upset_color = "#ef4444" if leg.upset_risk >= 50 else ("#f59e0b" if leg.upset_risk >= 30 else "#22c55e")
+
+                pick_rows.append(
+                    f'<tr style="{border_style}">'
+                    f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
+                    f'<td>{dist}m {method}</td>'
+                    f'<td style="color:{upset_color}">{leg.upset_risk:.0f}</td>'
+                    f'<td class="system-picks">{picks_str}</td>'
+                    f'<td>{leg.num_picks}</td>'
+                    f'</tr>'
+                )
+
+            rows_str = "".join(pick_rows)
+            cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
+
+            chansspik_cards.append(
+                f'<div class="system-card" style="border-left:3px solid #f59e0b">'
+                f'<div class="system-header">'
+                f'<h3>\U0001f3b2 Chansspik ({budget} kr) — Mål: 25-100k</h3>'
+                f'<span class="system-meta">{upset_analysis["expected_payout"]}</span>'
+                f'</div>'
+                f'<div class="system-stats">'
+                f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
+                f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
+                f'<div class="sys-stat"><span class="sys-val">{plan.num_spikes}</span><span class="sys-lbl">Spikar</span></div>'
+                f'<div class="sys-stat"><span class="sys-val">{upset_analysis["high_upset_races"]}</span><span class="sys-lbl">Skrällopp</span></div>'
+                f'</div>'
+                f'<div class="table-wrap">'
+                f'<table class="system-table">'
+                f'<thead><tr>'
+                f'<th>Lopp</th><th>Info</th><th>Skräll</th><th>Picks</th><th>#</th>'
+                f'</tr></thead>'
+                f'<tbody>{rows_str}</tbody>'
+                f'</table></div>'
+                f'</div>'
+            )
+    except Exception:
+        pass
+
+    # ── SPIKE EASIEST-system (bevisat +112% ROI) ──
+    budgets = [300, 500]
     cards = []
 
     for budget in budgets:
@@ -1209,7 +1284,7 @@ def _dennis_system_html(game_round: GameRound) -> str:
             f'</div>'
         )
 
-    return "".join(cards)
+    return "".join(chansspik_cards) + "".join(cards)
 
 
 def _stats_html(backlog_data: dict | None = None) -> str:

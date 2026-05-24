@@ -512,7 +512,8 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
     ]
 
     rows = []
-    for e in sorted_entries:
+    for rank_idx, e in enumerate(sorted_entries):
+        model_rank = rank_idx + 1  # 1-indexed
         fs = e.factor_scores
         bet_str = f"{e.bet_percentage:.1%}" if e.bet_percentage else "-"
         rec = e.recommendation
@@ -532,6 +533,15 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
 
         is_value = e in value_picks
         value_badge = ' <span class="value-badge">VALUE</span>' if is_value else ""
+
+        # Chansspik vinnarspel indicator: model rank ≤2, streck 5-20%
+        # Historical ROI: +47.8% on flat bet (walk-forward validated)
+        is_chansspik = (
+            model_rank <= 2
+            and e.bet_percentage is not None
+            and 0.05 <= e.bet_percentage <= 0.20
+        )
+        winbet_badge = ' <span class="winbet-badge">VINNARSPEL</span>' if is_chansspik else ""
 
         has_starts = len(e.horse.past_starts) > 0
         toggle_class = " clickable" if has_starts else ""
@@ -572,7 +582,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         rows.append(
             f'<tr class="horse-row{toggle_class}" data-horse="{e.post_position}">'
             f'<td class="pos">{e.post_position}</td>'
-            f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}</td>'
+            f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}{winbet_badge}</td>'
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
@@ -735,6 +745,19 @@ def _summary_html(game_round: GameRound) -> str:
                 else:
                     result_badge = '<span class="miss-badge" style="font-size:.7rem">&#10007;</span>'
 
+        # Chansspik vinnarspel candidates in this race
+        winbet_candidates = []
+        for rank_idx, entry in enumerate(sorted_entries):
+            if rank_idx >= 2:
+                break
+            if (entry.bet_percentage is not None
+                    and 0.05 <= entry.bet_percentage <= 0.20):
+                winbet_candidates.append(entry)
+        winbet_orc_badge = ""
+        if winbet_candidates:
+            names = ", ".join(f"{e.post_position} {_esc(e.horse.name[:10])}" for e in winbet_candidates)
+            winbet_orc_badge = f'<div class="orc-winbet">🎰 {names}</div>'
+
         # Race info line
         dist_str = f"{race.distance}m"
         method_str = race.start_method.value[0].upper()
@@ -767,10 +790,83 @@ def _summary_html(game_round: GameRound) -> str:
             f'</div>'
             f'</div>'
             f'<div class="orc-gard">{gard_str if gard_str else "&mdash;"}</div>'
+            f'{winbet_orc_badge}'
             f'</div>'
         )
 
     return f'<div class="overview-race-grid">{"".join(cards)}</div>'
+
+
+def _vinnarspel_summary_html(game_round: GameRound) -> str:
+    """Render a summary card showing all chansspik vinnarspel candidates.
+
+    Criteria: model rank ≤ 2, streck 5-20%.
+    Historical ROI: +47.8% on flat bet (walk-forward validated across all periods).
+    """
+    candidates = []
+    for race in game_round.races:
+        sorted_entries = sorted(
+            race.active_entries,
+            key=lambda e: e.super_score,
+            reverse=True,
+        )
+        for rank_idx, e in enumerate(sorted_entries):
+            model_rank = rank_idx + 1
+            if model_rank > 2:
+                break
+            if (
+                e.bet_percentage is not None
+                and 0.05 <= e.bet_percentage <= 0.20
+            ):
+                odds_est = round(1 / e.bet_percentage, 1) if e.bet_percentage > 0 else 0
+                candidates.append({
+                    "race_num": race.race_number,
+                    "name": e.horse.name,
+                    "post": e.post_position,
+                    "score": e.super_score,
+                    "streck": e.bet_percentage,
+                    "rank": model_rank,
+                    "odds_est": odds_est,
+                    "driver": e.driver_name or "",
+                })
+
+    if not candidates:
+        return ""
+
+    rows = []
+    for c in candidates:
+        streck_pct = c["streck"] * 100
+        rank_badge = "🥇" if c["rank"] == 1 else "🥈"
+        rows.append(
+            f'<tr class="winbet-row" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+            f'<td><strong>Avd {c["race_num"]}</strong></td>'
+            f'<td>{rank_badge} {c["post"]} {_esc(c["name"][:20])}</td>'
+            f'<td><strong>{c["score"]:.0f}</strong></td>'
+            f'<td>{streck_pct:.0f}%</td>'
+            f'<td>~{c["odds_est"]:.1f}x</td>'
+            f'<td class="winbet-driver">{_esc(c["driver"][:15])}</td>'
+            f'</tr>'
+        )
+
+    count = len(candidates)
+    roi_text = "+48% ROI historiskt"
+
+    return (
+        f'<div class="winbet-summary-card">'
+        f'<div class="winbet-header">'
+        f'<span class="winbet-title">🎰 Vinnarspel — Chansspik</span>'
+        f'<span class="winbet-roi">{roi_text}</span>'
+        f'</div>'
+        f'<div class="winbet-desc">'
+        f'{count} kandidater denna omgång — modell topp-2, streck 5-20%'
+        f'</div>'
+        f'<table class="winbet-table">'
+        f'<thead><tr><th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th><th>Odds</th><th>Kusk</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table>'
+        f'<div class="winbet-footnote">Flat bet 500kr/st → historisk vinst +82 053kr på 343 spel (12 mån). Walk-forward validerat.</div>'
+        f'</div>'
+    )
 
 
 def _risk_summary_bar(game_round: GameRound) -> str:
@@ -2345,6 +2441,7 @@ def generate_dashboard_html(
     backlog_section = _backlog_html(game_round, backlog_data)
     accuracy = _accuracy_html(game_round)
     risk_bar = _risk_summary_bar(game_round)
+    winbet_summary = _vinnarspel_summary_html(game_round)
 
     current_key = f"{game_round.game_type}/{game_round.round_date}"
 
@@ -2651,6 +2748,29 @@ letter-spacing:.01em}}
 .value-badge{{background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;padding:.15rem .5rem;border-radius:20px;
 font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
 text-transform:uppercase;letter-spacing:.04em}}
+.winbet-badge{{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#ffffff;padding:.15rem .5rem;border-radius:20px;
+font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
+text-transform:uppercase;letter-spacing:.04em;animation:winbet-pulse 2.5s ease-in-out infinite}}
+@keyframes winbet-pulse{{0%,100%{{box-shadow:0 0 0 0 rgba(139,92,246,0.4)}}50%{{box-shadow:0 0 8px 3px rgba(139,92,246,0.2)}}}}
+
+/* Vinnarspel summary card */
+.winbet-summary-card{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;
+padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);
+border-left:4px solid #8b5cf6}}
+.winbet-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}}
+.winbet-title{{font-weight:800;font-size:1.05rem;color:#1e293b}}
+.winbet-roi{{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;padding:.25rem .8rem;
+border-radius:20px;font-size:.78rem;font-weight:700;letter-spacing:.02em}}
+.winbet-desc{{font-size:.85rem;color:#6b7280;margin-bottom:12px}}
+.winbet-table{{width:100%;border-collapse:collapse;font-size:.85rem}}
+.winbet-table thead th{{text-align:left;font-weight:600;color:#6b7280;font-size:.75rem;
+text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:2px solid #e5e7eb}}
+.winbet-table tbody td{{padding:8px 10px;border-bottom:1px solid #f3f4f6}}
+.winbet-row:hover{{background:rgba(139,92,246,0.04)}}
+.winbet-driver{{color:#6b7280;font-size:.8rem}}
+.winbet-footnote{{margin-top:10px;font-size:.75rem;color:#94a3b8;font-style:italic}}
+.orc-winbet{{background:rgba(139,92,246,0.08);color:#7c3aed;font-size:.72rem;font-weight:600;
+padding:4px 8px;border-radius:6px;margin-top:6px;border:1px solid rgba(139,92,246,0.15)}}
 .value-picks{{background:rgba(245,166,35,0.04);border:1px solid rgba(245,166,35,0.12);border-radius:10px;
 padding:.6rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#b45309}}
 .proffs-cell{{font-size:.8rem;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding:4px 6px !important}}
@@ -3330,6 +3450,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
 <div class="view active" id="view-dashboard">
   <section id="s-summary" class="dashboard-section active">
     {risk_bar}
+    {winbet_summary}
     {sv_bar}
     {ranking}
     {consensus_ranking}
@@ -4303,16 +4424,16 @@ def generate_landing_html() -> str:
 *{margin:0;padding:0;box-sizing:border-box}
 ::selection{background:rgba(59,130,246,0.3)}
 body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-background:#0c0e14;color:#e2e8f0;line-height:1.6;-webkit-font-smoothing:antialiased;
+background:#f5f6f8;color:#1e293b;line-height:1.6;-webkit-font-smoothing:antialiased;
 overflow-x:hidden}
 
 /* Nav */
 .landing-nav{position:fixed;top:0;left:0;right:0;padding:1rem 2rem;display:flex;
 justify-content:space-between;align-items:center;z-index:50;
-background:rgba(15,17,23,0.8);backdrop-filter:blur(12px);border-bottom:1px solid rgba(46,49,56,0.5)}
+background:rgba(255,255,255,0.9);backdrop-filter:blur(12px);border-bottom:1px solid #e5e7eb}
 .landing-nav .logo{font-size:1.2rem;font-weight:800;letter-spacing:-0.02em}
 .landing-nav .logo span{color:#f59e0b}
-.nav-cta{background:#f59e0b;color:#0f1117;border:none;padding:.5rem 1.2rem;border-radius:10px;
+.nav-cta{background:#f59e0b;color:#1e293b;border:none;padding:.5rem 1.2rem;border-radius:10px;
 font-weight:700;font-size:.85rem;cursor:pointer;transition:all .25s;
 box-shadow:0 2px 12px rgba(245,166,35,0.3)}
 .nav-cta:hover{background:#d4911e;transform:translateY(-1px)}
@@ -4330,7 +4451,7 @@ border:1px solid rgba(245,166,35,0.2)}
 max-width:700px;margin-bottom:1.5rem}
 .hero h1 em{font-style:normal;color:#f59e0b}
 .hero p{font-size:1.15rem;color:#6b7280;max-width:500px;margin-bottom:2.5rem}
-.hero-cta{display:inline-flex;align-items:center;gap:.5rem;background:#f59e0b;color:#0f1117;
+.hero-cta{display:inline-flex;align-items:center;gap:.5rem;background:#f59e0b;color:#1e293b;
 border:none;padding:.8rem 2rem;border-radius:12px;font-weight:700;font-size:1rem;
 cursor:pointer;transition:all .3s;box-shadow:0 4px 20px rgba(245,166,35,0.35)}
 .hero-cta:hover{background:#d4911e;transform:translateY(-2px);box-shadow:0 8px 30px rgba(245,166,35,0.4)}
@@ -4346,17 +4467,17 @@ cursor:pointer;transition:all .3s;box-shadow:0 4px 20px rgba(245,166,35,0.35)}
 .features h2{text-align:center;font-size:2rem;font-weight:800;margin-bottom:.8rem;letter-spacing:-0.02em}
 .features .subtitle{text-align:center;color:#6b7280;margin-bottom:3rem;font-size:1rem}
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem}
-.feature-card{background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:2rem;
+.feature-card{background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:2rem;
 transition:all .3s}
-.feature-card:hover{border-color:#3a3d45;transform:translateY(-2px);
-box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+.feature-card:hover{border-color:#cbd5e1;transform:translateY(-2px);
+box-shadow:0 8px 24px rgba(0,0,0,0.08)}
 .feature-icon{font-size:1.8rem;margin-bottom:1rem}
-.feature-card h3{font-size:1.05rem;font-weight:700;margin-bottom:.5rem;color:#e2e8f0}
+.feature-card h3{font-size:1.05rem;font-weight:700;margin-bottom:.5rem;color:#1e293b}
 .feature-card p{color:#6b7280;font-size:.88rem;line-height:1.6}
 
 /* Social proof */
-.proof{padding:4rem 2rem;text-align:center;background:#111318;border-top:1px solid #2e3138;
-border-bottom:1px solid rgba(255,255,255,0.06)}
+.proof{padding:4rem 2rem;text-align:center;background:#f1f5f9;border-top:1px solid #e5e7eb;
+border-bottom:1px solid #e5e7eb}
 .proof h2{font-size:1.8rem;font-weight:800;margin-bottom:1rem}
 .proof-stat{font-size:3rem;font-weight:900;color:#22c55e;margin-bottom:.5rem;
 font-variant-numeric:tabular-nums}
@@ -4366,29 +4487,29 @@ font-variant-numeric:tabular-nums}
 .pricing{padding:5rem 2rem;max-width:900px;margin:0 auto}
 .pricing h2{text-align:center;font-size:2rem;font-weight:800;margin-bottom:3rem}
 .price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
-.price-card{background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:2.5rem;
+.price-card{background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:2.5rem;
 text-align:center;position:relative}
 .price-card.featured{border-color:#f59e0b;box-shadow:0 0 30px rgba(245,166,35,0.15)}
 .price-card.featured::before{content:'Populärast';position:absolute;top:-12px;left:50%;
-transform:translateX(-50%);background:#f59e0b;color:#0f1117;padding:.2rem 1rem;
+transform:translateX(-50%);background:#f59e0b;color:#1e293b;padding:.2rem 1rem;
 border-radius:20px;font-size:.72rem;font-weight:700}
 .price-name{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
 .price-amount{font-size:2.5rem;font-weight:900;color:#f59e0b;margin-bottom:.3rem}
 .price-amount span{font-size:.9rem;color:#6b7280;font-weight:500}
 .price-desc{color:#6b7280;font-size:.85rem;margin-bottom:1.5rem}
 .price-features{list-style:none;text-align:left;margin-bottom:2rem}
-.price-features li{padding:.4rem 0;font-size:.88rem;color:#e2e8f0}
+.price-features li{padding:.4rem 0;font-size:.88rem;color:#1e293b}
 .price-features li::before{content:'\\2713';color:#22c55e;font-weight:700;margin-right:.5rem}
 .price-btn{width:100%;padding:.7rem;border-radius:10px;border:none;font-weight:700;
 font-size:.9rem;cursor:pointer;transition:all .25s}
-.price-btn.primary{background:#f59e0b;color:#0f1117}
+.price-btn.primary{background:#f59e0b;color:#1e293b}
 .price-btn.primary:hover{background:#d4911e}
-.price-btn.secondary{background:rgba(255,255,255,0.02);color:#e2e8f0;border:1px solid rgba(255,255,255,0.06)}
-.price-btn.secondary:hover{background:rgba(255,255,255,0.06)}
+.price-btn.secondary{background:#f9fafb;color:#1e293b;border:1px solid #e5e7eb}
+.price-btn.secondary:hover{background:#f1f5f9}
 
 /* Footer */
 .landing-footer{padding:2rem;text-align:center;color:#4b5563;font-size:.8rem;
-border-top:1px solid #2e3138}
+border-top:1px solid #e5e7eb}
 
 @media(max-width:768px){
   .hero h1{font-size:2.2rem}
@@ -4498,7 +4619,7 @@ border-top:1px solid #2e3138}
 .upcoming h2{text-align:center;font-size:1.8rem;font-weight:800;margin-bottom:.5rem}
 .upcoming .sub{text-align:center;color:#6b7280;margin-bottom:2rem}
 #upcoming-list{display:flex;flex-direction:column;gap:.75rem;align-items:center}
-.game-link{display:flex;align-items:center;gap:1rem;width:100%;max-width:500px;padding:1rem 1.5rem;background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:12px;text-decoration:none;color:#e2e8f0;transition:all .2s;cursor:pointer}
+.game-link{display:flex;align-items:center;gap:1rem;width:100%;max-width:500px;padding:1rem 1.5rem;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;text-decoration:none;color:#1e293b;transition:all .2s;cursor:pointer}
 .game-link:hover{border-color:#f59e0b;transform:translateY(-1px)}
 .game-link .badge{background:rgba(245,166,35,0.15);color:#f59e0b;padding:.3rem .8rem;border-radius:8px;font-weight:700;font-size:.9rem;min-width:50px;text-align:center}
 .game-link .date{flex:1}

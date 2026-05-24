@@ -200,9 +200,14 @@ async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_for
                 if game_list and game_list[0].get("tracks"):
                     tracks = game_list[0]["tracks"]
                     if isinstance(tracks, list) and tracks:
-                        track = tracks[0].get("name", "")
+                        first_track = tracks[0]
+                        if isinstance(first_track, dict):
+                            track = first_track.get("name", "")
+                        # tracks can be a list of ints (track IDs) — skip
                     elif isinstance(tracks, dict):
-                        track = next(iter(tracks.values()), {}).get("name", "")
+                        first_val = next(iter(tracks.values()), {})
+                        if isinstance(first_val, dict):
+                            track = first_val.get("name", "")
                 is_past = d < today
                 key = f"{gt_upper}/{d}"
                 rounds.append((key, gt_upper, str(d), is_past, track))

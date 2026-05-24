@@ -1,429 +1,257 @@
 #!/usr/bin/env python3
-"""Jämför modellens predictions mot spelmarknadens streckprocent.
+"""Modell vs Marknad — slår vår modell streckprocenten?
 
-Kör CompositeAnalyzer på alla historiska V75+V85-omgångar och jämför:
-- Model ranking (composite_score, högst först)
-- Market ranking (bet_percentage / streckprocent, högst först)
+Hämtar slutodds (finalOdds) från cachade lopp och jämför
+modellens ranking med marknadens ranking (implicit streckprocent).
 
-Skriver ut detaljerade jämförelser: overall, per startmetod, per fältstorlek,
-skrällar, favoriter, head-to-head och kalibrering.
+Dennis: "Slår ens min modell vs streckprocenten?"
 """
 
-from __future__ import annotations
-
-import asyncio
+import json
+import glob
 import statistics
-import sys
-import time
 from collections import defaultdict
-from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 
-from trav_agent.analysis.composite import CompositeAnalyzer
-from trav_agent.config import AnalysisConfig
-from trav_agent.data.atg_client import ATGClient
-from trav_agent.data.models import GameRound
-
-import logging
-
-logging.basicConfig(
-    level=logging.WARNING, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S"
-)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-
-def filter_future_starts(game_round: GameRound) -> None:
-    """Remove starts that happened after the race date (prevent data leakage)."""
-    for race in game_round.races:
-        for entry in race.entries:
-            entry.horse.past_starts = [
-                s for s in entry.horse.past_starts if s.start_date < race.race_date
-            ]
-
-
-def compute_metrics(races: list[dict], label: str) -> dict:
-    """Compute top-N hit rates and rank stats for a set of races.
-
-    Each race dict has keys: model_ranking, market_ranking, winner, field_size
-    """
-    n = len(races)
-    if n == 0:
-        return {}
-
-    model_top1 = model_top2 = model_top3 = model_top5 = 0
-    market_top1 = market_top2 = market_top3 = market_top5 = 0
-    model_ranks = []
-    market_ranks = []
-
-    for r in races:
-        winner = r["winner"]
-        mr = r["model_ranking"]
-        mk = r["market_ranking"]
-
-        # Model rank of winner
-        if winner in mr:
-            m_rank = mr.index(winner) + 1
-        else:
-            m_rank = len(mr) + 1
-        model_ranks.append(m_rank)
-
-        if m_rank <= 1:
-            model_top1 += 1
-        if m_rank <= 2:
-            model_top2 += 1
-        if m_rank <= 3:
-            model_top3 += 1
-        if m_rank <= 5:
-            model_top5 += 1
-
-        # Market rank of winner
-        if winner in mk:
-            k_rank = mk.index(winner) + 1
-        else:
-            k_rank = len(mk) + 1
-        market_ranks.append(k_rank)
-
-        if k_rank <= 1:
-            market_top1 += 1
-        if k_rank <= 2:
-            market_top2 += 1
-        if k_rank <= 3:
-            market_top3 += 1
-        if k_rank <= 5:
-            market_top5 += 1
-
-    return {
-        "n": n,
-        "model_top1": model_top1 / n,
-        "model_top2": model_top2 / n,
-        "model_top3": model_top3 / n,
-        "model_top5": model_top5 / n,
-        "model_avg_rank": statistics.mean(model_ranks),
-        "model_median_rank": statistics.median(model_ranks),
-        "market_top1": market_top1 / n,
-        "market_top2": market_top2 / n,
-        "market_top3": market_top3 / n,
-        "market_top5": market_top5 / n,
-        "market_avg_rank": statistics.mean(market_ranks),
-        "market_median_rank": statistics.median(market_ranks),
-        "model_ranks": model_ranks,
-        "market_ranks": market_ranks,
-    }
+def load_backtest_races():
+    """Ladda alla backtest-lopp med prediktion + utfall."""
+    files = [
+        "backtest_results/backtest_V75_2024-01-01_2026-04-01.json",
+        "backtest_results/backtest_V85_2024-01-01_2026-04-01.json",
+        "backtest_results/backtest_V86_2024-01-01_2026-04-01.json",
+    ]
+    races = []
+    for fp in files:
+        p = Path(fp)
+        if not p.exists():
+            continue
+        with open(p) as f:
+            data = json.load(f)
+        game_type = data.get("game_type", "?")
+        for rd in data["predictions"]:
+            date = rd.get("date", "?")
+            for race in rd["races"]:
+                race["_game_type"] = game_type
+                race["_round_date"] = date
+                races.append(race)
+    return races
 
 
-def print_metrics_table(metrics: dict, title: str):
-    """Print a nicely formatted comparison table."""
-    if not metrics:
-        print(f"  (no data)")
-        return
+def main():
+    races = load_backtest_races()
+    print(f"Backtest-lopp: {len(races)}")
 
-    n = metrics["n"]
-    print(f"  Races: {n}")
-    print(f"  {'Metric':<25} {'Model':>10} {'Market (streck)':>16}")
-    print(f"  {'-'*25} {'-'*10} {'-'*16}")
-    print(
-        f"  {'Top-1 (rank 1 wins)':<25} {metrics['model_top1']:>9.1%} {metrics['market_top1']:>15.1%}"
-    )
-    print(
-        f"  {'Top-2 (winner in top 2)':<25} {metrics['model_top2']:>9.1%} {metrics['market_top2']:>15.1%}"
-    )
-    print(
-        f"  {'Top-3 (winner in top 3)':<25} {metrics['model_top3']:>9.1%} {metrics['market_top3']:>15.1%}"
-    )
-    print(
-        f"  {'Top-5 (winner in top 5)':<25} {metrics['model_top5']:>9.1%} {metrics['market_top5']:>15.1%}"
-    )
-    print(
-        f"  {'Avg rank of winner':<25} {metrics['model_avg_rank']:>10.2f} {metrics['market_avg_rank']:>16.2f}"
-    )
-    print(
-        f"  {'Median rank of winner':<25} {metrics['model_median_rank']:>10.1f} {metrics['market_median_rank']:>16.1f}"
-    )
+    matched = []
+    no_odds = 0
 
+    for race in races:
+        date = race.get("_round_date", "")
+        track = race.get("track", "?")
+        race_num = race.get("race_number", 0)
+        actual = race.get("actual_result", [])
+        ranking = race.get("predicted_ranking", [])
 
-async def main():
-    start_time = time.time()
+        if not actual or not ranking:
+            continue
 
-    # ── Fetch data (same as fine_tune_weights.py) ──────────────────────────
-    client = ATGClient()
-    all_rounds: list[GameRound] = []
-    end = date(2026, 2, 21)
+        winner = actual[0]
 
-    for gt, start in [("V75", date(2024, 1, 1)), ("V85", date(2024, 3, 1))]:
-        logger.info(f"Fetching {gt}...")
-        async for day, gr in client.fetch_historical_rounds_iter(gt, start, end):
-            if gr and gr.is_finished:
-                all_rounds.append(gr)
+        # Hitta odds i cache
+        odds = None
+        for track_pattern in glob.glob(f"cache/{date}_*_{race_num}_*.json"):
+            try:
+                with open(track_pattern) as f:
+                    data = json.load(f)
+                if data.get("status") != "results":
+                    continue
 
-    logger.info(f"Total: {len(all_rounds)} rounds")
+                race_winner = None
+                horse_odds = {}
+                for s in data.get("starts", []):
+                    result = s.get("result", {})
+                    num = s.get("number", 0)
+                    if result and "finalOdds" in result:
+                        horse_odds[num] = result["finalOdds"]
+                        if result.get("place") == 1:
+                            race_winner = num
 
-    # ── Analyze all rounds and collect race data ───────────────────────────
-    logger.info("Analyzing all rounds with CompositeAnalyzer...")
-    all_races = []
-    skipped_no_result = 0
-    skipped_no_market = 0
-
-    for gr in all_rounds:
-        gr_copy = gr.model_copy(deep=True)
-        filter_future_starts(gr_copy)
-        analyzer = CompositeAnalyzer(AnalysisConfig())
-        analyzer.analyze_round(gr_copy)
-
-        for race in gr_copy.races:
-            if not race.result_order or not race.active_entries:
-                skipped_no_result += 1
-                continue
-
-            winner = race.result_order[0]
-
-            # Check if market data is complete (all entries need bet_percentage)
-            entries_with_bp = [
-                e for e in race.active_entries if e.bet_percentage is not None
-            ]
-            if len(entries_with_bp) < len(race.active_entries):
-                # Some entries lack market data — skip this race
-                skipped_no_market += 1
-                continue
-
-            # Model ranking: sort by composite_score descending
-            model_sorted = sorted(
-                race.active_entries, key=lambda e: e.composite_score, reverse=True
-            )
-            model_ranking = [e.post_position for e in model_sorted]
-
-            # Market ranking: sort by bet_percentage descending
-            market_sorted = sorted(
-                race.active_entries, key=lambda e: e.bet_percentage, reverse=True
-            )
-            market_ranking = [e.post_position for e in market_sorted]
-
-            # Winner's bet_percentage
-            winner_bp = None
-            for e in race.active_entries:
-                if e.post_position == winner:
-                    winner_bp = e.bet_percentage
+                if race_winner == winner and horse_odds:
+                    odds = horse_odds
                     break
+            except Exception:
+                continue
 
-            all_races.append(
-                {
-                    "winner": winner,
-                    "model_ranking": model_ranking,
-                    "market_ranking": market_ranking,
-                    "method": race.start_method.value,
-                    "field_size": len(race.active_entries),
-                    "winner_bp": winner_bp,
-                    "game_type": gr.game_type,
-                    "date": race.race_date.isoformat(),
-                    "track": race.track_name,
-                    "race_number": race.race_number,
-                }
-            )
+        if not odds:
+            no_odds += 1
+            continue
 
-    logger.info(
-        f"Collected {len(all_races)} races with complete data "
-        f"(skipped {skipped_no_result} no-result, {skipped_no_market} incomplete market)"
-    )
+        market_ranking = sorted(
+            [h for h, o in odds.items() if o > 0],
+            key=lambda h: odds[h]
+        )
+        model_ranking = ranking
 
-    if not all_races:
-        print("ERROR: No races with complete data found!")
+        try:
+            model_pos = model_ranking.index(winner) + 1
+        except ValueError:
+            continue
+        try:
+            market_pos = market_ranking.index(winner) + 1
+        except ValueError:
+            continue
+
+        matched.append({
+            "date": date,
+            "track": track,
+            "race_num": race_num,
+            "winner": winner,
+            "model_pos": model_pos,
+            "market_pos": market_pos,
+            "model_ranking": model_ranking,
+            "market_ranking": market_ranking,
+            "winner_odds": odds.get(winner, 0),
+            "n_horses": len(model_ranking),
+            "game_type": race.get("_game_type", "?"),
+        })
+
+    print(f"Matchade med odds: {len(matched)}")
+    print(f"Utan odds (ej i cache): {no_odds}")
+    print()
+
+    if not matched:
+        print("Inga matchade lopp!")
         return
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # A) OVERALL COMPARISON
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("A) OVERALL COMPARISON — Model vs Market (streckprocent)")
+    # === JÄMFÖRELSE ===
     print("=" * 70)
-    overall = compute_metrics(all_races, "Overall")
-    print_metrics_table(overall, "Overall")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # B) BY RACE TYPE (volt vs auto)
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("B) BY START METHOD")
+    print("MODELL VS MARKNAD (slutodds)")
     print("=" * 70)
 
-    volt_races = [r for r in all_races if r["method"] == "volt"]
-    auto_races = [r for r in all_races if r["method"] == "auto"]
+    for k_label, k_val in [("Rank 1", 1), ("Top 2", 2), ("Top 3", 3), ("Top 4", 4), ("Top 5", 5)]:
+        model_hits = sum(1 for r in matched if r["model_pos"] <= k_val)
+        market_hits = sum(1 for r in matched if r["market_pos"] <= k_val)
+        total = len(matched)
+        model_pct = model_hits / total * 100
+        market_pct = market_hits / total * 100
+        diff = model_pct - market_pct
+        w = "MODELL" if diff > 0 else "MARKNAD" if diff < 0 else "LIKA"
+        print(f"  {k_label:>6}: Modell {model_pct:>5.1f}% ({model_hits:>4})  |  "
+              f"Marknad {market_pct:>5.1f}% ({market_hits:>4})  |  "
+              f"Diff {diff:>+5.1f}%  {w}")
 
-    print(f"\n  --- VOLT ({len(volt_races)} races) ---")
-    print_metrics_table(compute_metrics(volt_races, "Volt"), "Volt")
-
-    print(f"\n  --- AUTO ({len(auto_races)} races) ---")
-    print_metrics_table(compute_metrics(auto_races, "Auto"), "Auto")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # C) BY FIELD SIZE
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("C) BY FIELD SIZE")
+    # Per spelform
+    print()
+    print("=" * 70)
+    print("PER SPELFORM")
     print("=" * 70)
 
-    small = [r for r in all_races if r["field_size"] <= 8]
-    medium = [r for r in all_races if 9 <= r["field_size"] <= 11]
-    large = [r for r in all_races if r["field_size"] >= 12]
+    for game_type in ["V75", "V85", "V86"]:
+        subset = [r for r in matched if r["game_type"] == game_type]
+        if not subset:
+            continue
+        print(f"\n  {game_type} ({len(subset)} lopp):")
+        for k_val in [1, 2, 4]:
+            m_h = sum(1 for r in subset if r["model_pos"] <= k_val)
+            k_h = sum(1 for r in subset if r["market_pos"] <= k_val)
+            t = len(subset)
+            label = f"Top {k_val}" if k_val > 1 else "Rank 1"
+            d = m_h/t*100 - k_h/t*100
+            w = "M+" if d > 0 else "m+" if d < 0 else "="
+            print(f"    {label:>6}: Modell {m_h/t*100:>5.1f}% | Marknad {k_h/t*100:>5.1f}% | {d:>+5.1f}% {w}")
 
-    print(f"\n  --- Small field (<=8 starters, {len(small)} races) ---")
-    print_metrics_table(compute_metrics(small, "Small"), "Small")
-
-    print(f"\n  --- Medium field (9-11 starters, {len(medium)} races) ---")
-    print_metrics_table(compute_metrics(medium, "Medium"), "Medium")
-
-    print(f"\n  --- Large field (12+ starters, {len(large)} races) ---")
-    print_metrics_table(compute_metrics(large, "Large"), "Large")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # D) UPSET ANALYSIS (skrallar)
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("D) UPSET ANALYSIS (winner had <10% streck)")
+    # Per-lopp breakdown
+    print()
+    print("=" * 70)
+    print("PER LOPP: MODELL VS MARKNAD")
     print("=" * 70)
 
-    upsets = [r for r in all_races if r["winner_bp"] is not None and r["winner_bp"] < 0.10]
+    model_better = sum(1 for r in matched if r["model_pos"] < r["market_pos"])
+    market_better = sum(1 for r in matched if r["market_pos"] < r["model_pos"])
+    equal = sum(1 for r in matched if r["model_pos"] == r["market_pos"])
 
+    print(f"\n  Modell bättre rank: {model_better} ({model_better/len(matched)*100:.1f}%)")
+    print(f"  Marknad bättre rank: {market_better} ({market_better/len(matched)*100:.1f}%)")
+    print(f"  Samma rank: {equal} ({equal/len(matched)*100:.1f}%)")
+
+    model_avg = statistics.mean(r["model_pos"] for r in matched)
+    market_avg = statistics.mean(r["market_pos"] for r in matched)
+    print(f"\n  Modellens avg rank för vinnare: {model_avg:.2f}")
+    print(f"  Marknadens avg rank för vinnare: {market_avg:.2f}")
+    diff_rank = model_avg - market_avg
+    print(f"  Diff: {diff_rank:+.2f} ({'Modell bättre' if diff_rank < 0 else 'Marknad bättre'})")
+
+    # Upsets
+    print()
+    print("=" * 70)
+    print("VID UPSETS (odds >= 5.0)")
+    print("=" * 70)
+
+    upsets = [r for r in matched if r["winner_odds"] >= 5.0]
     if upsets:
-        upset_metrics = compute_metrics(upsets, "Upsets")
-        print(f"\n  Total upsets: {len(upsets)} / {len(all_races)} ({len(upsets)/len(all_races):.1%} of races)")
-        print(f"\n  {'Metric':<30} {'Model':>10} {'Market (streck)':>16}")
-        print(f"  {'-'*30} {'-'*10} {'-'*16}")
-        print(
-            f"  {'Avg rank of upset winner':<30} {upset_metrics['model_avg_rank']:>10.2f} {upset_metrics['market_avg_rank']:>16.2f}"
-        )
-        print(
-            f"  {'Median rank of upset winner':<30} {upset_metrics['model_median_rank']:>10.1f} {upset_metrics['market_median_rank']:>16.1f}"
-        )
-        print(
-            f"  {'Top-3 rate for upsets':<30} {upset_metrics['model_top3']:>9.1%} {upset_metrics['market_top3']:>15.1%}"
-        )
-        print(
-            f"  {'Top-5 rate for upsets':<30} {upset_metrics['model_top5']:>9.1%} {upset_metrics['market_top5']:>15.1%}"
-        )
+        print(f"\n  Upsets: {len(upsets)} lopp")
+        m4 = sum(1 for r in upsets if r["model_pos"] <= 4)
+        k4 = sum(1 for r in upsets if r["market_pos"] <= 4)
+        print(f"  Modell top 4: {m4} ({m4/len(upsets)*100:.1f}%)")
+        print(f"  Marknad top 4: {k4} ({k4/len(upsets)*100:.1f}%)")
+
+        mb = sum(1 for r in upsets if r["model_pos"] < r["market_pos"])
+        kb = sum(1 for r in upsets if r["market_pos"] < r["model_pos"])
+        print(f"  Modell bättre: {mb} ({mb/len(upsets)*100:.1f}%)")
+        print(f"  Marknad bättre: {kb} ({kb/len(upsets)*100:.1f}%)")
+
+    big_upsets = [r for r in matched if r["winner_odds"] >= 15.0]
+    if big_upsets:
+        print(f"\n  Stora upsets (odds >= 15): {len(big_upsets)} lopp")
+        m4 = sum(1 for r in big_upsets if r["model_pos"] <= 4)
+        k4 = sum(1 for r in big_upsets if r["market_pos"] <= 4)
+        print(f"  Modell top 4: {m4} ({m4/len(big_upsets)*100:.1f}%)")
+        print(f"  Marknad top 4: {k4} ({k4/len(big_upsets)*100:.1f}%)")
+
+    # Korrelation
+    print()
+    print("=" * 70)
+    print("KORRELATION MODELL/MARKNAD")
+    print("=" * 70)
+
+    mad = statistics.mean(abs(r["model_pos"] - r["market_pos"]) for r in matched)
+    agree_top1 = sum(1 for r in matched if r["model_ranking"][0] == r["market_ranking"][0])
+    
+    overlaps = []
+    for r in matched:
+        m3 = set(r["model_ranking"][:3])
+        k3 = set(r["market_ranking"][:3])
+        overlaps.append(len(m3 & k3))
+
+    print(f"\n  Mean absolute rank diff: {mad:.2f}")
+    print(f"  Top-1 agreement: {agree_top1}/{len(matched)} ({agree_top1/len(matched)*100:.1f}%)")
+    print(f"  Top-3 overlap: {statistics.mean(overlaps):.2f}/3 ({statistics.mean(overlaps)/3*100:.1f}%)")
+
+    # Sammanfattning
+    print()
+    print("=" * 70)
+    print("SLUTSATS")
+    print("=" * 70)
+
+    model_r1 = sum(1 for r in matched if r["model_pos"] == 1) / len(matched) * 100
+    market_r1 = sum(1 for r in matched if r["market_pos"] == 1) / len(matched) * 100
+    model_t4 = sum(1 for r in matched if r["model_pos"] <= 4) / len(matched) * 100
+    market_t4 = sum(1 for r in matched if r["market_pos"] <= 4) / len(matched) * 100
+
+    print(f"\n  Rank 1:  Modell {model_r1:.1f}%  vs  Marknad {market_r1:.1f}%  ({model_r1 - market_r1:+.1f}%)")
+    print(f"  Top 4:   Modell {model_t4:.1f}%  vs  Marknad {market_t4:.1f}%  ({model_t4 - market_t4:+.1f}%)")
+    print(f"  Avg rank: Modell {model_avg:.2f}  vs  Marknad {market_avg:.2f}  ({diff_rank:+.2f})")
+    print()
+
+    if model_avg < market_avg and model_r1 > market_r1:
+        print("  MODELLEN SLÅR MARKNADEN på BÅDA mått")
+    elif model_avg < market_avg:
+        print("  Modellen har bättre avg rank men sämre rank-1")
+    elif model_r1 > market_r1:
+        print("  Modellen har bättre rank-1 men sämre avg rank")
     else:
-        print("  No upsets found.")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # E) FAVORITE ANALYSIS
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("E) FAVORITE ANALYSIS (winner had >25% streck)")
-    print("=" * 70)
-
-    favorites = [r for r in all_races if r["winner_bp"] is not None and r["winner_bp"] > 0.25]
-
-    if favorites:
-        fav_metrics = compute_metrics(favorites, "Favorites")
-        print(f"\n  Favorites won: {len(favorites)} / {len(all_races)} ({len(favorites)/len(all_races):.1%} of races)")
-        print(f"\n  {'Metric':<30} {'Model':>10} {'Market (streck)':>16}")
-        print(f"  {'-'*30} {'-'*10} {'-'*16}")
-        print(
-            f"  {'Top-1 rate for favorites':<30} {fav_metrics['model_top1']:>9.1%} {fav_metrics['market_top1']:>15.1%}"
-        )
-        print(
-            f"  {'Top-2 rate for favorites':<30} {fav_metrics['model_top2']:>9.1%} {fav_metrics['market_top2']:>15.1%}"
-        )
-        print(
-            f"  {'Avg rank of fav winner':<30} {fav_metrics['model_avg_rank']:>10.2f} {fav_metrics['market_avg_rank']:>16.2f}"
-        )
-    else:
-        print("  No favorite winners found.")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # F) HEAD-TO-HEAD PER RACE
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("F) HEAD-TO-HEAD: Who ranked the winner higher?")
-    print("=" * 70)
-
-    model_wins = 0
-    market_wins = 0
-    ties = 0
-
-    for r in all_races:
-        winner = r["winner"]
-        mr = r["model_ranking"]
-        mk = r["market_ranking"]
-
-        m_rank = mr.index(winner) + 1 if winner in mr else len(mr) + 1
-        k_rank = mk.index(winner) + 1 if winner in mk else len(mk) + 1
-
-        if m_rank < k_rank:
-            model_wins += 1
-        elif k_rank < m_rank:
-            market_wins += 1
-        else:
-            ties += 1
-
-    print(f"\n  Model ranked winner higher:  {model_wins:>4} races ({model_wins/len(all_races):.1%})")
-    print(f"  Market ranked winner higher: {market_wins:>4} races ({market_wins/len(all_races):.1%})")
-    print(f"  Tied (same rank):            {ties:>4} races ({ties/len(all_races):.1%})")
-    print(f"  Model advantage (net):       {model_wins - market_wins:>+4} races")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # G) CALIBRATION: Rank vs actual win rate
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "=" * 70)
-    print("G) CALIBRATION: Rank position vs actual win rate")
-    print("=" * 70)
-
-    # For model: for each rank 1..10, how often did that horse win?
-    model_rank_wins = defaultdict(int)
-    model_rank_total = defaultdict(int)
-    market_rank_wins = defaultdict(int)
-    market_rank_total = defaultdict(int)
-
-    for r in all_races:
-        winner = r["winner"]
-        mr = r["model_ranking"]
-        mk = r["market_ranking"]
-
-        for rank_idx in range(min(10, len(mr))):
-            model_rank_total[rank_idx + 1] += 1
-            if mr[rank_idx] == winner:
-                model_rank_wins[rank_idx + 1] += 1
-
-        for rank_idx in range(min(10, len(mk))):
-            market_rank_total[rank_idx + 1] += 1
-            if mk[rank_idx] == winner:
-                market_rank_wins[rank_idx + 1] += 1
-
-    print(f"\n  {'Rank':<6} {'Model win%':>12} {'Market win%':>13} {'Delta (M-Mk)':>14}")
-    print(f"  {'-'*6} {'-'*12} {'-'*13} {'-'*14}")
-    for rank in range(1, 11):
-        m_pct = (
-            model_rank_wins[rank] / model_rank_total[rank]
-            if model_rank_total[rank] > 0
-            else 0
-        )
-        k_pct = (
-            market_rank_wins[rank] / market_rank_total[rank]
-            if market_rank_total[rank] > 0
-            else 0
-        )
-        delta = m_pct - k_pct
-        print(
-            f"  {rank:<6} {m_pct:>11.1%} {k_pct:>12.1%} {delta:>+13.1%}"
-        )
-
-    # ── Summary ────────────────────────────────────────────────────────────
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(f"  Total races analyzed:  {len(all_races)}")
-    print(f"  Total rounds:          {len(all_rounds)}")
-    print(f"  Model Top-1:           {overall['model_top1']:.1%}")
-    print(f"  Market Top-1:          {overall['market_top1']:.1%}")
-    print(f"  Model Top-3:           {overall['model_top3']:.1%}")
-    print(f"  Market Top-3:          {overall['market_top3']:.1%}")
-    print(f"  Model avg rank:        {overall['model_avg_rank']:.2f}")
-    print(f"  Market avg rank:       {overall['market_avg_rank']:.2f}")
-    print(f"  Head-to-head:          Model {model_wins} — Market {market_wins} — Ties {ties}")
-    elapsed = time.time() - start_time
-    print(f"\n  Time: {elapsed:.0f}s")
+        print("  MARKNADEN SLÅR MODELLEN — behöver förbättring")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

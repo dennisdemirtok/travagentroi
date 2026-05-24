@@ -30,6 +30,7 @@ from .prize_index import PrizeIndex
 from .time_analysis import TimeAnalysis
 from .track_profile import TrackProfile
 from .recent_form_signals import LastWinFactor, CompetitionStrength, LayoffFactor
+from .gallop_risk import GallopRisk
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,8 @@ class CompositeAnalyzer:
             LastWinFactor(),
             CompetitionStrength(),
             LayoffFactor(),
+            # v8.1: Galopprisksignal
+            GallopRisk(),
         ]
 
     def analyze_race(self, race: Race) -> list[RaceEntry]:

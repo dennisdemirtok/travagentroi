@@ -139,6 +139,7 @@ class FactorWeights:
     category_profile: float = 0.062    # Kategoriprofil
     last_win: float = 0.049            # Seger senast (Dennis)
     form_curve: float = 0.049          # Formkurva
+    gallop_risk: float = 0.035          # Galopphistorik + voltspårsinteraktion
     equipment: float = 0.005           # Barfot/sulky (Am/Va)
     driver_trainer: float = 0.005      # Kusk-tranar kombination
     layoff: float = 0.003              # Uppehall
@@ -163,6 +164,7 @@ class FactorWeights:
             "driver_class": self.driver_class,
             "equipment": self.equipment,
             "age": self.age,
+            "gallop_risk": self.gallop_risk,
         }
 
     def interactions(self) -> list[tuple[str, str, float]]:

@@ -263,6 +263,70 @@ def greedy_allocate(race_diffs, max_rows, curves, boundaries):
     return picks
 
 
+def greedy_allocate_balanced(race_diffs, max_rows, curves, boundaries):
+    """Balanced greedy: ensure minimum 2 picks per leg first, then greedy.
+
+    Fixes the under-coverage problem on easy legs:
+    - Pure greedy gives easiest races 2.0 avg picks → 51.9% coverage
+    - With floor of 2 picks: 52.4% minimum → then greedy adds where needed
+    - Hard legs still get expanded, but easy legs don't get neglected
+    """
+    n = len(race_diffs)
+    picks = [1] * n
+
+    def total_rows():
+        r = 1
+        for p in picks:
+            r *= p
+        return r
+
+    # Phase 1: Floor — ensure all legs have at least 2 picks
+    # Prioritize by lowest coverage (biggest gain from 1→2)
+    floor_order = sorted(
+        range(n),
+        key=lambda i: get_coverage_prob(race_diffs[i][1], 1, curves, boundaries),
+    )
+    for i in floor_order:
+        rn, diff, ns = race_diffs[i]
+        if picks[i] >= 2 or picks[i] >= ns:
+            continue
+        new_rows = total_rows() * 2
+        if new_rows <= max_rows:
+            picks[i] = 2
+
+    # Phase 2: Greedy expansion with ratio method
+    for _ in range(200):
+        if total_rows() >= max_rows:
+            break
+
+        best_ratio = -float("inf")
+        best_idx = -1
+
+        for i, (rn, diff, ns) in enumerate(race_diffs):
+            if picks[i] >= ns:
+                continue
+            new_rows = total_rows() * (picks[i] + 1) // picks[i]
+            if new_rows > max_rows:
+                continue
+
+            old_p = get_coverage_prob(diff, picks[i], curves, boundaries)
+            new_p = get_coverage_prob(diff, picks[i] + 1, curves, boundaries)
+            gain = math.log(max(new_p, 1e-10)) - math.log(max(old_p, 1e-10))
+            cost = math.log(picks[i] + 1) - math.log(picks[i])
+            ratio = gain / max(cost, 1e-10)
+
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_idx = i
+
+        if best_idx < 0:
+            break
+
+        picks[best_idx] += 1
+
+    return picks
+
+
 def greedy_allocate_v2(race_diffs, max_rows, curves, boundaries):
     """V2: Pure probability maximization with budget constraint.
 
@@ -522,6 +586,7 @@ async def main():
         # Greedy strategies
         for name, allocator in [
             ("greedy_ratio", greedy_allocate),
+            ("greedy_balanced", greedy_allocate_balanced),
             ("greedy_abs", greedy_allocate_v2),
             ("greedy_mult", greedy_allocate_v3),
         ]:
@@ -563,6 +628,7 @@ async def main():
             # Test each strategy
             for strat_name, allocator in [
                 ("greedy_ratio", greedy_allocate),
+                ("greedy_balanced", greedy_allocate_balanced),
                 ("greedy_abs", greedy_allocate_v2),
                 ("greedy_mult", greedy_allocate_v3),
             ]:
@@ -643,7 +709,7 @@ async def main():
                   f"{hitrate:>6.1%} {avg_cost:>7.0f}kr {roi:>+7.0%} {avg_pred:>8.2%} {avg_leg:>9.1%}{marker}")
 
         # Pick distribution for greedy strategies
-        for strat_name in ["greedy_ratio", "greedy_abs", "greedy_mult"]:
+        for strat_name in ["greedy_ratio", "greedy_balanced", "greedy_abs", "greedy_mult"]:
             s = strategies[strat_name]
             if not s["pick_dist"]:
                 continue
@@ -843,8 +909,9 @@ async def main():
 
     for strat_label, strat_func in [
         ("greedy_ratio", lambda rd, mr: greedy_allocate(rd, mr, curves, boundaries)),
+        ("greedy_balanced", lambda rd, mr: greedy_allocate_balanced(rd, mr, curves, boundaries)),
+        ("fixed_1S+rest4", lambda rd, mr: fixed_strategy(rd, 1, 4, mr)),
         ("fixed_2S+rest4", lambda rd, mr: fixed_strategy(rd, 2, 4, mr)),
-        ("fixed_3S+rest4", lambda rd, mr: fixed_strategy(rd, 3, 4, mr)),
     ]:
         bootstrap_rois = []
         bootstrap_hits = []

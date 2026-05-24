@@ -1,4 +1,4 @@
-"""Spåranalys v8 — empiriskt kalibrerad på 2 278 lopp.
+"""Spåranalys v8.2 — empiriskt kalibrerad på 2 278+ lopp.
 
 Kalibrerat med gallop_volt_analysis.py (350 omgångar, 563 volt + 1715 auto).
 
@@ -17,8 +17,19 @@ AUTO (1715 lopp):
   Spår 1: 7.7% — överraskande dåligt i auto!
   Spår 8: 7.3%, Spår 9: 5.9%
 
+TILLÄGG (2 991 starter i andra volten):
+  +60m tillägg: 15.8% vinst ★ — starkaste hästarna
+  +40m tillägg: 8.1% vinst
+  +20m tillägg: 7.2% vinst (vanligast, svag nackdel)
+  Position i andra volten:
+    Pos 1: 10.0% ★ (springspår)
+    Pos 8: 3.1% (sämst)
+    Tillägg totalt: 7.6% vs ej tillägg 9.0%
+
 Dennis: "voltlopp gynnas spår 1, 6, 7 — springspår"
+        "häst nr 13 kan ha springspår i andra volten"
 → Spår 1 bekräftat starkt, 6 och 7 har viss fördel.
+→ Pos 1 i andra volten = 10% vinst (springspår-effekt gäller även volt 2).
 """
 
 from __future__ import annotations
@@ -46,9 +57,35 @@ STAIR_DRAW_ADVANTAGE = {
     7: 1.12, 8: 1.10, 9: 1.00, 10: 0.95, 11: 0.88, 12: 0.82,
 }
 
+# Empiriskt: position i andra volten (tillägg) — 2 991 starter
+# Normaliserat mot snitt ~7.6% segerfrekvens för tilläggshästar
+SECOND_VOLT_ADVANTAGE = {
+    1: 1.32,   # 10.0% — springspår i andra volten
+    2: 1.04,   # 7.9%
+    3: 1.13,   # 8.6%
+    4: 1.09,   # 8.3%
+    5: 0.86,   # 6.5%
+    6: 0.79,   # 6.0%
+    7: 1.00,   # 7.6%
+    8: 0.41,   # 3.1% — sämsta positionen
+    9: 1.12,   # 8.5%
+    10: 0.97,  # 7.4%
+    11: 1.51,  # 11.5% (liten sample men tydlig)
+    12: 0.41,  # 3.1%
+}
+
+# Tillägg distans → kvalitetssignal
+# +60m = 15.8% vinst, +40m = 8.1%, +20m = 7.2%
+TILLAGG_DISTANCE_FACTOR = {
+    20: 0.95,   # Svag nackdel
+    40: 1.07,   # Neutral/lite plus
+    60: 2.08,   # Stark häst → 15.8% vinst!
+    80: 1.88,   # Mycket stark (liten sample)
+}
+
 
 class PostPosition(AnalysisFactor):
-    """Analyserar spårpositionens påverkan inklusive spårtrappa."""
+    """Analyserar spårpositionens påverkan inklusive spårtrappa och tillägg."""
 
     name = "post_position"
 
@@ -58,12 +95,26 @@ class PostPosition(AnalysisFactor):
         1. Spårets fördel/nackdel (normal eller spårtrappa) → 40%
         2. Hästens historik från liknande spår → 30%
         3. Överprestationsbonus: bra resultat från dåligt spår → 30%
+        + Tillägg-justering: position i andra volten (additiv, ±5 poäng)
         """
         general_score = self._general_position_score(entry, race) * 0.40
         history_score = self._position_history_score(entry, race) * 0.30
         overperf_score = self._overperformance_bonus(entry) * 0.30
 
-        return min(100.0, max(0.0, general_score + history_score + overperf_score))
+        base = general_score + history_score + overperf_score
+
+        # Tillägg: additiv justering baserad på position i andra volten
+        # Påverkar BARA tilläggshästar, inga vikter ändras för andra
+        is_tillagg = (
+            entry.distance > 0
+            and race.distance > 0
+            and entry.distance > race.distance
+        )
+        if is_tillagg and race.start_method == StartMethod.VOLT:
+            tillagg_adj = self._tillagg_adjustment(entry, race)
+            base += tillagg_adj
+
+        return min(100.0, max(0.0, base))
 
     @staticmethod
     def _general_position_score(entry: RaceEntry, race: Race) -> float:
@@ -155,3 +206,29 @@ class PostPosition(AnalysisFactor):
             scores.append(min(100.0, score))
 
         return sum(scores) / len(scores)
+
+    @staticmethod
+    def _tillagg_adjustment(entry: RaceEntry, race: Race) -> float:
+        """Additiv justering för tilläggshästar baserad på position i andra volten.
+
+        Empiriskt (2 991 starter):
+        - Pos 1 i andra volten: 10.0% vinst (springspår → bonus)
+        - Pos 8: 3.1% (sämsta → straff)
+        - Snitt tillägg: 7.6%
+
+        Returnerar ±5 poäng (liten justering, undviker att störa modellen).
+        Distans-kvalitet (+60m etc) fångas redan av prize_index-faktorn.
+        """
+        n_first_volt = len([
+            e for e in race.active_entries
+            if e.distance == race.distance
+        ])
+        second_volt_pos = entry.post_position - n_first_volt
+        if second_volt_pos <= 0:
+            second_volt_pos = entry.post_position
+
+        # Normaliserat advantage (1.0 = snitt)
+        advantage = SECOND_VOLT_ADVANTAGE.get(second_volt_pos, 0.90)
+
+        # Skalera till ±5 poäng: pos 1 (1.32) → +2.4, pos 8 (0.41) → -4.4
+        return (advantage - 1.0) * 7.5

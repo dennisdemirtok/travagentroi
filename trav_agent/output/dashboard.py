@@ -1114,13 +1114,13 @@ def _system_html(game_round: GameRound) -> str:
 
 
 def _dennis_system_html(game_round: GameRound) -> str:
-    """Empiriskt optimerat system: upset_low spikning + fast bredd."""
+    """Greedy probability-maximizing system — adaptiv bredd per lopp."""
     try:
         from ..analysis.system_builder import build_system
     except ImportError:
         return ""
 
-    budgets = [300, 500]
+    budgets = [300, 500, 750]
     cards = []
 
     for budget in budgets:
@@ -1143,15 +1143,17 @@ def _dennis_system_html(game_round: GameRound) -> str:
                 "spik": '\U0001f512 SPIK',
                 "kort": '2-val',
                 "medel": '3-val',
-                "bred": 'Bred',
+                "bred": f'{leg.num_picks}-val',
             }.get(leg.leg_type, leg.leg_type)
+
+            diff_color = "#22c55e" if leg.difficulty < 25 else ("#f59e0b" if leg.difficulty < 45 else "#ef4444")
 
             pick_rows.append(
                 f'<tr>'
                 f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
                 f'<td>{dist}m {method}</td>'
-                f'<td><span class="conf-badge {conf_cls}">{leg.confidence:.0f}</span></td>'
-                f'<td>{upset_icon} {leg.upset_risk:.0f}%</td>'
+                f'<td><span class="conf-badge {conf_cls}">{leg.confidence:.0f}%</span></td>'
+                f'<td style="color:{diff_color}">D{leg.difficulty:.0f}</td>'
                 f'<td class="system-picks">{picks_str}</td>'
                 f'<td>{leg.num_picks}</td>'
                 f'</tr>'
@@ -1159,23 +1161,27 @@ def _dennis_system_html(game_round: GameRound) -> str:
 
         rows_str = "".join(pick_rows)
         cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
+        prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
+        is_rec = budget == 300
 
         cards.append(
-            f'<div class="system-card" style="border-left:3px solid #f59e0b">'
+            f'<div class="system-card" style="border-left:3px solid {"#22c55e" if is_rec else "#f59e0b"}">'
             f'<div class="system-header">'
-            f'<h3>\U0001f451 Dennis-metoden ({budget} kr){"  ★ Rekommenderad" if budget == 300 else ""}</h3>'
-            f'<span class="system-meta">2S+rest4 | Spik lättaste, bredd 4 i resten | +66% ROI vid 300kr</span>'
+            f'<h3>\U0001f3af Greedy Optimal ({budget} kr){"  ★ Rekommenderad" if is_rec else ""}</h3>'
+            f'<span class="system-meta">Adaptiv bredd: {plan.num_spikes} spikar, '
+            f'{plan.num_short} korta, {plan.num_wide} breda | '
+            f'P(alla rätt) ≈ {prob_str}</span>'
             f'</div>'
             f'<div class="system-stats">'
             f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
             f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
             f'<div class="sys-stat"><span class="sys-val">{plan.num_spikes}</span><span class="sys-lbl">Spikar</span></div>'
-            f'<div class="sys-stat"><span class="sys-val">{plan.num_wide}</span><span class="sys-lbl">Breda</span></div>'
+            f'<div class="sys-stat"><span class="sys-val">{prob_str}</span><span class="sys-lbl">P(hit)</span></div>'
             f'</div>'
             f'<div class="table-wrap">'
             f'<table class="system-table">'
             f'<thead><tr>'
-            f'<th>Lopp</th><th>Info</th><th>Konf</th><th>Risk</th><th>Picks</th><th>#</th>'
+            f'<th>Lopp</th><th>Info</th><th>Täckn</th><th>Diff</th><th>Picks</th><th>#</th>'
             f'</tr></thead>'
             f'<tbody>{rows_str}</tbody>'
             f'</table></div>'

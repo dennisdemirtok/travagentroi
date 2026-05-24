@@ -112,37 +112,40 @@ def get_todays_game_types() -> list[str]:
 class FactorWeights:
     """Vikter för varje analysfaktor. Summerar till 1.0.
 
-    Version 6: 10 faktorer, optimerade med random search + hill climbing.
-    Tre nya faktorer baserade på datamining av 14,292+ lopp:
-    - driver_class: Kuskens vinstprocent (1.89x lift för elitcuskar)
-    - age: Hästens ålder (peak vid 4 år, 1.37x lift)
-    - equipment: Barfot/sulkybyte (1.13x lift)
+    Version 7: 13 faktorer — Dennis's metod + optimerade vikter.
 
-    Resultat vs v5 (7 faktorer):
-    - top1: 28.9% (+2.2pp)
-    - top2: 48.2% (+2.1pp)
-    - top3: 61.1% (+2.5pp)
+    Ombyggd modell baserad pa Dennis's personliga spelmetodik:
+    - time_analysis: Distansjusterad tid senaste 5 starter (Dennis: huvudsignal)
+    - competition_strength: Motstandsstyrka — prissumma/klass (Dennis: skrall-detektor)
+    - last_win: Seger senast + momentum (Dennis: "positivt")
+    - layoff: Uppehall negativt for lang vila (Dennis: "inte formen direkt")
 
-    Optimerat på 1,902 lopp (2024-01 till 2026-04) utan data-leakage
-    (neutraliserade closing odds + temporal karriärfiltrering).
+    Optimerat med random search + hill climbing pa 424 V75/V85-lopp:
+    - top1: 23.3% (vinnare korrekt)
+    - top2: 37.5% (topp 2 ratt)
+    - top3: 52.1% (topp 3 ratt)
+    - spik: 28.1% traffsakerhet (160 spikar)
 
-    Market weight = 0: Ren modell utan marknadsinblandning.
+    Utan data-leakage (temporal filtrering + neutraliserade closing odds).
     """
 
-    time_analysis: float = 0.242
-    form_curve: float = 0.010
-    prize_index: float = 0.121
-    category_profile: float = 0.212
-    post_position: float = 0.129
-    driver_trainer: float = 0.010
-    track_profile: float = 0.024
+    # v7 optimerade vikter (hill climbing pa 424 V75/V85-lopp)
+    # Optimerat for balanced top1+top3: 23.3% top1, 52.1% top3
+    prize_index: float = 0.157         # Starkaste prediktorn
+    post_position: float = 0.147       # Sparprofil — hog prediktivitet
+    age: float = 0.141                 # Aldersfaktor — peak vid 4 ar
+    time_analysis: float = 0.122       # Dennis's distansjusterade tid
+    competition_strength: float = 0.096 # Dennis's motstandsstyrka
+    driver_class: float = 0.088        # Kuskens vinstprocent
+    track_profile: float = 0.084       # Banerfarenhet
+    category_profile: float = 0.058    # Kategoriprofil
+    last_win: float = 0.042            # Dennis's seger-senast
+    form_curve: float = 0.029          # Formkurva
+    equipment: float = 0.018           # Barfot/sulky
+    driver_trainer: float = 0.016      # Kusk-tranar kombination
+    layoff: float = 0.004              # Uppehall
 
-    # v6: Nya faktorer (datamining-baserade, optimerade)
-    driver_class: float = 0.122  # Kuskens vinstprocent — 1.89x lift
-    equipment: float = 0.012     # Barfot/sulky/sko-byte — 1.13x lift
-    age: float = 0.118           # Åldersfaktor — 1.37x lift vid 4 år
-
-    # Interaktionstermer borttagna (förstärkte brus)
+    # Interaktionstermer borttagna
     interaction_track_post: float = 0.0
     interaction_track_category: float = 0.0
 
@@ -150,6 +153,9 @@ class FactorWeights:
         """Bas-vikter (utan interaktioner)."""
         return {
             "time_analysis": self.time_analysis,
+            "last_win": self.last_win,
+            "competition_strength": self.competition_strength,
+            "layoff": self.layoff,
             "prize_index": self.prize_index,
             "form_curve": self.form_curve,
             "track_profile": self.track_profile,
@@ -183,8 +189,8 @@ class AnalysisConfig:
 
     weights: FactorWeights = field(default_factory=FactorWeights)
 
-    # Hur många senaste starter att analysera
-    recent_starts_count: int = 10
+    # Hur många senaste starter att analysera (Dennis: senaste 5)
+    recent_starts_count: int = 5
 
     # Tröskelvärden
     spike_threshold: float = 0.30  # Max streckprocent för spik (skärpt från 0.40)

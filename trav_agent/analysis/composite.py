@@ -29,6 +29,7 @@ from .post_position import PostPosition
 from .prize_index import PrizeIndex
 from .time_analysis import TimeAnalysis
 from .track_profile import TrackProfile
+from .recent_form_signals import LastWinFactor, CompetitionStrength, LayoffFactor
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +40,22 @@ class CompositeAnalyzer:
     def __init__(self, config: Optional[AnalysisConfig] = None):
         self.config = config or DEFAULT_CONFIG
         self.factors: list[AnalysisFactor] = [
-            TimeAnalysis(recent_n=self.config.recent_starts_count),
+            # v7 Dennis-method: time analysis uses only last 5
+            TimeAnalysis(recent_n=5),
             PrizeIndex(recent_n=self.config.recent_starts_count),
             FormCurve(recent_n=self.config.recent_starts_count),
             TrackProfile(),
             CategoryProfile(),
             DriverTrainer(),
             PostPosition(),
-            # v6: Nya faktorer baserade på datamining av 14k+ lopp
+            # v6: Datamining-baserade
             DriverClass(),
             Equipment(),
             AgeFactor(),
+            # v7: Dennis's tre formsignaler
+            LastWinFactor(),
+            CompetitionStrength(),
+            LayoffFactor(),
         ]
 
     def analyze_race(self, race: Race) -> list[RaceEntry]:
@@ -243,20 +249,22 @@ class CompositeAnalyzer:
         else:
             value_index = score / 10
 
-        # Spik: skärpt — kräver rank 1, hög poäng, stort gap, max 30% streck
-        # + value_index > 1.0 (modellen ser mer än marknaden)
+        # Spik: rank 1, hög poäng, stort gap
+        # Med marknadsdata: kräv max 30% streck + value_index >= 1.0
+        # Utan marknadsdata: rena modellsignaler räcker
         if (
             rank == 1
             and score >= self.config.spike_min_score
             and gap_to_second >= self.config.spike_min_gap
         ):
-            if (
-                bet_pct
-                and bet_pct <= self.config.spike_threshold
-                and value_index >= 1.0
-            ):
+            if bet_pct > 0:
+                # Med marknadsdata: kräv att vi inte spikar en överspelad favorit
+                if bet_pct <= self.config.spike_threshold and value_index >= 1.0:
+                    return "spik"
+                return "2-val"
+            else:
+                # Utan marknadsdata: modellens gap och score räcker
                 return "spik"
-            return "2-val"
         elif rank <= 2 and score >= self.config.choice2_min_score:
             return "2-val"
         elif rank <= 3 and score >= self.config.choice3_min_score:

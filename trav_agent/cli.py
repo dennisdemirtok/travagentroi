@@ -1402,5 +1402,46 @@ def db_import_cache(game_type: str, limit: int):
     asyncio.run(_run())
 
 
+@db.command("import-backlog")
+@click.option("--file", "-f", "file_path", type=click.Path(exists=True),
+              default=None, help="Sökväg till backlog.json (default: backlog.json)")
+def db_import_backlog(file_path: str):
+    """Importera backlog.json till Supabase (backlog_rounds + backlog_race_picks)."""
+    import json as _json
+    from .database.backlog_sync import sync_all_backlog
+    from .database.client import get_client
+
+    if file_path is None:
+        from .config import PROJECT_ROOT
+        file_path = str(PROJECT_ROOT / "backlog.json")
+
+    click.echo(f"Läser {file_path}...")
+    with open(file_path) as f:
+        backlog_data = _json.load(f)
+
+    entries = backlog_data.get("entries", [])
+    click.echo(f"Hittade {len(entries)} entries att importera")
+
+    if not entries:
+        click.echo("✗ Inga entries hittades")
+        return
+
+    db_client = get_client()
+
+    def progress(i, total):
+        click.echo(f"  [{i}/{total}] importerade...")
+
+    click.echo("Importerar till Supabase...")
+    stats = sync_all_backlog(backlog_data, client=db_client, progress_callback=progress)
+
+    click.echo()
+    click.echo("═" * 50)
+    click.echo(f"Import klar!")
+    click.echo(f"  Totalt:    {stats['total']}")
+    click.echo(f"  Synkade:   {stats['synced']}")
+    if stats['errors']:
+        click.echo(f"  Fel:       {stats['errors']}")
+
+
 if __name__ == "__main__":
     cli()

@@ -1,33 +1,45 @@
-"""Systembyggare — empiriskt optimerad på 194 V75/V85-omgångar.
+"""Systembyggare — empiriskt optimerad på 241 V75/V85-omgångar.
 
-Testat: 360+ strategikonfigurationer, 3 allokeringsmetoder, 4 budgetnivåer.
+Testat: 1 680 konfigurationer (budget × spikar × bredd) i budget_optimizer.py.
 
-EMPIRISKA FYND (system_optimizer.py + winner_depth_analysis.py):
+EMPIRISKA FYND (budget_optimizer.py, 241 omgångar):
 
-1. BASSTRUKTUR: 3 spikar + 4 val i resten = bäst ROI
-   - 3S+rest4 vid 200kr: 4 träffar/194 = 2.1%, +1267% ROI
-   - 2S+rest4 vid 1000kr: 7 träffar = 3.6%, +238% ROI
+1. OPTIMAL BUDGET: 300kr med 2S+rest4
+   - 4 fullträffar av 241 omgångar (1.7% hitrate)
+   - +66% ROI, 188kr vinst per omgång
+   - Total vinst: 45 244kr på testperioden
+   - Genomsnittlig verklig kostnad: 285kr
 
-2. SPIKE-URVAL: "upset_low" — spika de 3 tryggaste loppen
+2. BUDGET SWEET SPOT: 300-500kr
+   - 300kr → +66% ROI, 188kr/omgång (BÄST)
+   - 400kr → +24% ROI, 90kr/omgång
+   - 500kr → +21% ROI, 82kr/omgång
+   - >550kr → ROI sjunker, mer kapital utan fler hits
+
+3. REST WIDTH = 4 DOMINERAR
+   - Width 2: 0 hits (värdelöst)
+   - Width 3: nästan 0 hits
+   - Width 4: Bäst ROI (+302% max), enda positiva
+   - Width 5+: Lägre ROI, kostar mer utan fler hits
+
+4. SPIKE-ANALYS
+   - 2 spikar: bäst profit vid 300kr (sweet spot)
+   - 3 spikar: bäst vid låga budgetar (75-200kr)
+   - 5 spikar: högst ROI% men bara 1 hit (10kr kostnad)
+   - 0 spikar: flest hits (7) men massiv förlust
+
+5. SPIKE-URVAL: "upset_low" — spika de lättaste loppen
    - upset_low: 45/116 configs träffade (bäst)
    - gap: 42/116
    - confidence: 34/116 (sämst)
 
-3. VARIABEL BREDD: Testades men slog INTE fast bredd
-   - Smart variabel: 3 träffar vid 500kr vs fixed 5 träffar
-   - Anledning: multiplicativ kostnad — bredare i ett lopp
-     fördubblar rader, vinsten i täckning kompenserar inte
-   - MEN: variabel ger fler partiella (n-1) träffar
-
-4. LOPPSVÅRIGHETSMODELL (1 371 lopp analyserade):
+6. LOPPSVÅRIGHETSMODELL (1 371 lopp analyserade):
    Vinnarens modellranking beror på:
    - Antal startande: r=+0.196 (starkaste signalen)
    - Tillägg: r=+0.158
    - Modellspridning: r=-0.157
    - Volt: r=+0.147
    - Spårtrappa: r=+0.137
-
-5. BREAKEVEN: Mediandividend ~49 700kr, breakeven vid ~1 750-3 500kr.
 
 Dennis: "alla lopp har olika svårighet eller lätthet"
 Empirin: Ja, men intelligensen sitter i VILKA lopp som spikas (variabelt
@@ -240,12 +252,16 @@ def predict_difficulty(race: Race) -> float:
 # Optimala konfigurationer per budget
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Baserat på 194 historiska omgångar.
+# Baserat på 241 historiska omgångar, 1680 konfigurationer.
+# Budget 300kr med 2S+rest4 = bäst vinst per omgång (+66% ROI).
 # (n_spikes, rest_width, label)
 OPTIMAL_CONFIGS: dict[int, tuple[int, int, str]] = {
+    75:   (3, 4, "3 spikar + 4 val — 75kr"),
     100:  (3, 4, "3 spikar + 4 val — 100kr"),
     200:  (3, 4, "3 spikar + 4 val — 200kr"),
-    500:  (3, 4, "3 spikar + 4 val — 500kr"),
+    300:  (2, 4, "2 spikar + 4 val — 300kr ★"),
+    400:  (2, 4, "2 spikar + 4 val — 400kr"),
+    500:  (2, 4, "2 spikar + 4 val — 500kr"),
     1000: (2, 4, "2 spikar + 4 val — 1000kr"),
 }
 
@@ -482,11 +498,11 @@ def build_multiple_systems(
 ) -> list[SystemPlan]:
     """Bygg system vid flera budgetnivåer.
 
-    Alla använder den empiriskt bästa metoden (upset_low + 3S+rest4).
-    Vid högsta budget används 2S+rest4 (empiriskt bäst vid 1000kr+).
+    Default: 200kr, 300kr (optimal), 500kr, 1000kr.
+    300kr med 2S+rest4 = empiriskt bäst: +66% ROI, 188kr/omgång.
     """
     if budgets is None:
-        budgets = [200, 500, 1000]
+        budgets = [200, 300, 500, 1000]
 
     plans = []
     for budget in budgets:

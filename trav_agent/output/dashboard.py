@@ -1120,7 +1120,7 @@ def _dennis_system_html(game_round: GameRound) -> str:
     except ImportError:
         return ""
 
-    budgets = [200, 500]
+    budgets = [300, 500]
     cards = []
 
     for budget in budgets:
@@ -1163,8 +1163,8 @@ def _dennis_system_html(game_round: GameRound) -> str:
         cards.append(
             f'<div class="system-card" style="border-left:3px solid #f59e0b">'
             f'<div class="system-header">'
-            f'<h3>\U0001f451 Dennis-metoden ({budget} kr)</h3>'
-            f'<span class="system-meta">Intelligent breddning: spik sakra lopp, bred i skralllopp</span>'
+            f'<h3>\U0001f451 Dennis-metoden ({budget} kr){"  ★ Rekommenderad" if budget == 300 else ""}</h3>'
+            f'<span class="system-meta">2S+rest4 | Spik lättaste, bredd 4 i resten | +66% ROI vid 300kr</span>'
             f'</div>'
             f'<div class="system-stats">'
             f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'

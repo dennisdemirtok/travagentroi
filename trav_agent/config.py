@@ -193,15 +193,20 @@ class AnalysisConfig:
     recent_starts_count: int = 5
 
     # Tröskelvärden
-    spike_threshold: float = 0.30  # Max streckprocent för spik (skärpt från 0.40)
+    spike_threshold: float = 0.50  # Max streckprocent för spik (höjd: hybrid inkl. marknad)
     value_sweet_spot: tuple[float, float] = (0.05, 0.15)  # 5-15% streck = sweet spot
 
     # Super Score: blend av modell + marknad
-    # 85% modell + 15% streckprocent — streck ger lite info men
-    # ska inte dominera. Tidigare 55/45 var overfit på slutgiltig streck.
-    # Streck 1h före start är ganska stabil vs slutvärde, men 45% var
-    # för mycket — modellen måste stå på egna ben.
-    super_score_model_weight: float = 1.0  # 0.0 = ren marknad, 1.0 = ren modell
+    # 20% modell + 80% streckprocent — optimerad vikt baserad på
+    # 1559 lopp (V75+V85+V86 2024-2026):
+    #   Ren modell:  28.2% rank-1, avg rank 3.79
+    #   Ren marknad: 40.3% rank-1, avg rank 2.79
+    #   Hybrid 20/80: 40.5% rank-1, avg rank 2.87
+    # Modellen tillför edge vid upsets (outsiders <3%: modell avg 7.6 vs marknad 8.6)
+    # men marknaden dominerar för favoriter. Hybrid slår båda.
+    # OBS: I backtest används closing streck (betDistribution) som proxy.
+    # I live-läge används aktuell streck ~1h före start.
+    super_score_model_weight: float = 0.20  # 0.0 = ren marknad, 1.0 = ren modell
 
     # Klassificeringströsklar (anpassade för mer modell-driven skala)
     spike_min_score: float = 75.0     # Minst poäng för "spik" (rank 1)

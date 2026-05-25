@@ -513,7 +513,33 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         reverse=True,
     )
 
-    # Build composite-only ranking for dual display
+    # Build alternative rankings for comparison display
+    # 1. Pure market ranking (streckprocent)
+    market_sorted = sorted(
+        race.active_entries,
+        key=lambda e: e.bet_percentage or 0,
+        reverse=True,
+    )
+    market_rank_map: dict[int, int] = {
+        e.post_position: idx + 1 for idx, e in enumerate(market_sorted)
+    }
+
+    # 2. 50/50 blend ranking
+    def _blend50(e):
+        entries = race.active_entries
+        max_comp = max(x.composite_score for x in entries) if entries else 1
+        min_comp = min(x.composite_score for x in entries) if entries else 0
+        comp_range = max_comp - min_comp if max_comp > min_comp else 1
+        max_streck = max((x.bet_percentage or 0) for x in entries) if entries else 1
+        comp_norm = (e.composite_score - min_comp) / comp_range
+        streck_norm = (e.bet_percentage or 0) / max_streck if max_streck > 0 else 0
+        return 0.5 * comp_norm + 0.5 * streck_norm
+    blend_sorted = sorted(race.active_entries, key=_blend50, reverse=True)
+    blend_rank_map: dict[int, int] = {
+        e.post_position: idx + 1 for idx, e in enumerate(blend_sorted)
+    }
+
+    # 3. Pure composite ranking (model only)
     comp_sorted = sorted(
         race.active_entries,
         key=lambda e: e.composite_score,
@@ -614,9 +640,10 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             else:
                 proffs_cell = '<td class="proffs-cell" style="color:#6b7280">-</td>'
 
-        # Composite score and rank
+        # Three comparison ranks
+        market_rank = market_rank_map.get(e.post_position, 0)
+        blend_rank = blend_rank_map.get(e.post_position, 0)
         comp_rank = comp_rank_map.get(e.post_position, 0)
-        comp_score = e.composite_score
 
         # Estimated time (dennis_effective_form) — stored as km-time in seconds
         # e.g. 75.3 means 1.15.3 (1 min 15.3 sec per km)
@@ -633,16 +660,26 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         te_str = f"{te:+.1f}s" if te else ""
         te_color = "#22c55e" if te and te > 0 else "#ef4444" if te and te < 0 else "#6b7280"
 
+        # Rank highlight: green if rank ≤3, red if bottom 30%
+        n_entries = len(race.active_entries)
+        def _rank_cell(rank, css_class):
+            if rank <= 3:
+                return f'<td class="{css_class} rank-top">{rank}</td>'
+            elif rank > n_entries * 0.7:
+                return f'<td class="{css_class} rank-bot">{rank}</td>'
+            return f'<td class="{css_class}">{rank}</td>'
+
         rows.append(
             f'<tr class="horse-row{toggle_class}" data-horse="{e.post_position}">'
             f'<td class="pos">{e.post_position}</td>'
             f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}{winbet_badge}{dennis_badge}</td>'
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
-            f'<td class="comp-score">{comp_score:.0f}</td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
             f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}{model_rank}</span></td>'
-            f'<td class="comp-rank">{comp_rank}</td>'
+            f'{_rank_cell(market_rank, "rank-mr")}'
+            f'{_rank_cell(blend_rank, "rank-br")}'
+            f'{_rank_cell(comp_rank, "rank-cr")}'
             f'<td class="est-time">{eff_str}'
             f'<span style="color:{te_color};font-size:0.7em;margin-left:2px">{te_str}</span></td>'
             f'{result_cell}'
@@ -730,9 +767,13 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         f'<div class="table-wrap">'
         f'<table>'
         f'<thead><tr>'
-        f'<th>#</th><th>Hast</th><th>Poang</th><th>Comp</th><th>Streck</th>'
+        f'<th>#</th><th>Hast</th><th>Poang</th><th>Streck</th>'
         f'{"<th>Proffs</th>" if proffs_horses else ""}'
-        f'<th>Rank</th><th>CR</th><th>Est.tid</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
+        f'<th>Rank</th>'
+        f'<th title="Ren marknad (streckprocent)">MR</th>'
+        f'<th title="50/50 modell+marknad">50/50</th>'
+        f'<th title="100% modell (composite)">Mod</th>'
+        f'<th title="Estimerad km-tid">Est.tid</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
         f'</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
@@ -3113,8 +3154,12 @@ font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .horse-name{{font-weight:600;white-space:nowrap;color:#1e293b}}
 .score{{font-size:1rem;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .score strong{{color:#f59e0b}}
-.comp-score{{color:#8b5cf6;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600}}
-.comp-rank{{color:#8b5cf6;font-family:'JetBrains Mono',monospace;font-size:.85rem;text-align:center;font-weight:700}}
+.rank-mr,.rank-br,.rank-cr{{font-family:'JetBrains Mono',monospace;font-size:.82rem;text-align:center;font-weight:700;min-width:28px}}
+.rank-mr{{color:#6b7280}}
+.rank-br{{color:#0ea5e9}}
+.rank-cr{{color:#8b5cf6}}
+.rank-top{{background:#dcfce7 !important}}
+.rank-bot{{background:#fee2e2 !important;opacity:.7}}
 .est-time{{color:#0ea5e9;font-family:'JetBrains Mono',monospace;font-size:.82rem;white-space:nowrap}}
 .bet{{color:#6b7280;font-family:'JetBrains Mono',monospace;font-size:.82rem}}
 .driver{{color:#6b7280;font-size:.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}

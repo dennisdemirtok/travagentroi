@@ -99,7 +99,7 @@ def _calculate_spelvarde(game_round: GameRound) -> dict | None:
         return None
 
     gen = SystemGenerator(
-        budget=2500, strategy="I_streck_1st", selective_filter="avg_upset_lt_40",
+        budget=500, strategy="D_smart", selective_filter="none",
     )
     system = gen.generate(game_round)
 
@@ -1436,101 +1436,23 @@ def _accuracy_html(game_round: GameRound) -> str:
 
 
 def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
-    """Generera system-rekommendation baserat på SystemGenerator."""
-    try:
-        from ..betting.system_generator import SystemGenerator
-    except ImportError:
-        return ""
+    """Generera system-sektion — bara validerade strategier.
 
-    # (strategy, filter, budget, max_spikes, spike_conf, spike_gap, label, desc)
-    strategies = [
-        ("I_streck_1st", "avg_upset_lt_40", 2500, 0, 0, 0, "I_streck_1st", "Bäst netto — utan spik"),
-        ("I_streck_1st", "avg_upset_lt_40", 2500, 1, 75, 12, "I_streck + 1 spik", "Med 1 spik (conf≥75, gap≥12)"),
-        ("Q_dom_x_mktgap", "avg_upset_lt_40", 2500, 0, 0, 0, "Q_dom_x_mktgap", "Bäst ROI"),
-        ("D_market_gap", "avg_upset_lt_40", 2500, 0, 0, 0, "D_market_gap", "Mest hits"),
-    ]
-
-    systems_html = []
-    for strategy, filt, budget, max_spikes, spike_conf, spike_gap, label, desc in strategies:
-        gen = SystemGenerator(
-            budget=budget, strategy=strategy, selective_filter=filt,
-            max_spikes=max_spikes, spike_conf_threshold=spike_conf, spike_score_gap=spike_gap,
-        )
-        system = gen.generate(game_round)
-
-        if system.skip_round:
-            systems_html.append(
-                f'<div class="system-card skipped">'
-                f'<div class="system-header">'
-                f'<h3>⏭️ {label}</h3>'
-                f'<span class="system-meta">{desc}</span>'
-                f'</div>'
-                f'<div class="skip-reason">{_esc(system.skip_reason)}</div>'
-                f'</div>'
-            )
-            continue
-
-        # Bygg pick-rader
-        pick_rows = []
-        for rp in system.race_picks:
-            conf_cls = "high" if rp.confidence >= 60 else ("medium" if rp.confidence >= 30 else "low")
-            upset_icon = "🟢" if rp.upset_risk < 25 else ("🟡" if rp.upset_risk < 50 else "🔴")
-
-            pick_nums = ", ".join(
-                f"<strong>{n}</strong> {name[:12]}"
-                for n, name in zip(rp.picks, rp.pick_names)
-            )
-
-            spik_badge = ' <span class="spik-badge">🔒 A</span>' if rp.num_picks == 1 else ''
-
-            pick_rows.append(
-                f'<tr>'
-                f'<td class="race-link">Avd {rp.race_number}{spik_badge}</td>'
-                f'<td>{rp.distance}m {rp.start_method}</td>'
-                f'<td><span class="conf-badge {conf_cls}">{rp.confidence:.0f}</span></td>'
-                f'<td>{upset_icon} {rp.upset_risk:.0f}%</td>'
-                f'<td class="system-picks">{pick_nums}</td>'
-                f'<td>{rp.num_picks}</td>'
-                f'<td>{rp.combined_streck:.0%}</td>'
-                f'</tr>'
-            )
-
-        rows_str = "".join(pick_rows)
-        cost_color = "#22c55e" if system.total_cost <= budget else "#ef4444"
-
-        systems_html.append(
-            f'<div class="system-card">'
-            f'<div class="system-header">'
-            f'<h3>💰 {label.replace("_", " ")}</h3>'
-            f'<span class="system-meta">{desc}</span>'
-            f'</div>'
-            f'<div class="system-stats">'
-            f'<div class="sys-stat"><span class="sys-val">{system.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
-            f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{system.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
-            f'<div class="sys-stat"><span class="sys-val">{system.avg_confidence:.0f}</span><span class="sys-lbl">Konfidens</span></div>'
-            f'<div class="sys-stat"><span class="sys-val">{system.avg_upset_risk:.0f}</span><span class="sys-lbl">Skrällrisk</span></div>'
-            f'</div>'
-            f'<div class="table-wrap">'
-            f'<table class="system-table">'
-            f'<thead><tr>'
-            f'<th>Lopp</th><th>Info</th><th>Konf</th><th>Risk</th><th>Picks</th><th>#</th><th>Täckn</th>'
-            f'</tr></thead>'
-            f'<tbody>{rows_str}</tbody>'
-            f'</table></div>'
-            f'</div>'
-        )
-
-    # ── Dennis-method system builder ──
+    Backtested 21 strategier på 165 omgångar med no-leakage (2025-2026):
+    - Spike Easiest 300kr: breakeven (-0.3% ROI) — bästa systemstrategin
+    - Chansspik 500kr: -41% ROI — hög varians, sällan hit men stor utdelning
+    - Vinnarspel (Bet-fliken): +8-80% ROI — den enda bevisade edgen
+    """
     dennis_html = _dennis_system_html(game_round, proffs_data=proffs_data)
 
     return (
         f'<div id="system" class="summary-card system-section">'
-        f'<h2>💰 System — Budget 2,500 kr</h2>'
+        f'<h2>🎯 System — Spike Easiest</h2>'
         f'<p style="color:#6b7280;font-size:.85rem;margin-bottom:1rem">'
-        f'4 strategier backtestade på 266 omgångar (5 år). '
-        f'Inkl. spik-variant med 1 spik vid hög konfidens.</p>'
+        f'Bästa systemstrategin (165 omgångar, no-leakage backtest). '
+        f'Spike lättaste loppet + 4 val i resten. '
+        f'Breakeven som system — den riktiga edgen finns i Vinnarspel (Bet-fliken).</p>'
         f'{dennis_html}'
-        f'{"".join(systems_html)}'
         f'</div>'
     )
 
@@ -1616,7 +1538,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
     except Exception:
         pass
 
-    # ── SPIKE EASIEST-system (bevisat +112% ROI) ──
+    # ── SPIKE EASIEST-system (breakeven, bästa systemstrategin) ──
     budgets = [300, 500]
     cards = []
 
@@ -1696,28 +1618,26 @@ def _stats_html(backlog_data: dict | None = None) -> str:
     strategies = backlog_data["strategies"]
     strat_names = list(strategies.keys())
 
-    strat_short = {
-        "I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom",
-        "D_market_gap": "D_market", "I_streck_spik1": "I_spik1",
-        "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3",
-    }
-    STRAT_COLORS = {
-        "I_streck_1st": ("#f59e0b", "rgba(245,166,35,0.10)"),
-        "Q_dom_x_mktgap": ("#a78bfa", "rgba(167,139,250,0.10)"),
-        "D_market_gap": ("#fb923c", "rgba(251,146,60,0.10)"),
-        "I_streck_spik1": ("#fbbf24", "rgba(251,191,36,0.10)"),
-        "I_streck_spik2": ("#34d399", "rgba(52,211,153,0.10)"),
-        "I_streck_spik3": ("#f472b6", "rgba(244,114,182,0.10)"),
-    }
+    # Dynamic strategy display — no hardcoded fake names
+    _palette = [
+        ("#f59e0b", "rgba(245,166,35,0.10)"),
+        ("#a78bfa", "rgba(167,139,250,0.10)"),
+        ("#fb923c", "rgba(251,146,60,0.10)"),
+        ("#34d399", "rgba(52,211,153,0.10)"),
+        ("#f472b6", "rgba(244,114,182,0.10)"),
+        ("#fbbf24", "rgba(251,191,36,0.10)"),
+        ("#64748b", "rgba(100,116,139,0.10)"),
+    ]
+    STRAT_COLORS = {s: _palette[i % len(_palette)] for i, s in enumerate(strat_names)}
+    strat_short = {s: s.replace("_", " ")[:12] for s in strat_names}
     GT_COLORS_STATS = {
         "V75": "#f59e0b", "V85": "#f59e0b", "GS75": "#a78bfa",
         "V86": "#fb923c", "V64": "#34d399", "V65": "#34d399",
     }
 
-    # Group strategies: main vs variants
-    MAIN_STRATS = {"I_streck_1st", "Q_dom_x_mktgap", "D_market_gap"}
-    main_names = [s for s in strat_names if s in MAIN_STRATS]
-    variant_names = [s for s in strat_names if s not in MAIN_STRATS]
+    # Sort by ROI, show all
+    main_names = sorted(strat_names, key=lambda s: strategies[s].get("roi", 0), reverse=True)
+    variant_names = []
 
     # ── Build strategy cards ──
     def _strat_card(s: str) -> str:
@@ -1755,16 +1675,16 @@ def _stats_html(backlog_data: dict | None = None) -> str:
 
     strategy_cards_html = (
         f'<div class="sc-section">'
-        f'<h3 class="sc-group-title">Huvudstrategier</h3>'
+        f'<h3 class="sc-group-title">Strategier (sorterade efter ROI)</h3>'
         f'<div class="sc-grid">{main_cards}</div>'
     )
     if variant_cards:
         strategy_cards_html += (
             f'<div class="sc-variant-toggle">'
-            f'<button class="sc-toggle-btn" data-action="toggle-variants">Visa varianter ({len(variant_names)})</button>'
+            f'<button class="sc-toggle-btn" data-action="toggle-variants">Visa fler ({len(variant_names)})</button>'
             f'</div>'
             f'<div class="sc-variants-wrap" style="display:none">'
-            f'<h3 class="sc-group-title">Varianter</h3>'
+            f'<h3 class="sc-group-title">Övriga</h3>'
             f'<div class="sc-grid">{variant_cards}</div>'
             f'</div>'
         )
@@ -2064,11 +1984,9 @@ def _backlog_html(
 
     entries = backlog_data["entries"]
     cutoff = str(date.today() - timedelta(days=30))
-    strat_short = {
-        "I_streck_1st": "I_streck", "Q_dom_x_mktgap": "Q_dom",
-        "D_market_gap": "D_market", "I_streck_spik1": "I_spik1",
-        "I_streck_spik2": "I_spik2", "I_streck_spik3": "I_spik3",
-    }
+    # Dynamic strategy display — no hardcoded names
+    all_strat_names_bl = sorted(set(e.get("strategy", "") for e in entries if e.get("strategy")))
+    strat_short = {s: s.replace("_", " ")[:12] for s in all_strat_names_bl}
 
     GT_COLORS_BL = {
         "V75": "#f59e0b", "V85": "#f59e0b", "GS75": "#a78bfa",
@@ -2094,14 +2012,16 @@ def _backlog_html(
             sa["partial"] += 1
 
     # ── Summary metric cards (top-level aggregation) ──
-    strat_colors = {
-        "I_streck_1st": ("#f59e0b", "rgba(245,166,35,0.15)"),
-        "Q_dom_x_mktgap": ("#a78bfa", "rgba(167,139,250,0.15)"),
-        "D_market_gap": ("#fb923c", "rgba(251,146,60,0.15)"),
-        "I_streck_spik1": ("#fbbf24", "rgba(251,191,36,0.15)"),
-        "I_streck_spik2": ("#34d399", "rgba(52,211,153,0.15)"),
-        "I_streck_spik3": ("#f472b6", "rgba(244,114,182,0.15)"),
-    }
+    _bl_palette = [
+        ("#f59e0b", "rgba(245,166,35,0.15)"),
+        ("#a78bfa", "rgba(167,139,250,0.15)"),
+        ("#fb923c", "rgba(251,146,60,0.15)"),
+        ("#34d399", "rgba(52,211,153,0.15)"),
+        ("#f472b6", "rgba(244,114,182,0.15)"),
+        ("#fbbf24", "rgba(251,191,36,0.15)"),
+        ("#64748b", "rgba(100,116,139,0.15)"),
+    ]
+    strat_colors = {s: _bl_palette[i % len(_bl_palette)] for i, s in enumerate(all_strat_names_bl)}
 
     agg_cards = []
     for s in sorted(strat_agg.keys()):

@@ -22,15 +22,9 @@ from trav_agent.betting.system_generator import SystemGenerator, BettingSystem
 #   B_marknad: Marknadsstyrd (streck), modell som value-tillägg
 #   C_bred:    Bred ABC — smal i trygga, bred i öppna lopp
 STRATEGIES = [
-    # ★ Smart ABC — bäst ROI i backtest
+    # Bara D_smart (minst olönsamma systemstrategin i no-leakage backtest)
     ("D_smart",   "none", 500,  0, 0, 0, "D_smart_500"),
     ("D_smart",   "none", 1000, 0, 0, 0, "D_smart_1000"),
-    ("D_smart",   "none", 1500, 0, 0, 0, "D_smart_1500"),
-    ("D_smart",   "none", 2000, 0, 0, 0, "D_smart_2000"),
-    # Union-picks (referens)
-    ("A_union",   "none", 1000, 0, 0, 0, "A_union_1000"),
-    # Marknad-primär (referens)
-    ("B_marknad", "none", 1000, 0, 0, 0, "B_marknad_1000"),
 ]
 
 

@@ -159,32 +159,24 @@ async def main():
 
     print(f"Laddade {len(rounds)} omgångar")
 
-    # ── Temporal filtrering: ta bort framtida starter + omberäkna karriär ──
-    # Förhindrar data leakage — modellen ska bara se data som fanns
-    # tillgänglig vid loppets tidpunkt.
+    # ── Full leakage prevention (3 lager) ──
+    # 1. Ta bort framtida starter + omberäkna karriärstatistik
+    # 2. Neutralisera closing odds (behåll streckprocent)
     for gr in rounds:
         BacktestRunner._filter_future_starts(gr)
-        for race in gr.races:
-            for entry in race.entries:
-                entry.horse.recompute_career_from_starts()
+        BacktestRunner._neutralize_closing_odds(gr)
 
     for gr in rounds:
         analyzer.analyze_round(gr)
-    print("Alla omgångar analyserade (temporal filtrering aktiv)\n")
+    print("Alla omgångar analyserade (full leakage prevention aktiv)\n")
 
-    # ── Strategier v5: Union + Marknad + Bred ──
+    # ── Strategier v6: Bara validerade strategier (no-leakage backtest) ──
+    # D_smart bäst av SystemGenerator (-33% ROI vid 500kr)
+    # Alla system-strategier är olönsamma — vinnarspel (Bet) är den enda edgen
     # (strategy, filter, budget, max_spikes, spike_conf, spike_gap, label)
     strategies = [
-        # 1000 kr
-        ("A_union",   "none", 1000, 0, 0, 0, "A_union_1000"),
-        ("B_marknad", "none", 1000, 0, 0, 0, "B_marknad_1000"),
-        ("C_bred",    "none", 1000, 0, 0, 0, "C_bred_1000"),
-        # 500 kr
-        ("A_union",   "none", 500, 0, 0, 0, "A_union_500"),
-        ("B_marknad", "none", 500, 0, 0, 0, "B_marknad_500"),
-        # 2000 kr
-        ("B_marknad", "none", 2000, 0, 0, 0, "B_marknad_2000"),
-        ("C_bred",    "none", 2000, 0, 0, 0, "C_bred_2000"),
+        ("D_smart",   "none",  500, 0, 0, 0, "D_smart_500"),
+        ("D_smart",   "none", 1000, 0, 0, 0, "D_smart_1000"),
     ]
 
     all_entries = []

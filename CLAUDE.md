@@ -100,11 +100,29 @@ Bara 4 faktorer tillför positiv edge till hybriden:
 Alla andra faktorer (tid, form, bana, etc.) behålls med 0-vikt
 för dashboard-analys men påverkar inte ranking.
 
-### Chansspik Vinnarspel (validerad strategi)
-- Kriterier: modell rank ≤ 2, streck 5-20%
-- ROI: +47.8% (walk-forward validerad, 92 omgångar)
-- Vinstfrekvens: 21.0% (72/343), snittodds: 7.0x
-- ~3.8 kandidater per omgång
+### Vinnarspel — Den enda bevisade edgen (no-leakage validerad)
+
+5 profiler med kuskfilter, backtestade på 169 omgångar (jun 2025 → maj 2026)
+med full leakage prevention (temporal filtrering + odds-neutralisering):
+
+| Profil | ROI | Spel | Vinst% | Odds | Beskrivning |
+|--------|-----|------|--------|------|-------------|
+| Sniper | +79.5% | 55 | 12.7% | 14.1x | Rank A-B + kusk ≥100 st/år + 3-10% |
+| Pro | +16.3% | 432 | 16.9% | 6.9x | Rank A-B + kusk ≥100 st/år + 5-20% |
+| Sharp | +8.1% | 264 | 18.6% | 5.8x | Score ≥45 + kusk ≥100 st/år + 5-20% |
+| Bas | +8.7% | 626 | 16.1% | 6.7x | Rank A-B + 5-20% (ingen kuskfilter) |
+| Elite | +0.5% | 429 | 14.9% | 6.7x | Score topp-10% + 5-20% |
+
+Kuskfilter: `driver_starts_year ≥ 100` — kuskar med <100 starter/år förlorar (-15.7% ROI).
+⚠-varning visas i dashboarden för kuskar med under 100 starter.
+
+### Systemspel — INTE lönsamt (no-leakage backtest)
+
+21 strategier testade på 165 omgångar (V75+V85+GS75, 2025-2026):
+- **INGEN** strategi är lönsam med korrekt leakage prevention
+- Bäst: Spike Easiest 300kr = -0.3% ROI (breakeven)
+- Alla gamla "+2134% ROI"-siffror berodde på data leakage
+- Gamla strateginamn (I_streck_1st, Q_dom_x_mktgap, D_market_gap) var fake — alla körde A_union
 
 ### Proffs Rescue (systembygge)
 - Om proffs rankar häst topp-3 men modellen har den rank 4-6
@@ -140,11 +158,11 @@ A/B/C/D ranking genom hela systemet:
 ## TODO
 
 - [ ] Kör viktoptimeraren (`scripts/optimize_weights.py`) på senaste data
-- [ ] Backfill bet_results i Supabase (kör gamla omgångar genom dashboard)
 - [ ] TRAIS API-integration (TR Media) för loppkommentarer
 - [ ] Excel-export av rekommendationer
 - [ ] Skrällindex-integration (koppla expertkonsensus-data)
 - [ ] Mobile-responsiv förbättring (hamburger-meny, swipe)
+- [ ] Regenerera backlog.json med D_smart strategier (ersätter gammal A/B/C)
 
 ## Klart (tidigare TODO)
 
@@ -157,3 +175,8 @@ A/B/C/D ranking genom hela systemet:
 - [x] AI chat med omgångskontext
 - [x] Chansspik vinnarspel backtest + dashboard-integration
 - [x] A/B/C/D ranking-system
+- [x] No-leakage backtest: 21 strategier × 165 omgångar (maj 2026)
+- [x] Kuskfilter i vinnarspel (5 profiler med driver_starts ≥ 100)
+- [x] Backfill bet_results till Supabase (169 omgångar)
+- [x] Dashboard cleanup: ta bort fake strategier (I_streck, Q_dom, D_market)
+- [x] Vinnarspel no-leakage verifiering (+8-80% ROI, bekräftat)

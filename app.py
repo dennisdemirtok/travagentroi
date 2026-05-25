@@ -436,10 +436,10 @@ async def api_rounds():
 # ── Bet Result API ─────────────────────────────────────────────────────────
 
 @app.get("/api/bets")
-async def api_bets(game_type: str = None, profile: str = "profitable", days: int = 365):
+async def api_bets(game_type: str = None, profile: str = "sniper", days: int = 365):
     """Return vinnarspel bet history with P&L aggregation.
 
-    profile: sniper/pro/sharp/bas/profitable (default: profitable = kuskfilter-profiler)
+    profile: sniper/pro/sharp/bas/all (default: sniper — only proven profitable profile)
     """
     if not SUPABASE_ENABLED:
         return JSONResponse({"error": "Supabase ej konfigurerad"}, status_code=503)

@@ -1024,12 +1024,11 @@ def _sidebar_html(game_round: GameRound, has_system: bool = False, has_backlog: 
 def _bet_view_html(game_round: GameRound) -> str:
     """Build the Bet recommendations view with multiple vinnarspel profiles.
 
-    Profiles (120 omgångar, jun 2025 → maj 2026, 438 kandidater):
-    1. Bas (rank≤2, 5-20%) — +14% ROI, 438 spel, 17.6% vinst
-    2. Pro (rank≤2, kusk≥100 st/år, 5-20%) — +27% ROI, 306 spel, 19.6% vinst
-    3. Sharp (rank≤2, score≥45, kusk≥100, 5-20%) — +44% ROI, 190 spel, 24.2% vinst
-    4. Sniper (rank≤2, kusk≥100, 3-10%) — +56% ROI, 31 spel, 12.9% vinst
-    5. Elite (score≥P90, 5-20%) — +29% ROI, 44 spel, 22.7% vinst
+    Profiles (169 omgångar, actual ATG odds — includes ~25% track commission):
+    1. Sniper (rank≤2, kusk≥100, 3-10%) — +26.5% ROI  ← ONLY profitable
+    2. Pro (rank≤2, kusk≥100 st/år, 5-20%) — -27.3% ROI
+    3. Sharp (rank≤2, score≥45, kusk≥100, 5-20%) — -4.5% ROI
+    4. Bas (rank≤2, 5-20%) — -16.9% ROI
     """
     gt = _esc(game_round.game_type)
     date_str = str(game_round.round_date) if game_round.round_date else ""
@@ -1097,72 +1096,64 @@ def _bet_view_html(game_round: GameRound) -> str:
                 "driver_win_pct": getattr(e, "driver_win_pct", 0.0),
             })
 
-    # Define profiles — ordered by selectivity (broadest → most selective)
-    # Backtest: 120 omgångar, juni 2025 → maj 2026, 438 kandidater
+    # Define profiles — Sniper first (only profitable), rest shown with warnings
+    # ROI from 169 rounds with actual ATG odds (includes ~25% track commission)
     PROFILES = [
         {
-            "id": "bas",
-            "name": "Bas",
-            "desc": "Rank A-B + streck 5-20%",
-            "badge_roi": "+14%",
-            "badge_color": "#6b7280",
-            "bt_wins": "77/438",
-            "bt_winrate": "17.6%",
-            "bt_odds": "7.0x",
-            "bt_profit": "+31 129kr",
-            "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20,
-        },
-        {
-            "id": "pro",
-            "name": "Pro",
-            "desc": "Rank A-B + kusk ≥100 st/år + 5-20%",
-            "badge_roi": "+27%",
-            "badge_color": "#7c3aed",
-            "bt_wins": "60/306",
-            "bt_winrate": "19.6%",
-            "bt_odds": "7.0x",
-            "bt_profit": "+41 498kr",
-            "filter": lambda c: (c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20
+            "id": "sniper",
+            "name": "🎯 Sniper",
+            "desc": "Rank A-B + kusk ≥100 st/år + 3-10%",
+            "badge_roi": "+26.5%",
+            "badge_color": "#15803d",
+            "bt_wins": "7/55",
+            "bt_winrate": "12.7%",
+            "bt_odds": "10.1x",
+            "bt_profit": "✅ Lönsam",
+            "profitable": True,
+            "filter": lambda c: (c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10
                                  and c["driver_starts"] >= 100),
         },
         {
             "id": "sharp",
             "name": "Sharp",
             "desc": "Score ≥45 + kusk ≥100 st/år + 5-20%",
-            "badge_roi": "+44%",
-            "badge_color": "#15803d",
-            "bt_wins": "46/190",
-            "bt_winrate": "24.2%",
-            "bt_odds": "6.0x",
-            "bt_profit": "+41 299kr",
+            "badge_roi": "-4.5%",
+            "badge_color": "#dc2626",
+            "bt_wins": "49/262",
+            "bt_winrate": "18.7%",
+            "bt_odds": "5.2x",
+            "bt_profit": "⚠ Ej lönsam",
+            "profitable": False,
             "filter": lambda c: (c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20
                                  and c["driver_starts"] >= 100
                                  and c["score"] >= 45),
         },
         {
-            "id": "sniper",
-            "name": "Sniper",
-            "desc": "Rank A-B + kusk ≥100 st/år + 3-10%",
-            "badge_roi": "+56%",
-            "badge_color": "#b45309",
-            "bt_wins": "4/31",
-            "bt_winrate": "12.9%",
-            "bt_odds": "12.8x",
-            "bt_profit": "+8 696kr",
-            "filter": lambda c: (c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10
+            "id": "pro",
+            "name": "Pro",
+            "desc": "Rank A-B + kusk ≥100 st/år + 5-20%",
+            "badge_roi": "-27.3%",
+            "badge_color": "#dc2626",
+            "bt_wins": "17/125",
+            "bt_winrate": "13.6%",
+            "bt_odds": "5.0x",
+            "bt_profit": "⚠ Ej lönsam",
+            "profitable": False,
+            "filter": lambda c: (c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20
                                  and c["driver_starts"] >= 100),
         },
         {
-            "id": "elite",
-            "name": "Elite",
-            "desc": "Score topp-10% + streck 5-20%",
-            "badge_roi": "+29%",
-            "badge_color": "#0369a1",
-            "bt_wins": "10/44",
-            "bt_winrate": "22.7%",
-            "bt_odds": "5.6x",
-            "bt_profit": "+6 409kr",
-            "filter": lambda c: c["is_p90"] and 0.05 <= c["streck"] <= 0.20,
+            "id": "bas",
+            "name": "Bas",
+            "desc": "Rank A-B + streck 5-20%",
+            "badge_roi": "-16.9%",
+            "badge_color": "#dc2626",
+            "bt_wins": "28/199",
+            "bt_winrate": "14.1%",
+            "bt_odds": "6.5x",
+            "bt_profit": "⚠ Ej lönsam",
+            "profitable": False,
+            "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20,
         },
     ]
 
@@ -1194,9 +1185,11 @@ def _bet_view_html(game_round: GameRound) -> str:
             f'</div>'
         )
 
+        opacity_style = "" if profile.get("profitable", True) else ' style="opacity:0.6"'
+
         if count == 0:
             return (
-                f'<div class="bet-profile-card" id="profile-{pid}">'
+                f'<div class="bet-profile-card" id="profile-{pid}"{opacity_style}>'
                 f'{header}'
                 f'<div class="bet-profile-empty">Inga kandidater denna omgång</div>'
                 f'</div>'
@@ -1257,7 +1250,7 @@ def _bet_view_html(game_round: GameRound) -> str:
             )
 
         return (
-            f'<div class="bet-profile-card" id="profile-{pid}">'
+            f'<div class="bet-profile-card" id="profile-{pid}"{opacity_style}>'
             f'{header}'
             f'{status_html}'
             f'<div class="table-wrap">'
@@ -1451,7 +1444,7 @@ def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
         f'<p style="color:#6b7280;font-size:.85rem;margin-bottom:1rem">'
         f'Bästa systemstrategin (165 omgångar, no-leakage backtest). '
         f'Spike lättaste loppet + 4 val i resten. '
-        f'Breakeven som system — den riktiga edgen finns i Vinnarspel (Bet-fliken).</p>'
+        f'Breakeven som system — edgen finns i Vinnarspel Sniper-profilen (Bet-fliken, +26.5% ROI).</p>'
         f'{dennis_html}'
         f'</div>'
     )
@@ -4700,7 +4693,7 @@ function removeCustomSource(sourceKey){{
 // ── Bet History ──
 let _betData=null;
 let _betPeriod='month';
-let _betProfile='profitable';
+let _betProfile='sniper';
 
 function setBetPeriod(p){{
   _betPeriod=p;
@@ -4753,18 +4746,20 @@ function renderBetHistory(data){{
   let html='';
 
   // Profile breakdown cards (always shown)
-  const profileMeta={{sniper:{{label:'Sniper',desc:'3-10% + kusk≥100',color:'#f59e0b'}},pro:{{label:'Pro',desc:'5-20% + kusk≥100',color:'#3b82f6'}},sharp:{{label:'Sharp',desc:'score≥45 + kusk',color:'#8b5cf6'}},bas:{{label:'Bas',desc:'5-20% (alla)',color:'#6b7280'}}}};
+  const profileMeta={{sniper:{{label:'🎯 Sniper',desc:'3-10% + kusk≥100',color:'#f59e0b',profitable:true}},pro:{{label:'Pro',desc:'5-20% + kusk≥100',color:'#3b82f6',profitable:false}},sharp:{{label:'Sharp',desc:'score≥45 + kusk',color:'#8b5cf6',profitable:false}},bas:{{label:'Bas',desc:'5-20% (alla)',color:'#6b7280',profitable:false}}}};
   if(Object.keys(byProfile).length>0){{
     html+='<div class="bet-profile-grid">';
     for(const[pKey,pMeta] of Object.entries(profileMeta)){{
       const p=byProfile[pKey];
       if(!p)continue;
       const c=p.roi_pct>=0?'#15803d':'#dc2626';
-      html+='<div class="bet-profile-card'+((_betProfile===pKey)?' active':'')+'" onclick="setBetProfile(\''+pKey+'\')">';
+      const warn=pMeta.profitable?'':'<div style="font-size:.6rem;color:#dc2626;margin-top:2px">⚠ Ej lönsam (riktiga odds)</div>';
+      html+='<div class="bet-profile-card'+((_betProfile===pKey)?' active':'')+'" onclick="setBetProfile(\''+pKey+'\')" style="'+(pMeta.profitable?'':'opacity:0.65;')+'">';
       html+='<div class="bet-profile-name" style="color:'+pMeta.color+'">'+pMeta.label+'</div>';
       html+='<div class="bet-profile-desc">'+pMeta.desc+'</div>';
       html+='<div class="bet-profile-roi" style="color:'+c+'">'+(p.roi_pct>=0?'+':'')+p.roi_pct.toFixed(0)+'% ROI</div>';
       html+='<div class="bet-profile-detail">'+p.bets+' spel · '+p.wins+' vinster</div>';
+      html+=warn;
       html+='</div>';
     }}
     html+='</div>';
@@ -4773,7 +4768,7 @@ function renderBetHistory(data){{
   // Summary cards
   const pnlColor=sum.total_pnl>=0?'#15803d':'#dc2626';
   html+='<div class="bet-cum-summary">';
-  html+='<div class="bet-cum-item"><span class="bet-cum-label">Historisk P&L</span><span class="bet-cum-val" style="font-size:.75rem;color:#6b7280">'+((_betProfile==='profitable')?'Kuskfilter-profiler':_betProfile)+'</span></div>';
+  html+='<div class="bet-cum-item"><span class="bet-cum-label">Historisk P&L</span><span class="bet-cum-val" style="font-size:.75rem;color:#6b7280">'+_betProfile+'</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">Spel</span><span class="bet-cum-val">'+sum.finished_count+'</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">Vinster</span><span class="bet-cum-val">'+sum.wins+' ('+sum.win_rate.toFixed(0)+'%)</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">ROI</span><span class="bet-cum-val" style="color:'+pnlColor+'">'+(sum.roi_pct>=0?'+':'')+sum.roi_pct.toFixed(0)+'%</span></div>';

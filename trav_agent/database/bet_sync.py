@@ -21,11 +21,14 @@ def _get_client():
 def _classify_profile(model_rank: int, streck: float, driver_starts: int, score: float) -> str:
     """Classify a bet candidate into a vinnarspel profile.
 
-    Profiles (from no-leakage backtest, 169 rounds):
-      Sniper (+79.5% ROI): rank≤2, streck 3-10%, kusk≥100
-      Pro    (+16.3% ROI): rank≤2, streck 5-20%, kusk≥100
-      Sharp  (+8.1% ROI):  rank≤2, streck 5-20%, kusk≥100, score≥45
-      Bas    (+8.7% ROI):  rank≤2, streck 5-20% (no kusk filter)
+    Profiles (169 rounds, actual ATG odds — includes ~25% track commission):
+      Sniper (+26.5% ROI): rank≤2, streck 3-10%, kusk≥100  ← ONLY profitable
+      Pro    (-27.3% ROI): rank≤2, streck 5-20%, kusk≥100
+      Sharp  (-4.5% ROI):  rank≤2, streck 5-20%, kusk≥100, score≥45
+      Bas    (-16.9% ROI): rank≤2, streck 5-20% (no kusk filter)
+
+    Note: Original backtest used 1/streck as odds estimate which overstated ROI
+    by ~25-33%. Real ATG payouts include track commission.
     """
     if model_rank > 2:
         return "none"
@@ -187,7 +190,7 @@ def load_bet_history(
     all_bets = result.data if result.data else []
 
     # Filter by profile
-    PROFITABLE_PROFILES = {"sniper", "pro", "sharp"}
+    PROFITABLE_PROFILES = {"sniper"}  # Only sniper is profitable with real ATG odds
     if profile == "profitable":
         bets = [b for b in all_bets if b.get("profile") in PROFITABLE_PROFILES]
     elif profile:

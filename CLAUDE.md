@@ -102,16 +102,23 @@ för dashboard-analys men påverkar inte ranking.
 
 ### Vinnarspel — Den enda bevisade edgen (no-leakage validerad)
 
-5 profiler med kuskfilter, backtestade på 169 omgångar (jun 2025 → maj 2026)
-med full leakage prevention (temporal filtrering + odds-neutralisering):
+5 profiler med kuskfilter, backtestade på 169 omgångar (jun 2025 → maj 2026).
 
-| Profil | ROI | Spel | Vinst% | Odds | Beskrivning |
-|--------|-----|------|--------|------|-------------|
-| Sniper | +79.5% | 55 | 12.7% | 14.1x | Rank A-B + kusk ≥100 st/år + 3-10% |
-| Pro | +16.3% | 432 | 16.9% | 6.9x | Rank A-B + kusk ≥100 st/år + 5-20% |
-| Sharp | +8.1% | 264 | 18.6% | 5.8x | Score ≥45 + kusk ≥100 st/år + 5-20% |
-| Bas | +8.7% | 626 | 16.1% | 6.7x | Rank A-B + 5-20% (ingen kuskfilter) |
-| Elite | +0.5% | 429 | 14.9% | 6.7x | Score topp-10% + 5-20% |
+⚠ **OBS: Backtest använde `1/streck` som odds-estimat, men ATG:s riktiga utdelningar
+inkluderar ~25% bankommission. Tabellen nedan visar RIKTIGA ROI från ATG-odds (Supabase
+backfill, 169 omgångar):**
+
+| Profil | ROI (riktig) | ROI (1/streck) | Spel | Vinst% | Status |
+|--------|-------------|----------------|------|--------|--------|
+| **Sniper** | **+26.5%** | +79.5% | 55 | 12.7% | ✅ LÖNSAM |
+| Pro | -27.3% | +16.3% | 125 | 13.6% | ❌ Ej lönsam |
+| Sharp | -4.5% | +8.1% | 262 | 18.7% | ❌ Ej lönsam |
+| Bas | -16.9% | +8.7% | 199 | 14.1% | ❌ Ej lönsam |
+
+**Slutsats:** Bara Sniper-profilen är lönsam med riktiga ATG-odds.
+Dashboard default-filter = "sniper". Pro/Sharp/Bas visas med ⚠-varning.
+
+Sniper-kriterierna: `model_rank ≤ 2` + `streck 3-10%` + `driver_starts_year ≥ 100`
 
 Kuskfilter: `driver_starts_year ≥ 100` — kuskar med <100 starter/år förlorar (-15.7% ROI).
 ⚠-varning visas i dashboarden för kuskar med under 100 starter.
@@ -179,4 +186,6 @@ A/B/C/D ranking genom hela systemet:
 - [x] Kuskfilter i vinnarspel (5 profiler med driver_starts ≥ 100)
 - [x] Backfill bet_results till Supabase (169 omgångar)
 - [x] Dashboard cleanup: ta bort fake strategier (I_streck, Q_dom, D_market)
-- [x] Vinnarspel no-leakage verifiering (+8-80% ROI, bekräftat)
+- [x] Vinnarspel no-leakage verifiering (Sniper +26.5% ROI med riktiga ATG-odds)
+- [x] Odds-korrigering: backtest 1/streck → riktiga ATG-utdelningar (25% bankommission)
+- [x] Dashboard default-filter: sniper only (enda lönsamma profilen)

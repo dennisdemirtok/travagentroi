@@ -179,24 +179,34 @@ async def _refresh_live_rounds():
             logger.warning(f"Live refresh error: {e}")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Pre-warm caches so first page load is instant
-    logger.info("Startup: pre-warming caches...")
+async def _prewarm_caches():
+    """Pre-warm available rounds + backlog cache in background.
+
+    Runs as a background task so it doesn't block startup / health checks.
+    """
     try:
         client = ATGClient()
-        # Parallel: fetch available rounds + load backlog
-        rounds_task = asyncio.create_task(_get_available_rounds(client))
-        backlog_task = asyncio.create_task(_load_backlog())
-        await asyncio.gather(rounds_task, backlog_task, return_exceptions=True)
-        n_rounds = len(_available_rounds_cache)
+        # Load backlog first (fast, no external API calls)
+        await _load_backlog()
         n_entries = len((_backlog_cache or {}).get("entries", []))
-        logger.info(f"Startup: {n_rounds} rounds, {n_entries} backlog entries cached")
-    except Exception as e:
-        logger.warning(f"Startup cache warming failed (non-fatal): {e}")
+        logger.info(f"Pre-warm: {n_entries} backlog entries cached")
 
+        # Then fetch available rounds (slower, 21 calendar API calls)
+        await _get_available_rounds(client)
+        n_rounds = len(_available_rounds_cache)
+        logger.info(f"Pre-warm: {n_rounds} rounds cached")
+    except Exception as e:
+        logger.warning(f"Pre-warm failed (non-fatal): {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pre-warm caches in background (non-blocking so health checks pass)
+    logger.info("Startup: launching background cache warming...")
+    warmup = asyncio.create_task(_prewarm_caches())
     task = asyncio.create_task(_refresh_live_rounds())
     yield
+    warmup.cancel()
     task.cancel()
 
 

@@ -123,6 +123,34 @@ Sniper-kriterierna: `model_rank ≤ 2` + `streck 3-10%` + `driver_starts_year �
 Kuskfilter: `driver_starts_year ≥ 100` — kuskar med <100 starter/år förlorar (-15.7% ROI).
 ⚠-varning visas i dashboarden för kuskar med under 100 starter.
 
+### Dennis Brain — Vinnarspel S4-strategi (+44.5% ROI)
+
+Dennis analysmetod integrerad i modellen som post-analys steg 7.
+Körs efter `CompositeAnalyzer.analyze_race()`.
+
+**S4-kriterier (alla måste uppfyllas):**
+- `model_rank ≤ 5` — modellen gillar hästen
+- `streck 5-25%` — outsider men inte totalt okänd
+- `barfota` (front + bak) — positiv utrustningssignal
+- `time_edge ≥ 1.0s` — snabbare än GLOBAL median för distans/startmetod
+- `class_ratio ≥ 1.5x` — karriärpengar 1.5x fältets median
+
+**Tidskant:** Jämför hästen mot globala medianer (76k hästar, 880 omgångar, 2021-2026).
+INTE lopp-level median (som ger nära-noll edges). Fuzzy distance match ±100m.
+Globala medianer hardkodade i `trav_agent/analysis/dennis_brain.py`.
+
+**Klassdropp:** Använder `api_career_money` (bevarad från ATG API, överlever temporal filtrering).
+
+**Backtest:** 305 picks, 66 vinster (21.6%), +44.5% vinnarspel ROI, p<0.0001, 5/6 år positiva.
+~0.35 picks per omgång — sällsynt men extremt lönsam.
+
+**Filer:**
+- `trav_agent/analysis/dennis_brain.py` — signalberäkning + S4 filter
+- `trav_agent/data/models.py` — `dennis_time_edge`, `dennis_class_ratio`, `dennis_pick` på RaceEntry
+- `trav_agent/data/atg_client.py` — parsning av `horse.record.time` + `api_career_money`
+- `trav_agent/analysis/composite.py` — steg 7 i analyze_race()
+- `trav_agent/output/dashboard.py` — Dennis Brain profil i vinnarspel-tab
+
 ### Systemspel — INTE lönsamt (no-leakage backtest)
 
 21 strategier testade på 165 omgångar (V75+V85+GS75, 2025-2026):
@@ -173,6 +201,7 @@ A/B/C/D ranking genom hela systemet:
 
 ## Klart (tidigare TODO)
 
+- [x] Dennis Brain S4-strategi integrerad i live-modellen (+44.5% ROI, globala tidsmedians)
 - [x] ATG API-parsers verifierade
 - [x] Kusk-statistik (driver_class + driver_trainer faktorer)
 - [x] Faktor-optimering (grid search script klart)

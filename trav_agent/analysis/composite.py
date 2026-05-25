@@ -152,14 +152,10 @@ class CompositeAnalyzer:
             reverse=True,
         )
 
-        # Beräkna gap till rank 2 (för spik-bedömning, baserat på super_score)
-        gap_to_second = 0.0
-        if len(sorted_entries) >= 2:
-            gap_to_second = sorted_entries[0].super_score - sorted_entries[1].super_score
-
-        for rank, entry in enumerate(sorted_entries, start=1):
-            entry.rank = rank
-            entry.recommendation = self._classify(entry, race, rank, gap_to_second)
+        # Dynamisk A/B/C/D baserat på poängfördelning
+        # I jämna lopp: fler B, ingen ensam A
+        # I klara lopp: 1 A (spik), tydlig hierarki
+        self._classify_dynamic(race, sorted_entries)
 
         # Steg 6: Skrällrisk-analys
         self._assess_upset_risk(race, sorted_entries)
@@ -247,48 +243,61 @@ class CompositeAnalyzer:
             )
         return game_round
 
-    def _classify(
-        self, entry: RaceEntry, race: Race, rank: int, gap_to_second: float = 0.0
-    ) -> str:
-        """Klassificera en häst: spik, 2-val, 3-val, gardering, strykning.
+    def _classify_dynamic(
+        self, race: Race, sorted_entries: list[RaceEntry]
+    ) -> None:
+        """Dynamisk A/B/C/D-klassificering baserad på fältposition.
 
-        Spik-kriterier: rank 1, hög poäng, stort gap, max 30% streck,
-        och value_index >= 1.0 (modellen ser mer potential än marknaden).
+        Dennis-metod: A/B/C/D reflekterar analysens syn, inte bettingvärde.
+        Distributionen skalar med fältstorleken:
+          - 6 hästar:  1A, 1-2B, 2C, 1-2D
+          - 10 hästar: 0-1A, 3B, 3-4C, 3D
+          - 14 hästar: 0-1A, 4-5B, 5-6C, 3-4D
+
+        A (spik): rank 1 med TYDLIG ledning (relativt gap ≥ 30%).
+                  Streck spelar INGEN roll — A = analysens klar toppval.
+        B (2-val/3-val): topp 35% av fältet = starka alternativ.
+        C (gardering): mellangrupp 35-70% = outsidechans.
+        D (strykning): botten 30% = inga realistiska chanser.
         """
-        score = entry.super_score
-        bet_pct = entry.bet_percentage or 0.0
+        if not sorted_entries:
+            return
 
-        # Value index: modellpoäng relativt marknadsförväntning
-        # Hög value_index = modellen ser mer potential än marknaden
-        if bet_pct > 0:
-            value_index = score / (bet_pct * 100)
-        else:
-            value_index = score / 10
+        n = len(sorted_entries)
+        scores = [e.super_score for e in sorted_entries]
+        spread = scores[0] - scores[-1] if n > 1 else 0
 
-        # Spik: rank 1, hög poäng, stort gap
-        # Med marknadsdata: kräv max 30% streck + value_index >= 1.0
-        # Utan marknadsdata: rena modellsignaler räcker
-        if (
-            rank == 1
-            and score >= self.config.spike_min_score
-            and gap_to_second >= self.config.spike_min_gap
-        ):
-            if bet_pct > 0:
-                # Med marknadsdata: kräv att vi inte spikar en överspelad favorit
-                if bet_pct <= self.config.spike_threshold and value_index >= 1.0:
-                    return "spik"
-                return "2-val"
+        # Gap till rank 2
+        gap_to_second = scores[0] - scores[1] if n >= 2 else 0
+
+        # Relativ gap: hur stor del av total spread är gapet till 2:an?
+        relative_gap = gap_to_second / spread if spread > 0 else 0
+
+        for rank, entry in enumerate(sorted_entries, start=1):
+            entry.rank = rank
+
+            # Fältposition: 0.0 = bäst, 1.0 = sämst
+            position_pct = (rank - 1) / max(n - 1, 1)
+
+            # ── A (spik): bara vid TYDLIG ledare ──
+            if (
+                rank == 1
+                and relative_gap >= 0.30
+                and entry.super_score >= self.config.spike_min_score
+                and gap_to_second >= self.config.spike_min_gap
+            ):
+                entry.recommendation = "spik"
+                continue
+
+            # ── B (2-val/3-val): topp 35% av fältet ──
+            if position_pct < 0.35:
+                entry.recommendation = "2-val" if rank <= 3 else "3-val"
+            # ── C (gardering): mellangrupp 35-70% ──
+            elif position_pct < 0.70:
+                entry.recommendation = "gardering"
+            # ── D (strykning): botten 30% ──
             else:
-                # Utan marknadsdata: modellens gap och score räcker
-                return "spik"
-        elif rank <= 2 and score >= self.config.choice2_min_score:
-            return "2-val"
-        elif rank <= 3 and score >= self.config.choice3_min_score:
-            return "3-val"
-        elif score >= self.config.gardering_min_score:
-            return "gardering"
-        else:
-            return "strykning"
+                entry.recommendation = "strykning"
 
     def _assess_upset_risk(self, race: Race, sorted_entries: list[RaceEntry]) -> None:
         """Beräkna skrällrisk för ett lopp.

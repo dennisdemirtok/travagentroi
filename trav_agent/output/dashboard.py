@@ -611,7 +611,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
-            f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}</span></td>'
+            f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}{model_rank}</span></td>'
             f'{result_cell}'
             f'<td class="driver">{_esc(e.driver_name)}</td>'
             f'<td class="trend-cell">{trend_cell}{sparkline}</td>'
@@ -799,7 +799,7 @@ def _summary_html(game_round: GameRound) -> str:
             f'<div class="orc-pick">'
             f'<div class="orc-pick-main">'
             f'<strong>{top.post_position} {_esc(top.horse.name[:16])}</strong>'
-            f' <span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem;padding:.15rem .5rem">{_rank_label(top.recommendation)}</span>'
+            f' <span class="rec-badge" style="background:{bg};color:{color};font-size:.65rem;padding:.15rem .5rem">{_rank_label(top.recommendation)}1</span>'
             f'{result_badge}'
             f'</div>'
             f'<div class="orc-driver">{driver}</div>'
@@ -865,7 +865,9 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
     rows = []
     for c in candidates:
         streck_pct = c["streck"] * 100
-        rank_badge = "\U0001f947" if c["rank"] == 1 else "\U0001f948"
+        _r = c["rank"]
+        _grade = "A" if _r == 1 else "B"
+        rank_badge = f'{_grade}{_r}'
         # Sniper indicator: 3-10% streck + kusk≥100
         is_sniper = (
             c["rank"] <= 2
@@ -1126,6 +1128,7 @@ def _bet_view_html(game_round: GameRound) -> str:
                 "score": e.super_score,
                 "streck": streck,
                 "rank": model_rank,
+                "recommendation": e.recommendation,
                 "odds_est": odds_est,
                 "live_odds": live_odds,
                 "driver": e.driver_name or "",
@@ -1279,7 +1282,11 @@ def _bet_view_html(game_round: GameRound) -> str:
         is_dennis = pid == "dennis"
         rows = []
         for c in filtered:
-            rank_badge = "\U0001f947" if c["rank"] == 1 else ("\U0001f948" if c["rank"] == 2 else f'R{c["rank"]}')
+            # A/B/C/D rank badge with rank number (uses dynamic classification)
+            _r = c["rank"]
+            _rec = c.get("recommendation", "strykning")
+            _grade = RANK_LABEL.get(_rec, "D")
+            rank_badge = f'{_grade}{_r}'
             streck_pct = c["streck"] * 100
             driver_warn = ""
             if c.get("driver_starts", 0) < 100:

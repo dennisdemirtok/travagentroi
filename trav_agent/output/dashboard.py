@@ -558,6 +558,16 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         )
         winbet_badge = ' <span class="winbet-badge">VINNARSPEL</span>' if is_chansspik else ""
 
+        # Dennis Brain pick indicator
+        dennis_badge = ""
+        if getattr(e, "dennis_pick", False):
+            te = e.dennis_time_edge
+            cr = e.dennis_class_ratio
+            dennis_badge = (
+                f' <span class="dennis-badge" title="Dennis Brain: tid +{te:.1f}s, klass {cr:.1f}x, barfota">'
+                f'DENNIS +{te:.1f}s</span>'
+            )
+
         has_starts = len(e.horse.past_starts) > 0
         toggle_class = " clickable" if has_starts else ""
         toggle_icon = '<span class="toggle-icon">&#9654;</span> ' if has_starts else ""
@@ -597,7 +607,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         rows.append(
             f'<tr class="horse-row{toggle_class}" data-horse="{e.post_position}">'
             f'<td class="pos">{e.post_position}</td>'
-            f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}{winbet_badge}</td>'
+            f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}{winbet_badge}{dennis_badge}</td>'
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
@@ -1081,12 +1091,12 @@ def _bet_view_html(game_round: GameRound) -> str:
         )
         for rank_idx, e in enumerate(sorted_entries):
             model_rank = rank_idx + 1
-            if model_rank > 3:
+            if model_rank > 5:  # Expanded to rank 5 for Dennis Brain
                 break
             if e.bet_percentage is None:
                 continue
             streck = e.bet_percentage
-            if not (0.03 <= streck <= 0.25):
+            if not (0.01 <= streck <= 0.25):
                 continue
 
             odds_est = round(1 / streck, 1) if streck > 0 else 0
@@ -1125,21 +1135,39 @@ def _bet_view_html(game_round: GameRound) -> str:
                 "is_p90": e.super_score >= p90_threshold,
                 "driver_starts": getattr(e, "driver_starts_year", 0),
                 "driver_win_pct": getattr(e, "driver_win_pct", 0.0),
+                # Dennis brain signals
+                "dennis_pick": getattr(e, "dennis_pick", False),
+                "dennis_time_edge": getattr(e, "dennis_time_edge", 0.0),
+                "dennis_class_ratio": getattr(e, "dennis_class_ratio", 0.0),
+                "barefoot": getattr(e, "shoe_front_off", False) and getattr(e, "shoe_back_off", False),
             })
 
-    # Define profiles — Sniper first (only profitable), rest shown with warnings
-    # ROI from 169 rounds with actual ATG odds (includes ~25% track commission)
+    # Define profiles — Dennis Brain first (strongest edge), then Sniper, then others
+    # ROI from actual ATG odds (includes ~25% track commission)
     PROFILES = [
         {
+            "id": "dennis",
+            "name": "Dennis Brain",
+            "desc": "Barfota + tidskant + klassdropp + rank 1-5 + 5-25%",
+            "badge_roi": "+45.2%",
+            "badge_color": "#15803d",
+            "bt_wins": "64/293",
+            "bt_winrate": "21.8%",
+            "bt_odds": "6.6x",
+            "bt_profit": "p<0.0001, 5/6 posit.",
+            "profitable": True,
+            "filter": lambda c: c.get("dennis_pick", False),
+        },
+        {
             "id": "sniper",
-            "name": "🎯 Sniper",
+            "name": "Sniper",
             "desc": "Rank A-B + kusk ≥100 st/år + 3-10%",
             "badge_roi": "+26.5%",
             "badge_color": "#15803d",
             "bt_wins": "7/55",
             "bt_winrate": "12.7%",
             "bt_odds": "10.1x",
-            "bt_profit": "✅ Lönsam",
+            "bt_profit": "169 omg. verif.",
             "profitable": True,
             "filter": lambda c: (c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10
                                  and c["driver_starts"] >= 100),
@@ -1248,9 +1276,10 @@ def _bet_view_html(game_round: GameRound) -> str:
             )
 
         # Candidate rows
+        is_dennis = pid == "dennis"
         rows = []
         for c in filtered:
-            rank_badge = "\U0001f947" if c["rank"] == 1 else "\U0001f948"
+            rank_badge = "\U0001f947" if c["rank"] == 1 else ("\U0001f948" if c["rank"] == 2 else f'R{c["rank"]}')
             streck_pct = c["streck"] * 100
             driver_warn = ""
             if c.get("driver_starts", 0) < 100:
@@ -1259,26 +1288,52 @@ def _bet_view_html(game_round: GameRound) -> str:
             if is_finished:
                 if c["won"]:
                     win_amt = 500 * c["actual_odds"]
-                    result_cell = f'<td class="bet-result bet-win">✅ +{win_amt - 500:,.0f}kr</td>'
+                    result_cell = f'<td class="bet-result bet-win">+{win_amt - 500:,.0f}kr</td>'
                     row_class = " bet-row-win"
                 else:
-                    result_cell = f'<td class="bet-result bet-loss">❌ {c["placement"]}</td>'
+                    result_cell = f'<td class="bet-result bet-loss">{c["placement"]}</td>'
                     row_class = " bet-row-loss"
             else:
-                result_cell = '<td class="bet-result bet-pending">⏳</td>'
+                result_cell = '<td class="bet-result bet-pending">--</td>'
                 row_class = ""
 
-            rows.append(
-                f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
-                f'<td class="bet-race">Avd {c["race_num"]}</td>'
-                f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
-                f'<td class="bet-score">{c["score"]:.0f}</td>'
-                f'<td class="bet-streck">{streck_pct:.0f}%</td>'
-                f'<td class="bet-odds">{_format_odds(c)}</td>'
-                f'<td class="bet-driver">{_esc(c["driver"][:15])}{driver_warn}</td>'
-                f'{result_cell}'
-                f'</tr>'
-            )
+            # Dennis profile: show signal details instead of generic columns
+            if is_dennis:
+                tid = c.get("dennis_time_edge", 0)
+                klass = c.get("dennis_class_ratio", 0)
+                signal_cell = (
+                    f'<td class="bet-signal" title="Tid: +{tid:.1f}s, Klass: {klass:.1f}x">'
+                    f'+{tid:.1f}s / {klass:.1f}x</td>'
+                )
+                rows.append(
+                    f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+                    f'<td class="bet-race">Avd {c["race_num"]}</td>'
+                    f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
+                    f'<td class="bet-streck">{streck_pct:.0f}%</td>'
+                    f'<td class="bet-odds">{_format_odds(c)}</td>'
+                    f'{signal_cell}'
+                    f'<td class="bet-driver">{_esc(c["driver"][:15])}{driver_warn}</td>'
+                    f'{result_cell}'
+                    f'</tr>'
+                )
+            else:
+                rows.append(
+                    f'<tr class="bet-candidate-row{row_class}" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+                    f'<td class="bet-race">Avd {c["race_num"]}</td>'
+                    f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
+                    f'<td class="bet-score">{c["score"]:.0f}</td>'
+                    f'<td class="bet-streck">{streck_pct:.0f}%</td>'
+                    f'<td class="bet-odds">{_format_odds(c)}</td>'
+                    f'<td class="bet-driver">{_esc(c["driver"][:15])}{driver_warn}</td>'
+                    f'{result_cell}'
+                    f'</tr>'
+                )
+
+        # Table headers differ for Dennis (signal details) vs other profiles
+        if is_dennis:
+            thead = '<th>Lopp</th><th>Häst</th><th>Streck</th><th>Odds</th><th>Tid/Klass</th><th>Kusk</th><th>Resultat</th>'
+        else:
+            thead = '<th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th><th>Odds</th><th>Kusk</th><th>Resultat</th>'
 
         return (
             f'<div class="bet-profile-card" id="profile-{pid}"{opacity_style}>'
@@ -1286,10 +1341,7 @@ def _bet_view_html(game_round: GameRound) -> str:
             f'{status_html}'
             f'<div class="table-wrap">'
             f'<table class="bet-table">'
-            f'<thead><tr>'
-            f'<th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th>'
-            f'<th>Odds</th><th>Kusk</th><th>Resultat</th>'
-            f'</tr></thead>'
+            f'<thead><tr>{thead}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody>'
             f'</table>'
             f'</div>'
@@ -3032,6 +3084,10 @@ text-transform:uppercase;letter-spacing:.04em}}
 font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
 text-transform:uppercase;letter-spacing:.04em;animation:winbet-pulse 2.5s ease-in-out infinite}}
 @keyframes winbet-pulse{{0%,100%{{box-shadow:0 0 0 0 rgba(139,92,246,0.4)}}50%{{box-shadow:0 0 8px 3px rgba(139,92,246,0.2)}}}}
+.dennis-badge{{background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;padding:.15rem .5rem;border-radius:20px;
+font-size:.62rem;font-weight:700;margin-left:.3rem;vertical-align:middle;
+text-transform:uppercase;letter-spacing:.04em;animation:dennis-pulse 2s ease-in-out infinite}}
+@keyframes dennis-pulse{{0%,100%{{box-shadow:0 0 0 0 rgba(245,158,11,0.4)}}50%{{box-shadow:0 0 10px 4px rgba(245,158,11,0.3)}}}}
 
 /* Vinnarspel summary card */
 .winbet-summary-card{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;

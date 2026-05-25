@@ -472,6 +472,20 @@ class ATGClient:
             past_start = self._parse_past_start(ps)
             past_starts.append(past_start)
 
+        # Record (best time) from horse.record
+        record_time = None
+        record_start_method = ""
+        record_data = horse_data.get("record", {})
+        if isinstance(record_data, dict) and "time" in record_data:
+            rt = record_data["time"]
+            if isinstance(rt, dict) and "minutes" in rt:
+                minutes = rt.get("minutes", 0) or 0
+                seconds = rt.get("seconds", 0) or 0
+                tenths = rt.get("tenths", 0) or 0
+                if minutes > 0 or seconds > 0:
+                    record_time = minutes * 60 + seconds + tenths / 10.0
+            record_start_method = record_data.get("startMethod", "")
+
         horse = Horse(
             id=horse_data.get("id"),
             name=horse_data.get("name", "Okänd"),
@@ -485,7 +499,10 @@ class ATGClient:
             trainer_id=horse_data.get("trainer", {}).get("id") if isinstance(horse_data.get("trainer"), dict) else None,
             trainer_location=horse_data.get("trainer", {}).get("location", "") if isinstance(horse_data.get("trainer"), dict) else "",
             owner_name=horse_data.get("owner", {}).get("name", ""),
+            record_time=record_time,
+            record_start_method=record_start_method,
             career=career,
+            api_career_money=career.total_prize_money,  # Preserved for Dennis signals
             past_starts=past_starts,
         )
 

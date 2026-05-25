@@ -34,6 +34,7 @@ from .track_profile import TrackProfile
 from .recent_form_signals import LastWinFactor, CompetitionStrength, LayoffFactor
 from .gallop_risk import GallopRisk
 from .proffs_consensus import ProffsFactor
+from .dennis_brain import compute_dennis_signals
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +163,9 @@ class CompositeAnalyzer:
 
         # Steg 6: Skrällrisk-analys
         self._assess_upset_risk(race, sorted_entries)
+
+        # Steg 7: Dennis Brain — vinnarspel-signaler (barfota+tid+klass)
+        compute_dennis_signals(race)
 
         return sorted_entries
 

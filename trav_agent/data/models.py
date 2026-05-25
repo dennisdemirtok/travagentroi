@@ -115,7 +115,13 @@ class Horse(BaseModel):
     trainer_location: str = ""  # Stad/land, t.ex. "Halmstad" eller "Italien"
     owner_name: str = ""
 
+    # Record (best time) from ATG horse.record
+    record_time: Optional[float] = None  # km-tid i sekunder (t.ex. 73.5 = 1.13.5)
+    record_start_method: str = ""  # "auto" eller "volt"
+
     career: CareerStats = Field(default_factory=CareerStats)
+    # API career money preserved for Dennis signals (not wiped by temporal filtering)
+    api_career_money: int = 0
     past_starts: list[PastStart] = Field(default_factory=list)
 
     def recent_starts(self, n: int = 10) -> list[PastStart]:
@@ -229,6 +235,11 @@ class RaceEntry(BaseModel):
     super_score: float = 0.0  # Blend av modell + marknad (streckprocent)
     rank: int = 0
     recommendation: str = ""  # "spik", "2-val", "3-val", "gardering", "strykning"
+
+    # Dennis brain signals (computed post-analysis)
+    dennis_time_edge: float = 0.0  # sekunder snabbare än fältet (positivt = snabbare)
+    dennis_class_ratio: float = 0.0  # karriärpengar / fältets median (>1.5 = klassdropp)
+    dennis_pick: bool = False  # True om S4 qualifying (barfota+tid+klass+rank+streck)
 
 
 # ── Lopp ──────────────────────────────────────────────────────────────────────

@@ -180,21 +180,45 @@ async def _refresh_live_rounds():
 
 
 async def _prewarm_caches():
-    """Pre-warm available rounds + backlog cache in background.
+    """Pre-warm available rounds + backlog + active round in background.
 
     Runs as a background task so it doesn't block startup / health checks.
+    The goal: first user page load should hit 100% cached data.
     """
     try:
         client = ATGClient()
+        analyzer = CompositeAnalyzer()
+
         # Load backlog first (fast, no external API calls)
         await _load_backlog()
         n_entries = len((_backlog_cache or {}).get("entries", []))
         logger.info(f"Pre-warm: {n_entries} backlog entries cached")
 
-        # Then fetch available rounds (slower, 21 calendar API calls)
+        # Then fetch available rounds (21 calendar API calls)
         await _get_available_rounds(client)
         n_rounds = len(_available_rounds_cache)
         logger.info(f"Pre-warm: {n_rounds} rounds cached")
+
+        # Pre-fetch the active round (the one root / redirects to)
+        # This is the expensive part (~60-90s) but runs in background
+        if _available_rounds_cache:
+            today_str = str(date.today())
+            future = [r for r in _available_rounds_cache if r[2] >= today_str]
+            past = [r for r in _available_rounds_cache if r[2] < today_str]
+            target = future[0] if future else (past[-1] if past else None)
+            if target:
+                gt, d_str = target[1], target[2]
+                key = f"{gt}/{d_str}"
+                if key not in _round_cache:
+                    d = date.fromisoformat(d_str)
+                    logger.info(f"Pre-warm: fetching active round {key}...")
+                    game_round = await client.fetch_full_round(gt, d)
+                    if game_round:
+                        if not game_round.is_finished and d >= date.today():
+                            await client.refresh_results(game_round)
+                        analyzer.analyze_round(game_round)
+                        _round_cache[key] = game_round
+                        logger.info(f"Pre-warm: active round {key} cached ✓")
     except Exception as e:
         logger.warning(f"Pre-warm failed (non-fatal): {e}")
 

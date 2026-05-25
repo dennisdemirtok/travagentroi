@@ -459,6 +459,44 @@ def compute_dennis_signals(race: Race) -> None:
         entry.dennis_form_max = fr.form_max
         entry.dennis_confidence = fr.confidence
 
+    # ── 1b. Detektera distans-glesa lopp ─────────────────────────
+    # I 2640m-lopp har nastan ingen hast sprungit den distansen.
+    # Da ar confidence-penalty meningslos (alla straffas lika) och
+    # rankingen styrs av brus. Dennis: "starka snarare an snabba" —
+    # klass, kusk och formtrend ar viktigare nar tiderna ar osakra.
+    #
+    # Losning: nar >60% av faltet saknar distansdata, skala ner
+    # uncertainty_penalty och skala upp klass/kusk-bonusar.
+    n_dist_issues = sum(
+        1 for fr in form_results.values()
+        if "annan_distans" in fr.flags or "fa_distansstarter" in fr.flags
+    )
+    n_with_form = sum(1 for fr in form_results.values() if fr.form_min > 0)
+    dist_coverage = 1.0 - (n_dist_issues / n_with_form) if n_with_form > 0 else 1.0
+
+    # Scale factors for distance-sparse races
+    if dist_coverage < 0.3:
+        # >70% saknar distansdata (typiskt 2640m-lopp)
+        # Minimera confidence-penalty, maxa klass/kusk-signaler
+        race_uncertainty_penalty = UNCERTAINTY_PENALTY * 0.25
+        race_class_bonus_scale = 1.5  # klass vager 50% mer
+        race_driver_bonus_scale = 1.5  # kusk vager 50% mer
+        logger.debug(
+            f"  Avd {race.race_number}: distance-sparse race "
+            f"({n_dist_issues}/{n_with_form} lack dist data) — "
+            f"reducing uncertainty penalty, boosting class/driver"
+        )
+    elif dist_coverage < 0.5:
+        # 50-70% saknar distansdata
+        race_uncertainty_penalty = UNCERTAINTY_PENALTY * 0.5
+        race_class_bonus_scale = 1.25
+        race_driver_bonus_scale = 1.25
+    else:
+        # Normal race — de flesta har distansdata
+        race_uncertainty_penalty = UNCERTAINTY_PENALTY
+        race_class_bonus_scale = 1.0
+        race_driver_bonus_scale = 1.0
+
     # ── 2. Effective form: confidence-vagd + klass + kusk-justerad ──
     # Dennis rankar INTE enbart pa snabbaste tid. Han vager:
     # - Kan hasten springa fort? (form_min)
@@ -474,27 +512,32 @@ def compute_dennis_signals(race: Race) -> None:
         effective = fr.form_min
 
         # a) Confidence-penalty: osaker hast = hogre effektiv tid
-        #    form_min 73.5 + (1-0.28)*1.5 = 73.5 + 1.08 = 74.58
-        #    = Good as Caviar faller fran rank 4 till ~8
-        effective += (1.0 - fr.confidence) * UNCERTAINTY_PENALTY
+        #    Skalas ner i distans-glesa lopp dar alla har lag confidence
+        effective += (1.0 - fr.confidence) * race_uncertainty_penalty
 
         # b) Klassdropp-bonus: tuffare lopp nyligen = hasten ar bra
+        #    I distans-glesa lopp vager klass MER (scale > 1.0)
         class_drop = _compute_class_drop_vs_field(entry, field_median_purse)
         entry.dennis_class_drop = class_drop
         if class_drop > CLASS_DROP_THRESHOLD:
             bonus = min((class_drop - 1.0) * 0.5, MAX_CLASS_DROP_BONUS)
+            bonus *= race_class_bonus_scale
             effective -= bonus
             logger.debug(
-                f"  {entry.horse.name}: class_drop {class_drop:.1f}x → -{bonus:.1f}s"
+                f"  {entry.horse.name}: class_drop {class_drop:.1f}x → "
+                f"-{bonus:.1f}s (scale {race_class_bonus_scale:.1f}x)"
             )
 
         # c) Kusk-bonus: elit-kusk pressar bort 0.15-0.4s
+        #    I distans-glesa lopp vager kusken MER (scale > 1.0)
         driver_bonus = _driver_quality_bonus(entry)
         if driver_bonus > 0:
+            driver_bonus *= race_driver_bonus_scale
             effective -= driver_bonus
             logger.debug(
                 f"  {entry.horse.name}: driver_bonus -{driver_bonus:.1f}s "
-                f"(win {entry.driver_win_pct:.0%}, starts {entry.driver_starts_year})"
+                f"(win {entry.driver_win_pct:.0%}, starts {entry.driver_starts_year}, "
+                f"scale {race_driver_bonus_scale:.1f}x)"
             )
 
         entry.dennis_effective_form = round(effective, 2)

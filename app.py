@@ -436,14 +436,17 @@ async def api_rounds():
 # ── Bet Result API ─────────────────────────────────────────────────────────
 
 @app.get("/api/bets")
-async def api_bets(game_type: str = None, days: int = 90):
-    """Return vinnarspel bet history with P&L aggregation."""
+async def api_bets(game_type: str = None, profile: str = "profitable", days: int = 365):
+    """Return vinnarspel bet history with P&L aggregation.
+
+    profile: sniper/pro/sharp/bas/profitable (default: profitable = kuskfilter-profiler)
+    """
     if not SUPABASE_ENABLED:
         return JSONResponse({"error": "Supabase ej konfigurerad"}, status_code=503)
 
     try:
         from trav_agent.database.bet_sync import load_bet_history
-        data = load_bet_history(game_type=game_type, days_back=days)
+        data = load_bet_history(game_type=game_type, profile=profile, days_back=days)
         return JSONResponse(data)
     except Exception as e:
         logger.error(f"Bet history error: {e}")

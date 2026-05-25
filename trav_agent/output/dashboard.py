@@ -3103,6 +3103,13 @@ padding:16px;background:#f8fafc;border-radius:10px;border:1px solid #e5e7eb}}
 .bet-cum-label{{display:block;font-size:.68rem;color:#6b7280;text-transform:uppercase;
 letter-spacing:.5px;margin-bottom:2px}}
 .bet-cum-val{{display:block;font-weight:700;font-size:1rem;color:#1e293b}}
+.bet-profile-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}}
+.bet-profile-grid .bet-profile-card{{cursor:pointer;padding:14px;text-align:center;
+transition:all .15s;border:2px solid transparent}}
+.bet-profile-grid .bet-profile-card:hover{{border-color:#cbd5e1;transform:translateY(-1px)}}
+.bet-profile-grid .bet-profile-card.active{{border-color:#3b82f6;background:#f0f7ff}}
+.bet-profile-roi{{font-size:1.1rem;font-weight:800;margin:4px 0}}
+.bet-profile-detail{{font-size:.72rem;color:#94a3b8}}
 
 @media(max-width:768px){{
   .bet-strategy-stats{{grid-template-columns:repeat(2,1fr)}}
@@ -4693,6 +4700,7 @@ function removeCustomSource(sourceKey){{
 // ── Bet History ──
 let _betData=null;
 let _betPeriod='month';
+let _betProfile='profitable';
 
 function setBetPeriod(p){{
   _betPeriod=p;
@@ -4702,11 +4710,21 @@ function setBetPeriod(p){{
   if(_betData)renderBetHistory(_betData);
 }}
 
+function setBetProfile(p){{
+  _betProfile=p;
+  document.querySelectorAll('.bet-profile-btn').forEach(b=>b.classList.remove('active'));
+  const btn=document.querySelector('.bet-profile-btn[data-profile="'+p+'"]');
+  if(btn)btn.classList.add('active');
+  _betData=null;
+  fetchBetHistory();
+}}
+
 async function fetchBetHistory(){{
   const el=document.getElementById('bet-history-content');
   if(!el)return;
+  el.innerHTML='<div class="bet-loading">Laddar...</div>';
   try{{
-    const resp=await fetch('/api/bets?days=180');
+    const resp=await fetch('/api/bets?profile='+_betProfile+'&days=365');
     if(!resp.ok){{
       el.innerHTML='<div class="bet-loading">Historik inte tillgänglig</div>';
       return;
@@ -4725,15 +4743,37 @@ function renderBetHistory(data){{
   const periods=data.by_period||{{}};
   const periodData=periods[_betPeriod]||{{}};
   const keys=Object.keys(periodData);
+  const byProfile=data.by_profile||{{}};
 
   if(sum.total_bets===0){{
-    el.innerHTML='<div class="bet-loading">Inga resultat sparade ännu. Resultat sparas automatiskt när omgångar analyseras.</div>';
+    el.innerHTML='<div class="bet-loading">Inga resultat sparade. Data uppdateras efter backfill med profilklassificering.</div>';
     return;
+  }}
+
+  let html='';
+
+  // Profile breakdown cards (always shown)
+  const profileMeta={{sniper:{{label:'Sniper',desc:'3-10% + kusk≥100',color:'#f59e0b'}},pro:{{label:'Pro',desc:'5-20% + kusk≥100',color:'#3b82f6'}},sharp:{{label:'Sharp',desc:'score≥45 + kusk',color:'#8b5cf6'}},bas:{{label:'Bas',desc:'5-20% (alla)',color:'#6b7280'}}}};
+  if(Object.keys(byProfile).length>0){{
+    html+='<div class="bet-profile-grid">';
+    for(const[pKey,pMeta] of Object.entries(profileMeta)){{
+      const p=byProfile[pKey];
+      if(!p)continue;
+      const c=p.roi_pct>=0?'#15803d':'#dc2626';
+      html+='<div class="bet-profile-card'+((_betProfile===pKey)?' active':'')+'" onclick="setBetProfile(\''+pKey+'\')">';
+      html+='<div class="bet-profile-name" style="color:'+pMeta.color+'">'+pMeta.label+'</div>';
+      html+='<div class="bet-profile-desc">'+pMeta.desc+'</div>';
+      html+='<div class="bet-profile-roi" style="color:'+c+'">'+(p.roi_pct>=0?'+':'')+p.roi_pct.toFixed(0)+'% ROI</div>';
+      html+='<div class="bet-profile-detail">'+p.bets+' spel · '+p.wins+' vinster</div>';
+      html+='</div>';
+    }}
+    html+='</div>';
   }}
 
   // Summary cards
   const pnlColor=sum.total_pnl>=0?'#15803d':'#dc2626';
-  let html='<div class="bet-cum-summary">';
+  html+='<div class="bet-cum-summary">';
+  html+='<div class="bet-cum-item"><span class="bet-cum-label">Historisk P&L</span><span class="bet-cum-val" style="font-size:.75rem;color:#6b7280">'+((_betProfile==='profitable')?'Kuskfilter-profiler':_betProfile)+'</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">Spel</span><span class="bet-cum-val">'+sum.finished_count+'</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">Vinster</span><span class="bet-cum-val">'+sum.wins+' ('+sum.win_rate.toFixed(0)+'%)</span></div>';
   html+='<div class="bet-cum-item"><span class="bet-cum-label">ROI</span><span class="bet-cum-val" style="color:'+pnlColor+'">'+(sum.roi_pct>=0?'+':'')+sum.roi_pct.toFixed(0)+'%</span></div>';
@@ -4745,7 +4785,6 @@ function renderBetHistory(data){{
     html+='<div class="bet-loading">Ingen data för vald period</div>';
   }}else{{
     html+='<div class="bet-history-grid">';
-    // Find max absolute PNL for scaling bars
     let maxAbs=1;
     keys.forEach(k=>{{const a=Math.abs(periodData[k].pnl||0);if(a>maxAbs)maxAbs=a;}});
 

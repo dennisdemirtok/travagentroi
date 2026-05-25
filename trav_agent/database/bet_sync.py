@@ -18,10 +18,36 @@ def _get_client():
     return get_client()
 
 
+def _classify_profile(model_rank: int, streck: float, driver_starts: int, score: float) -> str:
+    """Classify a bet candidate into a vinnarspel profile.
+
+    Profiles (from no-leakage backtest, 169 rounds):
+      Sniper (+79.5% ROI): rank≤2, streck 3-10%, kusk≥100
+      Pro    (+16.3% ROI): rank≤2, streck 5-20%, kusk≥100
+      Sharp  (+8.1% ROI):  rank≤2, streck 5-20%, kusk≥100, score≥45
+      Bas    (+8.7% ROI):  rank≤2, streck 5-20% (no kusk filter)
+    """
+    if model_rank > 2:
+        return "none"
+    if driver_starts >= 100:
+        if 0.03 <= streck <= 0.10:
+            return "sniper"
+        if 0.05 <= streck <= 0.20:
+            if score >= 45:
+                return "sharp"
+            return "pro"
+    if 0.05 <= streck <= 0.20:
+        return "bas"
+    if 0.03 <= streck < 0.05:
+        return "bas"  # low-streck without kusk filter
+    return "none"
+
+
 def extract_vinnarspel_candidates(game_round) -> list[dict]:
     """Extract vinnarspel candidates from an analyzed game round.
 
-    Criteria: model rank ≤ 2, streck 5-20%.
+    Criteria: model rank ≤ 2, streck 3-20%.
+    Each candidate is classified into a profile (sniper/pro/sharp/bas).
     Returns list of candidate dicts ready for Supabase upsert.
     """
     candidates = []
@@ -44,45 +70,52 @@ def extract_vinnarspel_candidates(game_round) -> list[dict]:
             model_rank = rank_idx + 1
             if model_rank > 2:
                 break
-            if (
-                e.bet_percentage is not None
-                and 0.05 <= e.bet_percentage <= 0.20
-            ):
-                odds_est = round(1 / e.bet_percentage, 1) if e.bet_percentage > 0 else 0
+            streck = e.bet_percentage or 0
+            if streck < 0.03 or streck > 0.20:
+                continue
 
-                # Check result if finished
-                won = False
-                placement = None
-                actual_odds = 0.0
-                if is_finished and race.result_order:
-                    for pos, num in enumerate(race.result_order, 1):
-                        if num == e.post_position:
-                            placement = pos
-                            break
-                    won = placement == 1
-                    if won:
-                        # Use actual win odds if available, else estimate
-                        actual_odds = getattr(race, "win_odds", 0) or odds_est
+            odds_est = round(1 / streck, 1) if streck > 0.01 else 0
+            driver_starts = getattr(e, "driver_starts_year", 0) or 0
+            score = e.super_score or 0
 
-                candidates.append({
-                    "round_date": rd,
-                    "game_type": gt,
-                    "track_name": track_name,
-                    "race_number": race.race_number,
-                    "horse_name": e.horse.name,
-                    "post_position": e.post_position,
-                    "model_rank": model_rank,
-                    "streck_pct": round(e.bet_percentage, 4),
-                    "composite_score": round(e.super_score, 1),
-                    "odds_estimated": odds_est,
-                    "driver_name": e.driver_name or "",
-                    "bet_amount": 500,
-                    "won": won,
-                    "placement": placement,
-                    "actual_odds": actual_odds if won else 0,
-                    "payout": round(500 * actual_odds, 0) if won else 0,
-                    "round_finished": is_finished,
-                })
+            # Classify into profile
+            profile = _classify_profile(model_rank, streck, driver_starts, score)
+
+            # Check result if finished
+            won = False
+            placement = None
+            actual_odds = 0.0
+            if is_finished and race.result_order:
+                for pos, num in enumerate(race.result_order, 1):
+                    if num == e.post_position:
+                        placement = pos
+                        break
+                won = placement == 1
+                if won:
+                    # Use actual win odds if available, else estimate from streck
+                    actual_odds = getattr(race, "win_odds", 0) or odds_est
+
+            candidates.append({
+                "round_date": rd,
+                "game_type": gt,
+                "track_name": track_name,
+                "race_number": race.race_number,
+                "horse_name": e.horse.name,
+                "post_position": e.post_position,
+                "model_rank": model_rank,
+                "streck_pct": round(streck, 4),
+                "composite_score": round(score, 1),
+                "odds_estimated": odds_est,
+                "driver_name": e.driver_name or "",
+                "driver_starts_year": driver_starts,
+                "profile": profile,
+                "bet_amount": 500,
+                "won": won,
+                "placement": placement,
+                "actual_odds": actual_odds if won else 0,
+                "payout": round(500 * actual_odds, 0) if won else 0,
+                "round_finished": is_finished,
+            })
 
     return candidates
 
@@ -119,28 +152,21 @@ def sync_bet_results(game_round, client=None) -> dict:
 def load_bet_history(
     client=None,
     game_type: Optional[str] = None,
-    days_back: int = 90,
-    limit: int = 500,
+    profile: Optional[str] = None,
+    days_back: int = 365,
+    limit: int = 2000,
 ) -> dict:
     """Load bet results from Supabase for P&L tracking.
 
+    Args:
+        profile: Filter by profile (sniper/pro/sharp/bas). None = all.
+                 "profitable" = pro + sniper + sharp (kuskfilter-profiler).
     Returns:
         {
             "bets": [...],
-            "summary": {
-                "total_bets": int,
-                "total_staked": float,
-                "total_returned": float,
-                "total_pnl": float,
-                "roi_pct": float,
-                "wins": int,
-                "win_rate": float,
-            },
-            "by_period": {
-                "day": {...},    # last 7 days
-                "week": {...},   # last 4 weeks
-                "month": {...},  # all months
-            }
+            "summary": {...},
+            "by_period": {...},
+            "by_profile": {...},
         }
     """
     if client is None:
@@ -158,7 +184,16 @@ def load_bet_history(
         query = query.eq("game_type", game_type.upper())
 
     result = query.execute()
-    bets = result.data if result.data else []
+    all_bets = result.data if result.data else []
+
+    # Filter by profile
+    PROFITABLE_PROFILES = {"sniper", "pro", "sharp"}
+    if profile == "profitable":
+        bets = [b for b in all_bets if b.get("profile") in PROFITABLE_PROFILES]
+    elif profile:
+        bets = [b for b in all_bets if b.get("profile") == profile]
+    else:
+        bets = all_bets
 
     # Summary
     total_bets = len(bets)
@@ -233,10 +268,31 @@ def load_bet_history(
         "month": dict(sorted(monthly.items(), reverse=True)),
     }
 
+    # Per-profile breakdown (always from ALL bets, ignoring profile filter)
+    by_profile = {}
+    for p_name in ["sniper", "pro", "sharp", "bas"]:
+        p_bets = [b for b in all_bets if b.get("profile") == p_name and b.get("round_finished")]
+        if not p_bets:
+            continue
+        p_staked = sum(b.get("bet_amount", 500) for b in p_bets)
+        p_returned = sum(b.get("payout", 0) for b in p_bets)
+        p_pnl = p_returned - p_staked
+        p_wins = sum(1 for b in p_bets if b.get("won"))
+        by_profile[p_name] = {
+            "bets": len(p_bets),
+            "wins": p_wins,
+            "win_rate": (p_wins / len(p_bets) * 100) if p_bets else 0,
+            "staked": p_staked,
+            "returned": p_returned,
+            "pnl": p_pnl,
+            "roi_pct": (p_pnl / p_staked * 100) if p_staked > 0 else 0,
+        }
+
     return {
         "bets": bets,
         "summary": summary,
         "by_period": by_period,
+        "by_profile": by_profile,
     }
 
 

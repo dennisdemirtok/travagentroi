@@ -237,8 +237,13 @@ class RaceEntry(BaseModel):
     recommendation: str = ""  # "spik", "2-val", "3-val", "gardering", "strykning"
 
     # Dennis brain signals (computed post-analysis)
+    dennis_form_min: float = 0.0   # snabbaste realistiska km-tid (t.ex. 71.0 = 1.11.0)
+    dennis_form_max: float = 0.0   # långsammaste realistiska km-tid
+    dennis_confidence: float = 0.0  # 0-1 hur säker tidsbedömningen är
+    dennis_effective_form: float = 0.0  # confidence-vägd form + klass/kusk-justeringar
     dennis_time_edge: float = 0.0  # sekunder snabbare än fältet (positivt = snabbare)
     dennis_class_ratio: float = 0.0  # karriärpengar / fältets median (>1.5 = klassdropp)
+    dennis_class_drop: float = 0.0  # senaste loppens prispott / dagens prispott (>1.3 = klassdropp)
     dennis_pick: bool = False  # True om S4 qualifying (barfota+tid+klass+rank+streck)
 
 

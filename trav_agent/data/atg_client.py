@@ -128,7 +128,7 @@ class ATGClient:
         """
         url = f"{self.base_url}/horses/{horse_id}/results"
         try:
-            data = await self._get(url)
+            data = await self._get(url, skip_cache=True)
             return data.get("records", [])
         except Exception as e:
             logger.warning(f"Kunde inte hämta historik för häst {horse_id}: {e}")
@@ -215,6 +215,39 @@ class ATGClient:
             odds=odds_val,
         )
 
+    def _merge_missing_starts(self, horse: Horse, records: list[dict]) -> None:
+        """Fyll i saknade starter från /horses/{id}/results i hästens past_starts.
+
+        Speldata (pastPerformances) kan vara veckor efter — results-endpointen
+        har alltid färsk data. Vi behåller befintliga past_starts (rikare data)
+        och prepend:ar bara starter som saknas (baserat på datum + bana).
+        """
+        if not records:
+            return
+
+        # Bygg lookup-set av befintliga starter: (datum, bana) som nyckel
+        existing_keys: set[tuple[date, str]] = set()
+        for ps in horse.past_starts:
+            existing_keys.add((ps.start_date, ps.track_name.lower().strip()))
+
+        # Hitta starter i results som inte finns i befintliga past_starts
+        missing: list[PastStart] = []
+        for record in records:
+            parsed = self._parse_horse_result(record)
+            key = (parsed.start_date, parsed.track_name.lower().strip())
+            if key not in existing_keys:
+                missing.append(parsed)
+
+        if missing:
+            # Sortera saknade starter med nyast först (samma ordning som past_starts)
+            missing.sort(key=lambda ps: ps.start_date, reverse=True)
+            # Prepend saknade starter framför befintliga
+            horse.past_starts = missing + horse.past_starts
+            logger.debug(
+                f"Häst {horse.name} ({horse.id}): "
+                f"lade till {len(missing)} saknade starter från results-endpoint"
+            )
+
     # ── Zeta (analyser) ──────────────────────────────────────────────────────
 
     async def get_zeta_analysis(self, track_id: int, day: date) -> dict[str, Any]:
@@ -279,7 +312,8 @@ class ATGClient:
                 detailed = await self.get_race(race_id)
                 self._enrich_race(game_round.races[i], detailed)
 
-        # 5. Hämta fullständig starthistorik per häst via /horses/{id}/results
+        # 5. Hämta färsk starthistorik per häst via /horses/{id}/results
+        #    och fyll i saknade starter som speldata kan missa (ofta veckor efter)
         horse_ids_fetched: set[int] = set()
         for race in game_round.races:
             for entry in race.entries:
@@ -288,9 +322,7 @@ class ATGClient:
                     horse_ids_fetched.add(horse_id)
                     records = await self.get_horse_results(horse_id)
                     if records:
-                        entry.horse.past_starts = [
-                            self._parse_horse_result(r) for r in records
-                        ]
+                        self._merge_missing_starts(entry.horse, records)
 
         logger.info(
             f"Hämtade {game_round.game_type} {game_round.round_date}: "

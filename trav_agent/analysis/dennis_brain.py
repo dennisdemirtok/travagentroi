@@ -1,33 +1,30 @@
 """Dennis Brain — Post-analys som flaggar vinnarspel-picks baserat pa Dennis metod.
 
 Dennis analysmetod i modellform:
-1. Tidskant: Hastens rekordtid vs GLOBAL median per distans/startmetod
-   - "1.14 pa 2140m auto — ar det bra eller daligt for den har klassen?"
-   - Anvander globala medianer fran 76k hastar (backtest-validerade)
-2. Klassdropp: Karriarpengar vs faltets median — kor hasten under sin klass?
-   - "Pengarna sager vilken klass hasten tillhor"
-3. Barfota: Positiv utrustningssignal — tranaren provar ngt nytt
-   - "Fran skor till barfota brukar vara indikationer"
-4. Modellrank 1-5 + streck 5-25% — rimlig outsider som modellen gillar
-
-Backtestresultat (293 spel, 2021-2026, riktiga ATG-odds):
-  Vinnarspel ROI: +45.2% (p < 0.0001)
-  Platsspel ROI: +4.6%
-  5/6 ar positiva
+1. Formtid: Analysera senaste 5-10 starter, filtrera bort hangtider,
+   berakna realistiskt tidsintervall (min-max) for varje hast.
+   - Hangtid = snabb tid + dalig placering (5+) + hoga odds (20+)
+   - Riktiga tider = vinster/topp-3 + lagre odds + rimlig placering
+2. Klassdropp: Karriarpengar vs faltets median
+3. Barfota: Positiv utrustningssignal
+4. Modellrank 1-5 + streck 5-25%
 
 Koers efter CompositeAnalyzer.analyze_race() och satter:
-  - entry.dennis_time_edge (sekunder snabbare an faltet)
+  - entry.dennis_form_min/max (realistiskt tidsintervall fran senaste form)
+  - entry.dennis_time_edge (sekunder snabbare an faltets median formtid)
   - entry.dennis_class_ratio (karriarpengar / faltets median)
-  - entry.dennis_pick (True om alla S4-kriterier uppfylls)
+  - entry.dennis_pick (True om S4-kriterier uppfylls)
+  - entry.dennis_confidence (hur saker tidsbedomningen ar: 0-1)
 """
 
 from __future__ import annotations
 
 import logging
 import statistics
+from dataclasses import dataclass
 from typing import Optional
 
-from ..data.models import Race, RaceEntry
+from ..data.models import Race, RaceEntry, PastStart
 
 logger = logging.getLogger(__name__)
 
@@ -38,84 +35,401 @@ S4_MAX_STRECK = 0.25     # 25%
 S4_MIN_TIME_EDGE = 1.0   # 1 second faster than field median
 S4_MIN_CLASS_RATIO = 1.5  # 1.5x field median career money
 
-# ── Global time medians per (distance, start_method) ──────────────────────
-# Extracted from 76,158 horses across 880 rounds (2021-2026).
-# Only combos with n>=50 included. Values = median km_time in seconds.
-# km_time = record_time / (distance_km), e.g. 73.5s / 2.14km = 34.35 s/km
-GLOBAL_TIME_MEDIANS: dict[tuple[int, str], float] = {
-    (1600, "auto"): 44.25,
-    (1609, "auto"): 44.75,
-    (1620, "auto"): 44.20,
-    (1640, "auto"): 44.15,
-    (1640, "volte"): 46.49,
-    (1646, "auto"): 44.29,
-    (1680, "auto"): 43.69,
-    (1700, "auto"): 42.88,
-    (2000, "auto"): 36.50,
-    (2000, "volte"): 37.73,
-    (2011, "auto"): 34.86,
-    (2060, "auto"): 35.44,
-    (2080, "auto"): 35.48,
-    (2080, "volte"): 36.63,
-    (2100, "auto"): 34.81,
-    (2100, "volte"): 36.24,
-    (2120, "auto"): 34.39,
-    (2120, "volte"): 35.80,
-    (2140, "auto"): 34.02,
-    (2140, "volte"): 35.19,
-    (2148, "auto"): 34.31,
-    (2148, "volte"): 35.06,
-    (2413, "auto"): 29.88,
-    (2480, "auto"): 29.76,
-    (2480, "volte"): 34.50,
-    (2600, "auto"): 28.19,
-    (2609, "auto"): 28.23,
-    (2640, "auto"): 27.61,
-    (2640, "volte"): 28.30,
-    (2650, "auto"): 27.96,
-    (2650, "volte"): 28.30,
-    (2880, "auto"): 25.45,
-    (2900, "volte"): 25.90,
-    (2950, "volte"): 25.12,
-    (3120, "volte"): 23.81,
-    (3140, "auto"): 23.17,
-    (3140, "volte"): 23.60,
-    (3654, "volte"): 20.22,
-}
+
+# ── Formtid-analys (Dennis metod) ─────────────────────────────────────────
+
+@dataclass
+class FormTimeResult:
+    """Resultat av formtidsanalys for en hast."""
+    form_min: float = 0.0        # snabbaste realistiska km-tid (t.ex. 71.0 = 1.11.0)
+    form_max: float = 0.0        # langsammaste realistiska km-tid
+    confidence: float = 0.0      # 0-1 hur saker bedomningen ar
+    n_real_times: int = 0        # antal riktiga tider (ej hangtider)
+    n_total_starts: int = 0      # antal starter analyserade
+    flags: list[str] = None      # riskflaggor: "galopp", "uppehall", "hangtider"
+
+    def __post_init__(self):
+        if self.flags is None:
+            self.flags = []
+
+    @property
+    def form_mid(self) -> float:
+        """Mittpunkten av tidsintervallet."""
+        if self.form_min and self.form_max:
+            return (self.form_min + self.form_max) / 2
+        return self.form_min or self.form_max
 
 
-def _lookup_global_time_median(distance: int, start_method: str) -> Optional[float]:
-    """Look up global time median for a distance/method combo.
+def _is_similar_distance(start_dist: int, race_dist: int) -> bool:
+    """Ar starten pa liknande distans som dagens lopp?
 
-    Exact match first, then fuzzy match (nearest distance within 100m,
-    same start method).
+    Tre distansgrupper — tider ar jamborbara INOM grupp, inte mellan:
+      Sprint:  1400-1800m (1640m-typ)
+      Medel:   1900-2400m (2140m-typ)
+      Stayer:  2400-3700m (2640m+)
+
+    En 2640m-tid sager ingenting om hur hasten springer 2140m.
     """
-    key = (distance, start_method)
-    if key in GLOBAL_TIME_MEDIANS:
-        return GLOBAL_TIME_MEDIANS[key]
+    def bucket(d: int) -> str:
+        if d <= 1800:
+            return "sprint"
+        elif d <= 2400:
+            return "medel"
+        else:
+            return "stayer"
 
-    # Fuzzy: find nearest distance with same method within 100m
-    best_dist = None
-    best_diff = 101  # > max allowed
-    for (d, m), _ in GLOBAL_TIME_MEDIANS.items():
-        if m != start_method:
-            continue
-        diff = abs(d - distance)
-        if diff < best_diff:
-            best_diff = diff
-            best_dist = d
+    return bucket(start_dist) == bucket(race_dist)
 
-    if best_dist is not None and best_diff <= 100:
-        return GLOBAL_TIME_MEDIANS[(best_dist, start_method)]
 
-    return None
+def _hanging_time_penalty(start: PastStart) -> float:
+    """Berakna hangtids-penalty for en start.
+
+    Returnerar 0.0 om det INTE ar en hangtid.
+    Returnerar 0.3-1.0 sekunder penalty beroende pa hur tydlig
+    hangtiden ar. Tiden INKLUDERAS i analysen men med penalty.
+
+    Dennis princip: man ska inte ta bort hangtider — de visar att
+    hasten KAN springa dom tiderna. Men for att VINNA behover
+    hasten kanske 0.5-1.0s mer. Bedoms fran fall till fall:
+
+    - Mild (5-6:a, odds 15-25): +0.3s — hangde med men var inte langsamst
+    - Medium (5-8:a, odds 25-50): +0.5s — tydlig outsider som bara foljde
+    - Grov (7+:a, odds 50+ ELLER 8+:a i dyrlopp): +0.8s — helt overklassad
+    """
+    if not start.km_time or start.km_time <= 0:
+        return 0.0
+
+    placement = start.placement or 99
+    odds = start.odds or 0
+
+    # Vinst eller 2:a med rimliga odds = aldrig hangtid
+    if placement <= 2 and odds < 30:
+        return 0.0
+
+    # 3:a-4:a = normalt inte hangtid, utom vid extrema odds
+    if placement <= 4 and odds < 35:
+        return 0.0
+
+    # ── Grov hangtid ──
+    # Extrema outsider (odds 50+) som inte var nara att vinna
+    if odds >= 50 and placement >= 5:
+        return 0.8
+
+    # Mycket dalig placering (8+) i starkare falt
+    if placement >= 8 and odds >= 10:
+        return 0.8
+
+    # ── Medium hangtid ──
+    # Stor outsider (odds 25-50) med dalig placering
+    if odds >= 25 and placement >= 5:
+        return 0.5
+
+    # 7:a+ med medelhoga odds
+    if placement >= 7 and odds >= 8:
+        return 0.5
+
+    # ── Mild hangtid ──
+    # 5-6:a med forhojda odds
+    if placement >= 5 and odds >= 15:
+        return 0.3
+
+    # Disk med hoga odds
+    if start.disqualified and odds >= 15:
+        return 0.5
+
+    return 0.0
+
+
+def _is_lazy_win(start: PastStart) -> bool:
+    """Identifiera 'lata vinster' — hasten vann men utan att behova
+    springa fort.
+
+    En hast som vinner pa 1.14.9 i ett 35 000kr-lopp med odds 1.7
+    behover inte springa snabbare an sa for att vinna. Denna tid sager
+    INTE att hasten ar i dalig form — bara att klassen pa motstandet
+    var lag.
+
+    Indikator: vinst/2:a + lagt odds + lag prissumma relativt
+    hastens normala klass.
+    """
+    if not start.km_time or start.km_time <= 0:
+        return False
+
+    placement = start.placement or 99
+    odds = start.odds or 0
+
+    # Hast som vann/tvaa med lagt odds i sma lopp
+    # Dessa tider ar UNDRE GRANS for vad hasten kan — inte ovre
+    if placement <= 2 and odds <= 3.0 and start.race_purse > 0 and start.race_purse <= 60000:
+        return True
+
+    return False
+
+
+def _analyze_form_times(entry: RaceEntry, race_distance: int = 0) -> FormTimeResult:
+    """Analysera senaste 5-10 starter for att berakna realistiskt tidsintervall.
+
+    Dennis metod:
+    1. Titta pa senaste 10 starterna
+    2. Filtrera pa LIKNANDE DISTANS (kort vs lang)
+    3. Filtrera bort hangtider (snabb tid + dalig placering + hoga odds)
+    4. Separera 'lata vinster' fran verkliga prestationer
+    5. Berakna intervall: fokusera pa vad hasten KAN springa pa riktigt
+    6. Satt confidence baserat pa datakvalitet + risk
+    """
+    result = FormTimeResult()
+    recent = entry.horse.recent_starts(10)
+    if not recent:
+        return result
+
+    result.n_total_starts = len(recent)
+
+    # Kolla galopp/uppehall-risker
+    if recent and recent[0].galloped:
+        result.flags.append("galopp_senast")
+
+    n_gallops = sum(1 for s in recent[:5] if s.galloped)
+    if n_gallops >= 2:
+        result.flags.append("galoppbenagen")
+
+    # Kolla uppehall (dagar sedan senaste start)
+    from datetime import date as date_type
+    if recent:
+        days_since = (date_type.today() - recent[0].start_date).days
+        if days_since > 120:
+            result.flags.append(f"uppehall_{days_since}d")
+
+    # ── Filtrera pa distans ───────────────────────────────────────
+    # Separera starter pa liknande distans vs annan distans.
+    # Om racedistans ar satt, prefer liknande distanser.
+    same_dist_starts: list[PastStart] = []
+    other_dist_starts: list[PastStart] = []
+
+    for s in recent:
+        if not s.km_time or s.km_time <= 0:
+            continue  # galopp/disk utan tid
+        if s.km_time < 60 or s.km_time > 100:
+            continue  # orimligt varde
+
+        if race_distance > 0 and _is_similar_distance(s.distance, race_distance):
+            same_dist_starts.append(s)
+        elif race_distance > 0:
+            other_dist_starts.append(s)
+        else:
+            same_dist_starts.append(s)  # ingen distans angiven — anvand alla
+
+    # Om vi har minst 2 starter pa ratt distans, anvand bara dem
+    # Annars fyll pa med andra distanser (men flagga)
+    if len(same_dist_starts) >= 2:
+        analysis_starts = same_dist_starts
+    elif same_dist_starts:
+        analysis_starts = same_dist_starts + other_dist_starts
+        result.flags.append("fa_distansstarter")
+    elif other_dist_starts:
+        analysis_starts = other_dist_starts
+        result.flags.append("annan_distans")
+    else:
+        return result
+
+    # ── Berakna justerade tider (hangtider med penalty) ──────────
+    # Dennis princip: hangtider tas INTE bort. De visar kapacitet.
+    # Men de justeras med +0.3 till +0.8s for att reflektera
+    # att hasten inte hade vinnarchans vid den tiden.
+    adjusted_times: list[float] = []
+    competitive_times: list[float] = []  # exklusive lazy wins
+    n_hanging = 0
+    n_lazy = 0
+    n_competitive = 0
+
+    for s in analysis_starts:
+        penalty = _hanging_time_penalty(s)
+        if penalty > 0:
+            # Hangtid — inkludera med penalty
+            adjusted_time = s.km_time + penalty
+            adjusted_times.append(adjusted_time)
+            competitive_times.append(adjusted_time)
+            n_hanging += 1
+        elif _is_lazy_win(s):
+            # Lat vinst — hasten gick halvfart mot svagt motstand.
+            # Inkluderas i form_min (kan springa sa fort) men INTE
+            # i form_max (den lagre tiden beror inte pa dalig form,
+            # utan pa att hasten inte behovde springa fortare).
+            # Steady Express ex: 1.14.9 i 35k-lopp = lazy, men
+            # 1.11.2 mot starkare falt = riktigt. Spread ska vara
+            # baserad pa competitive_times, inte lazy wins.
+            n_lazy += 1
+            adjusted_times.append(s.km_time)  # paverkar form_min
+            # INTE competitive_times — paverkar inte form_max/spread
+        else:
+            adjusted_times.append(s.km_time)
+            competitive_times.append(s.km_time)
+            n_competitive += 1
+
+    if n_hanging:
+        result.flags.append(f"hangtider_{n_hanging}")
+    if n_lazy:
+        result.flags.append(f"lazy_wins_{n_lazy}")
+
+    # ── Berakna tidsintervall ─────────────────────────────────────
+    if not adjusted_times:
+        return result
+
+    result.form_min = min(adjusted_times)
+    # form_max baseras pa competitive times — lazy wins EXKLUDERADE
+    # Sa att spreaden reflekterar riktig inkonsistens, inte att
+    # hasten gick halvfart i svaga lopp.
+    if competitive_times:
+        result.form_max = max(competitive_times)
+    else:
+        result.form_max = max(adjusted_times)
+    result.n_real_times = n_competitive + n_lazy  # alla utom hangtider
+
+    # ── Confidence-berakning ──────────────────────────────────────
+    conf = 1.0
+
+    # Farre riktiga tider = lagre confidence
+    if result.n_real_times == 0:
+        conf *= 0.2
+    elif result.n_real_times == 1:
+        conf *= 0.4
+    elif result.n_real_times == 2:
+        conf *= 0.65
+    elif result.n_real_times <= 4:
+        conf *= 0.85
+
+    # Stort intervall = lagre confidence (ojamn hast)
+    spread = result.form_max - result.form_min
+    if spread > 3.0:
+        conf *= 0.4
+    elif spread > 2.0:
+        conf *= 0.6
+    elif spread > 1.0:
+        conf *= 0.8
+
+    # Galopp senast = lagre confidence
+    if "galopp_senast" in result.flags:
+        conf *= 0.6
+
+    # Langt uppehall = lagre confidence
+    for flag in result.flags:
+        if flag.startswith("uppehall_"):
+            days = int(flag.split("_")[1].rstrip("d"))
+            if days > 300:
+                conf *= 0.3
+            elif days > 180:
+                conf *= 0.5
+            elif days > 120:
+                conf *= 0.7
+
+    # Annan distans = lagre confidence
+    if "annan_distans" in result.flags:
+        conf *= 0.4
+    elif "fa_distansstarter" in result.flags:
+        conf *= 0.7
+
+    # Manga vinster med lagt odds = HOG confidence (bevisad klass)
+    wins_low_odds = sum(1 for s in analysis_starts
+                        if s.placement == 1 and (s.odds or 99) < 5.0)
+    if wins_low_odds >= 3:
+        conf = min(conf * 1.3, 0.95)  # boost men cap pa 95%
+    elif wins_low_odds >= 2:
+        conf = min(conf * 1.15, 0.95)
+
+    # Favorit-historik: hasten har varit betrodd (odds <5) i flera lopp
+    # Speciellt viktigt for unga hastar med fa starter — marknadens
+    # bedomning ger extra information nar egen data ar tunn
+    times_favored = sum(1 for s in analysis_starts
+                        if (s.odds or 99) < 5.0)
+    if times_favored >= 2 and result.n_total_starts <= 5:
+        # Ung hast som varit favorit flera ganger = marknaden tror pa den
+        conf = min(conf * 1.3, 0.95)
+    elif times_favored >= 3:
+        conf = min(conf * 1.2, 0.95)
+
+    result.confidence = round(min(conf, 1.0), 2)
+    return result
+
+
+def _compute_class_drop_vs_field(
+    entry: RaceEntry, field_median_purse: float
+) -> float:
+    """Berakna klassdropp: hastens senaste loppsprispottar vs faltets median.
+
+    Om hasten senast sprang i lopp med hogre prissumma (tuffare motstand)
+    an det typiska i detta falt, ar det en POSITIV signal — hasten har
+    matt bra hastar och nu moter den svagare.
+
+    Jamfor hastens average senaste 5 prispottar mot faltets median.
+    Fungerar aven nar race.purse = 0 (vanligt i ATG API).
+
+    Returnerar ratio >1.0 om klassdropp, <1.0 om klasshopp.
+    """
+    if field_median_purse <= 0:
+        return 1.0
+
+    recent = entry.horse.recent_starts(5)
+    purses = [s.race_purse for s in recent if s.race_purse > 0]
+    if not purses:
+        return 1.0
+
+    avg_purse = sum(purses) / len(purses)
+    return round(avg_purse / field_median_purse, 2)
+
+
+def _driver_quality_bonus(entry: RaceEntry) -> float:
+    """Berakna tidsbonus for elit-kusk.
+
+    Elite drivers produce faster times through better race tactics,
+    timing, and horse management. A top driver can gain 0.3-0.5s
+    compared to an average driver on the same horse.
+
+    Returns seconds to SUBTRACT from effective form (negative = faster).
+    """
+    win_pct = entry.driver_win_pct or 0
+    starts = entry.driver_starts_year or 0
+    top3_pct = entry.driver_top3_pct or 0
+
+    # Absolut elit: >15% vinstprocent med manga starter
+    # Typiskt: Ulf Ohlsson, Orjan Kihlstrom, Robert Bergh etc.
+    if win_pct >= 0.15 and starts >= 200:
+        return 0.4
+
+    # Stark proffs: >12% med aktiv stallning
+    if win_pct >= 0.12 and starts >= 150:
+        return 0.25
+
+    # Bra proffs: >10% med rejal volym ELLER >13% med nagra starter
+    if (win_pct >= 0.10 and starts >= 200) or (win_pct >= 0.13 and starts >= 80):
+        return 0.15
+
+    # Hog top3-procent utan manga vinster (stallt men sakerplacerad)
+    if top3_pct >= 0.30 and starts >= 100:
+        return 0.15
+
+    return 0.0
+
+
+# ── Effective form constants ──────────────────────────────────────
+# Max penalty for zero confidence (seconds added to form_min)
+UNCERTAINTY_PENALTY = 1.5
+# Max class drop bonus (seconds subtracted from form)
+MAX_CLASS_DROP_BONUS = 1.0
+# Class drop ratio threshold (>1.3 = running below recent level)
+CLASS_DROP_THRESHOLD = 1.3
+# Max driver bonus (seconds subtracted from form)
+MAX_DRIVER_BONUS = 0.4
 
 
 def compute_dennis_signals(race: Race) -> None:
     """Berakna Dennis-brain signaler for alla hastar i ett lopp.
 
-    Satter dennis_time_edge, dennis_class_ratio och dennis_pick
-    pa varje active entry.
+    Satter formtid-intervall, effective_form, time_edge, class_ratio
+    och dennis_pick pa varje active entry.
+
+    Effective form = form_min justerad for:
+    - Confidence (lag confidence = hogre effective tid = lagre ranking)
+    - Klassdropp (hogre prispott senast = bonus)
+    - Kuskskvalitet (elit-kusk = bonus)
 
     Maste koras EFTER analyze_race() sa att rank redan ar satt.
     """
@@ -123,56 +437,95 @@ def compute_dennis_signals(race: Race) -> None:
     if not active:
         return
 
-    # ── 1. Tid-edge: hastens rekord vs GLOBAL median ─────────────────
-    # Backtest-validerad metod: jamfor varje hasts km_time mot den
-    # globala medianen for (distance, start_method) fran 76k hastar.
-    # Detta ger mycket storre spreads an lopp-level median (dar alla
-    # hastar i samma lopp ar snarlika).
-
-    distance = race.distance
-    if distance <= 0:
-        distance = 2140  # fallback
-
-    method_str = race.start_method.value  # "auto" or "volt"
-    # ATG API uses "volt", backtest data uses "volte" — normalize
-    if method_str == "volt":
-        method_str = "volte"
-
-    global_median = _lookup_global_time_median(distance, method_str)
-    if global_median:
-        logger.debug(
-            f"Avd {race.race_number}: Global time median for "
-            f"{distance}m {method_str} = {global_median:.2f} s/km"
-        )
-
+    # ── 0. Berakna faltets median senaste prispott (for klassdropp) ──
+    # Istallet for race.purse (ofta 0 i ATG API), anvand faltets
+    # genomsnittliga senaste prispottar som referens.
+    field_purses: list[float] = []
     for entry in active:
-        km_time = None
-        rt = entry.horse.record_time
-        if rt and rt > 0 and distance > 0:
-            km_time = rt / (distance / 1000.0)
-            if not (15 < km_time < 90):
-                km_time = None
+        purses = [s.race_purse for s in entry.horse.recent_starts(5)
+                  if s.race_purse > 0]
+        if purses:
+            field_purses.append(sum(purses) / len(purses))
+    field_median_purse = statistics.median(field_purses) if field_purses else 0.0
 
-        if km_time is None:
-            # Fallback: basta km_time fran past_starts
-            best_km = _best_km_time_from_starts(entry)
-            if best_km:
-                km_time = best_km / (distance / 1000.0)
-                if not (15 < km_time < 90):
-                    km_time = None
+    # ── 1. Formtid-analys per hast ────────────────────────────────
+    race_dist = race.distance or 0
+    form_results: dict[int, FormTimeResult] = {}
+    for entry in active:
+        fr = _analyze_form_times(entry, race_distance=race_dist)
+        form_results[entry.post_position] = fr
+        # Spara ra formtider pa entry
+        entry.dennis_form_min = fr.form_min
+        entry.dennis_form_max = fr.form_max
+        entry.dennis_confidence = fr.confidence
 
-        if km_time is not None and global_median is not None:
-            # Positive = faster (lower time = better)
-            entry.dennis_time_edge = round(global_median - km_time, 2)
-        else:
+    # ── 2. Effective form: confidence-vagd + klass + kusk-justerad ──
+    # Dennis rankar INTE enbart pa snabbaste tid. Han vager:
+    # - Kan hasten springa fort? (form_min)
+    # - Hur saker ar vi pa det? (confidence)
+    # - Gar den ner i klass? (class_drop — tuffare lopp nyligen)
+    # - Har den elit-kusk? (driver_quality)
+    for entry in active:
+        fr = form_results[entry.post_position]
+        if fr.form_min <= 0:
+            entry.dennis_effective_form = 0.0
+            continue
+
+        effective = fr.form_min
+
+        # a) Confidence-penalty: osaker hast = hogre effektiv tid
+        #    form_min 73.5 + (1-0.28)*1.5 = 73.5 + 1.08 = 74.58
+        #    = Good as Caviar faller fran rank 4 till ~8
+        effective += (1.0 - fr.confidence) * UNCERTAINTY_PENALTY
+
+        # b) Klassdropp-bonus: tuffare lopp nyligen = hasten ar bra
+        class_drop = _compute_class_drop_vs_field(entry, field_median_purse)
+        entry.dennis_class_drop = class_drop
+        if class_drop > CLASS_DROP_THRESHOLD:
+            bonus = min((class_drop - 1.0) * 0.5, MAX_CLASS_DROP_BONUS)
+            effective -= bonus
+            logger.debug(
+                f"  {entry.horse.name}: class_drop {class_drop:.1f}x → -{bonus:.1f}s"
+            )
+
+        # c) Kusk-bonus: elit-kusk pressar bort 0.15-0.4s
+        driver_bonus = _driver_quality_bonus(entry)
+        if driver_bonus > 0:
+            effective -= driver_bonus
+            logger.debug(
+                f"  {entry.horse.name}: driver_bonus -{driver_bonus:.1f}s "
+                f"(win {entry.driver_win_pct:.0%}, starts {entry.driver_starts_year})"
+            )
+
+        entry.dennis_effective_form = round(effective, 2)
+
+    # ── 3. Tid-edge: effective_form vs faltets median ──────────────
+    # Anvander effective_form for ranking — inte ra form_min.
+    # Sa en hast med snabb form_min men lag confidence rankas lagre
+    # an en med medel form_min men hog confidence + class drop.
+    eff_forms: list[float] = []
+    for entry in active:
+        if entry.dennis_effective_form > 0:
+            eff_forms.append(entry.dennis_effective_form)
+
+    if len(eff_forms) >= 3:
+        field_eff_median = statistics.median(eff_forms)
+        for entry in active:
+            if entry.dennis_effective_form > 0:
+                # Positive = faster (lower eff form = better)
+                entry.dennis_time_edge = round(
+                    field_eff_median - entry.dennis_effective_form, 2
+                )
+            else:
+                entry.dennis_time_edge = 0.0
+    else:
+        for entry in active:
             entry.dennis_time_edge = 0.0
 
-    # ── 2. Klass-ratio: karriarpengar vs faltets median ─────────────
+    # ── 4. Klass-ratio: karriarpengar vs faltets median ────────────
     # Use api_career_money (preserved from ATG API, not wiped by temporal filtering)
     career_moneys: dict[int, float] = {}
     for entry in active:
-        # api_career_money is the ATG API career earnings (preserved pre-filtering)
-        # Falls back to career.total_prize_money for live use
         cm = entry.horse.api_career_money or entry.horse.career.total_prize_money
         if cm and cm > 0:
             career_moneys[entry.post_position] = float(cm)
@@ -194,7 +547,7 @@ def compute_dennis_signals(race: Race) -> None:
         for entry in active:
             entry.dennis_class_ratio = 0.0
 
-    # ── 3. Dennis pick: S4-kvalificering ────────────────────────────
+    # ── 5. Dennis pick: S4-kvalificering ────────────────────────────
     n_picks = 0
     for entry in active:
         is_barefoot = entry.shoe_front_off and entry.shoe_back_off

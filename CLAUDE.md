@@ -85,10 +85,15 @@ async def peek():
 asyncio.run(peek())
 ```
 
-## Modellversion (v9 — Hybrid)
+## Modellversion (v10 — Triple Blend)
 
-Hybrid-modell: 25% modell + 75% marknad (streckprocent).
-Bara 4 faktorer tillför positiv edge till hybriden:
+Triple blend: 33% composite + 33% Dennis Brain v2 (effective_form) + 33% marknad.
+Backtesterad pa 350 lopp (8 veckor, 2026):
+- Ren marknad: 36.6% rank-1
+- Gammal hybrid (25/75): 37.7% rank-1 (+1.1pp)
+- **Triple 33/33/33: 43.4% rank-1 (+6.9pp), 75.7% top-3**
+
+### Composite (4 faktorer):
 
 | Faktor | Vikt | Edge |
 |--------|------|------|
@@ -97,8 +102,17 @@ Bara 4 faktorer tillför positiv edge till hybriden:
 | driver_class | 0.15 | +0.13% |
 | category_profile | 0.10 | +0.13% |
 
-Alla andra faktorer (tid, form, bana, etc.) behålls med 0-vikt
-för dashboard-analys men påverkar inte ranking.
+### Dennis Brain v2 (effective_form):
+Tidsbaserad ranking: `effective_form = form_min + (1-confidence)*penalty - klassdropp - kuskbonus`
+- Formtid: senaste 10 starter, distansfilter, hangtids-penalty
+- Confidence: 0-1 baserad pa datakvalitet, spread, galopp, uppehall
+- Klassdropp: karriarpengar vs faltets median
+- Kuskbonus: elit-kusk (>15% vinst) pressar -0.4s
+
+### Marknad:
+Streckprocent (betDistribution) — kollektiv bedomning.
+
+Alla tre normaliseras till 0-100 och blandas lika i super_score.
 
 ### Vinnarspel — Den enda bevisade edgen (no-leakage validerad)
 

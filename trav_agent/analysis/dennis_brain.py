@@ -420,18 +420,19 @@ CLASS_DROP_THRESHOLD = 1.3
 MAX_DRIVER_BONUS = 0.4
 
 
-def compute_dennis_signals(race: Race) -> None:
-    """Berakna Dennis-brain signaler for alla hastar i ett lopp.
+def compute_dennis_form_signals(race: Race) -> None:
+    """Berakna Dennis Brain v2 form-signaler (effective_form, time_edge, class_ratio).
 
-    Satter formtid-intervall, effective_form, time_edge, class_ratio
-    och dennis_pick pa varje active entry.
+    Kors FORE super_score-berakning sa att effective_form kan
+    anvandas i triple-blenden (33% comp + 33% effform + 33% marknad).
 
-    Effective form = form_min justerad for:
-    - Confidence (lag confidence = hogre effective tid = lagre ranking)
-    - Klassdropp (hogre prispott senast = bonus)
-    - Kuskskvalitet (elit-kusk = bonus)
-
-    Maste koras EFTER analyze_race() sa att rank redan ar satt.
+    Satter pa varje entry:
+    - dennis_form_min/max (realistiskt tidsintervall)
+    - dennis_confidence (0-1)
+    - dennis_effective_form (confidence-vagd + klass + kusk)
+    - dennis_time_edge (sekunder snabbare an faltets median)
+    - dennis_class_ratio (karriarpengar / faltets median)
+    - dennis_class_drop (senaste prispott vs faltets median)
     """
     active = race.active_entries
     if not active:
@@ -590,7 +591,17 @@ def compute_dennis_signals(race: Race) -> None:
         for entry in active:
             entry.dennis_class_ratio = 0.0
 
-    # ── 5. Dennis pick: S4-kvalificering ────────────────────────────
+
+
+def compute_dennis_picks(race: Race) -> None:
+    """S4 vinnarspel-kvalificering. Kors EFTER ranking sa att entry.rank finns.
+
+    Satter entry.dennis_pick = True om S4-kriterier uppfylls.
+    """
+    active = race.active_entries
+    if not active:
+        return
+
     n_picks = 0
     for entry in active:
         is_barefoot = entry.shoe_front_off and entry.shoe_back_off
@@ -617,6 +628,13 @@ def compute_dennis_signals(race: Race) -> None:
         logger.info(
             f"Avd {race.race_number}: {n_picks} Dennis-pick(s) hittade"
         )
+
+
+# Legacy alias for backward compatibility
+def compute_dennis_signals(race: Race) -> None:
+    """Legacy wrapper — korer bade form-signaler och picks."""
+    compute_dennis_form_signals(race)
+    compute_dennis_picks(race)
 
 
 def _best_km_time_from_starts(entry: RaceEntry) -> Optional[float]:

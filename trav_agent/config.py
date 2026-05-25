@@ -201,17 +201,15 @@ class AnalysisConfig:
     spike_threshold: float = 0.50  # Max streckprocent för spik (höjd: hybrid inkl. marknad)
     value_sweet_spot: tuple[float, float] = (0.05, 0.15)  # 5-15% streck = sweet spot
 
-    # Super Score: blend av modell + marknad
-    # 25% modell + 75% streckprocent — optimerad vikt baserad på
-    # 1559 lopp (V75+V85+V86 2024-2026):
-    #   Ren marknad: 40.3% rank-1
-    #   Slim 2-faktor hybrid (25%): 41.2% rank-1 (+0.9% edge)
-    #   V86 specifikt: 43.3% rank-1 (+1.7% edge)
-    # Model tillfor edge via post_position + age (strukturella signaler
-    # som marknaden inte fullstandigt prissatter).
-    # OBS: I backtest anvands closing streck (betDistribution) som proxy.
-    # I live-lage anvands aktuell streck ~1h fore start.
-    super_score_model_weight: float = 0.25  # 0.0 = ren marknad, 1.0 = ren modell
+    # Super Score: triple blend — 33% comp + 33% effform + 33% marknad
+    # Backtesterad pa 350 lopp (8 veckor, 2026):
+    #   Ren marknad:         36.6% rank-1, 75.4% top-3
+    #   Comp 25% + Mark 75%: 37.7% rank-1, 75.7% top-3 (gammal)
+    #   Triple 33/33/33:     43.4% rank-1, 75.7% top-3 (ny!)
+    # Tre oberoende signaler: composite (strukturella), effform (tid),
+    # marknad (streckprocent). Vikterna hardkodade i composite.py.
+    # Denna parameter anvands ej langre men behalles for bakatkompabilitet.
+    super_score_model_weight: float = 0.333  # Legacy — triple blend i composite.py
 
     # Klassificeringströsklar (anpassade för mer modell-driven skala)
     spike_min_score: float = 75.0     # Minst poäng för "spik" (rank 1)

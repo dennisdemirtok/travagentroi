@@ -1,15 +1,14 @@
-"""Sammanvägd analys — kombinerar alla faktorer till en slutpoäng.
+"""Sammanvagd analys — kombinerar alla faktorer till en slutpoang.
 
-Varje faktor ger en poäng 0-100 per häst.
+Varje faktor ger en poang 0-100 per hast.
 Dessa viktas enligt FactorWeights och summeras till composite_score.
-super_score = 20% modellpoäng + 80% streckprocent (marknadssignal).
 
-Version 3: Hybrid-modell — modell + marknad.
-- 14 analysfaktorer → composite_score (modellens egna bedömning)
-- Streckprocent (betDistribution) → marknadssignal
-- super_score = 0.20 * composite + 0.80 * marknad
-- Optimerat på 1559 lopp: slår både ren modell OCH ren marknad
-- Modellen tillför unik edge vid upsets/outsiders
+Version 10: Triple blend — 33% composite + 33% effform + 33% marknad.
+- 4 analysfaktorer → composite_score (spar, alder, kusk, kategori)
+- Dennis Brain v2 → effective_form (tidsrank + confidence + klass + kusk)
+- Streckprocent → marknadssignal
+- super_score = 0.33 * comp + 0.33 * effform + 0.33 * marknad
+- Backtesterat pa 350 lopp: 43.4% rank-1 (+6.9pp vs marknad)
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ from .track_profile import TrackProfile
 from .recent_form_signals import LastWinFactor, CompetitionStrength, LayoffFactor
 from .gallop_risk import GallopRisk
 from .proffs_consensus import ProffsFactor
-from .dennis_brain import compute_dennis_signals
+from .dennis_brain import compute_dennis_form_signals, compute_dennis_picks
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +141,11 @@ class CompositeAnalyzer:
                 self._spread_score(entry.composite_score), 1
             )
 
-        # Steg 4b: Super Score — 85% modell + 15% marknad
+        # Steg 4b: Dennis Brain v2 form-signaler (effective_form)
+        # Kors FORE super_score sa att effform kan anvandas i triple-blenden
+        compute_dennis_form_signals(race)
+
+        # Steg 4c: Super Score — 33% comp + 33% effform + 33% marknad
         self._compute_super_scores(race)
 
         # Steg 5: Sortera och ranka (baserat på super_score)
@@ -160,8 +163,8 @@ class CompositeAnalyzer:
         # Steg 6: Skrällrisk-analys
         self._assess_upset_risk(race, sorted_entries)
 
-        # Steg 7: Dennis Brain — vinnarspel-signaler (barfota+tid+klass)
-        compute_dennis_signals(race)
+        # Steg 7: Dennis Brain — S4 vinnarspel-picks (behover rank)
+        compute_dennis_picks(race)
 
         return sorted_entries
 
@@ -175,62 +178,85 @@ class CompositeAnalyzer:
         return 100.0 / (1.0 + math.exp(-k * (raw - 50.0)))
 
     def _compute_super_scores(self, race: Race) -> None:
-        """Beräkna super_score = 20% modell + 80% marknadssignal.
+        """Berakna super_score = 33% composite + 33% effform + 33% marknad.
 
-        Optimerad på 1559 lopp (V75+V85+V86 2024-2026):
-          Ren modell:  28.2% rank-1
-          Ren marknad: 40.3% rank-1
-          Hybrid 20/80: 40.5% rank-1 (slår båda)
+        Triple blend — backtesterad pa 350 lopp (8 veckor, 2026):
+          Ren marknad:         36.6% rank-1, 75.4% top-3
+          Comp 25% + Mark 75%: 37.7% rank-1, 75.7% top-3 (gammal)
+          Triple 33/33/33:     43.4% rank-1, 75.7% top-3 (ny!)
 
-        Modellen tillför unik edge vid upsets/outsiders.
-        Marknaden (streckprocent) dominerar för favoriter.
+        Tre oberoende signaler:
+        - Composite: strukturella faktorer (spar, alder, kusk, kategori)
+        - EffForm (Dennis Brain v2): tidsbaserad ranking med confidence,
+          klassdropp och kuskbonus
+        - Marknad: streckprocent (kollektiv bedomning)
 
-        Streckprocent konverteras till 0-100 via min-max
-        normalisering inom fältet, så att skalan matchar composite.
-
-        Om streckprocent saknas helt → super_score = composite_score.
+        Alla tre normaliseras till 0-100 och blandas lika.
+        Om effform saknas for en hast → fallback till comp+marknad (50/50).
+        Om marknad saknas helt → comp+effform (50/50).
         """
-        model_weight = self.config.super_score_model_weight
-        market_weight = 1.0 - model_weight
-
         active = race.active_entries
         has_market = any(e.bet_percentage and e.bet_percentage > 0 for e in active)
 
-        if not has_market or market_weight <= 0:
-            # Ingen marknadsdata → super = composite
-            for entry in active:
-                entry.super_score = entry.composite_score
-            return
+        # ── Normalisera composite till 0-100 (min-max) ──
+        comps = [e.composite_score for e in active]
+        min_c, max_c = min(comps), max(comps)
+        comp_range = max_c - min_c if max_c > min_c else 1.0
 
-        # Normalisera streckprocent till 0-100 skala via min-max
-        # (bevarar relativa skillnader, matchar composite-skala)
-        bet_pcts = {
-            e.post_position: (e.bet_percentage or 0.0) * 100.0
-            for e in active
-        }
-        min_pct = min(bet_pcts.values())
-        max_pct = max(bet_pcts.values())
-        spread = max_pct - min_pct
+        # ── Normalisera marknad till 0-100 (min-max) ──
+        market_scores: dict[int, float] = {}
+        if has_market:
+            bet_pcts = {
+                e.post_position: (e.bet_percentage or 0.0) * 100.0
+                for e in active
+            }
+            min_pct = min(bet_pcts.values())
+            max_pct = max(bet_pcts.values())
+            spread = max_pct - min_pct
+            if spread >= 1.0:
+                for pos, pct in bet_pcts.items():
+                    market_scores[pos] = 5.0 + 90.0 * (pct - min_pct) / spread
 
-        if spread < 1.0:
-            # Alla har ~samma streckprocent → marknad ger ingen info
-            for entry in active:
-                entry.super_score = entry.composite_score
-            return
+        # ── Normalisera effective_form till 0-100 (inverterad: lagre tid = hogre score) ──
+        eff_forms = [
+            e.dennis_effective_form for e in active
+            if e.dennis_effective_form and e.dennis_effective_form > 0
+        ]
+        eff_scores: dict[int, float] = {}
+        if len(eff_forms) >= 3:
+            min_e, max_e = min(eff_forms), max(eff_forms)
+            eff_range = max_e - min_e if max_e > min_e else 1.0
+            for e in active:
+                ef = e.dennis_effective_form
+                if ef and ef > 0:
+                    # Inverterad: lagst tid (snabbast) = 95, hogst = 5
+                    eff_scores[e.post_position] = 5.0 + 90.0 * (max_e - ef) / eff_range
 
-        # Min-max normalisering till 5-95 (undviker 0 och 100 extremer)
-        market_scores = {}
-        for pos, pct in bet_pcts.items():
-            market_scores[pos] = 5.0 + 90.0 * (pct - min_pct) / spread
-
-        # Blend: super = model_weight * composite + market_weight * market
+        # ── Triple blend ──
         for entry in active:
-            market_s = market_scores.get(entry.post_position, 50.0)
-            entry.super_score = round(
-                model_weight * entry.composite_score
-                + market_weight * market_s,
-                1,
-            )
+            comp_norm = 5.0 + 90.0 * (entry.composite_score - min_c) / comp_range
+            market_s = market_scores.get(entry.post_position)
+            eff_s = eff_scores.get(entry.post_position)
+
+            # Dynamisk viktning beroende pa vilka signaler som finns
+            if market_s is not None and eff_s is not None:
+                # Alla tre signaler — 33/33/33
+                entry.super_score = round(
+                    0.333 * comp_norm + 0.333 * eff_s + 0.334 * market_s, 1
+                )
+            elif market_s is not None:
+                # Ingen effform — comp+marknad 50/50
+                entry.super_score = round(
+                    0.50 * comp_norm + 0.50 * market_s, 1
+                )
+            elif eff_s is not None:
+                # Ingen marknad — comp+effform 50/50
+                entry.super_score = round(
+                    0.50 * comp_norm + 0.50 * eff_s, 1
+                )
+            else:
+                # Bara composite
+                entry.super_score = round(comp_norm, 1)
 
     def analyze_round(self, game_round: GameRound) -> GameRound:
         """Analysera en hel spelomgång."""

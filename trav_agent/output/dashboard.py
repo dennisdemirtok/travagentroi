@@ -549,6 +549,15 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         e.post_position: idx + 1 for idx, e in enumerate(comp_sorted)
     }
 
+    # 4. Dennis Brain v2 ranking (effective_form — lower = better)
+    db2_sorted = sorted(
+        race.active_entries,
+        key=lambda e: e.dennis_effective_form if e.dennis_effective_form and e.dennis_effective_form > 0 else 999,
+    )
+    db2_rank_map: dict[int, int] = {
+        e.post_position: idx + 1 for idx, e in enumerate(db2_sorted)
+    }
+
     # Build actual placement lookup for finished races
     is_finished = race.status == RaceStatus.FINISHED and len(race.result_order) > 0
     actual_placement: dict[int, int] = {}
@@ -640,10 +649,11 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             else:
                 proffs_cell = '<td class="proffs-cell" style="color:#6b7280">-</td>'
 
-        # Three comparison ranks
+        # Four comparison ranks
         market_rank = market_rank_map.get(e.post_position, 0)
         blend_rank = blend_rank_map.get(e.post_position, 0)
         comp_rank = comp_rank_map.get(e.post_position, 0)
+        db2_rank = db2_rank_map.get(e.post_position, 0)
 
         # Estimated time (dennis_effective_form) — stored as km-time in seconds
         # e.g. 75.3 means 1.15.3 (1 min 15.3 sec per km)
@@ -677,6 +687,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
             f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}{model_rank}</span></td>'
+            f'{_rank_cell(db2_rank, "rank-db2")}'
             f'{_rank_cell(market_rank, "rank-mr")}'
             f'{_rank_cell(blend_rank, "rank-br")}'
             f'{_rank_cell(comp_rank, "rank-cr")}'
@@ -770,6 +781,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         f'<th>#</th><th>Hast</th><th>Poang</th><th>Streck</th>'
         f'{"<th>Proffs</th>" if proffs_horses else ""}'
         f'<th>Rank</th>'
+        f'<th title="Dennis Brain v2 (effective_form)">DB2</th>'
         f'<th title="Ren marknad (streckprocent)">MR</th>'
         f'<th title="50/50 modell+marknad">50/50</th>'
         f'<th title="100% modell (composite)">Mod</th>'
@@ -3154,7 +3166,8 @@ font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .horse-name{{font-weight:600;white-space:nowrap;color:#1e293b}}
 .score{{font-size:1rem;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .score strong{{color:#f59e0b}}
-.rank-mr,.rank-br,.rank-cr{{font-family:'JetBrains Mono',monospace;font-size:.82rem;text-align:center;font-weight:700;min-width:28px}}
+.rank-db2,.rank-mr,.rank-br,.rank-cr{{font-family:'JetBrains Mono',monospace;font-size:.82rem;text-align:center;font-weight:700;min-width:28px}}
+.rank-db2{{color:#f59e0b}}
 .rank-mr{{color:#6b7280}}
 .rank-br{{color:#0ea5e9}}
 .rank-cr{{color:#8b5cf6}}

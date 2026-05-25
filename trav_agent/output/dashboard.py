@@ -5025,7 +5025,7 @@ function renderBetHistory(data){{
       if(!p)continue;
       const c=p.roi_pct>=0?'#15803d':'#dc2626';
       const warn=pMeta.profitable?'':'<div style="font-size:.6rem;color:#dc2626;margin-top:2px">⚠ Ej lönsam (riktiga odds)</div>';
-      html+='<div class="bet-profile-card'+((_betProfile===pKey)?' active':'')+'" onclick="setBetProfile(\''+pKey+'\')" style="'+(pMeta.profitable?'':'opacity:0.65;')+'">';
+      html+='<div class="bet-profile-card'+((_betProfile===pKey)?' active':'')+'" data-profile="'+pKey+'" onclick="setBetProfile(this.dataset.profile)" style="'+(pMeta.profitable?'':'opacity:0.65;')+'">';
       html+='<div class="bet-profile-name" style="color:'+pMeta.color+'">'+pMeta.label+'</div>';
       html+='<div class="bet-profile-desc">'+pMeta.desc+'</div>';
       html+='<div class="bet-profile-roi" style="color:'+c+'">'+(p.roi_pct>=0?'+':'')+p.roi_pct.toFixed(0)+'% ROI</div>';

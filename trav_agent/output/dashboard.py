@@ -815,8 +815,8 @@ def _summary_html(game_round: GameRound) -> str:
 def _vinnarspel_summary_html(game_round: GameRound) -> str:
     """Render a summary card showing all chansspik vinnarspel candidates.
 
-    Criteria: model rank ≤ 2, streck 5-20%.
-    Historical ROI: +47.8% on flat bet (walk-forward validated across all periods).
+    Criteria: model rank ≤ 2, streck 3-20% (includes Sniper range).
+    Only Sniper profile (3-10% + kusk≥100) is proven profitable (+26.5% ROI).
     """
     candidates = []
     for race in game_round.races:
@@ -831,9 +831,11 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
                 break
             if (
                 e.bet_percentage is not None
-                and 0.05 <= e.bet_percentage <= 0.20
+                and 0.03 <= e.bet_percentage <= 0.20
             ):
                 odds_est = round(1 / e.bet_percentage, 1) if e.bet_percentage > 0 else 0
+                live_odds = e.odds if e.odds and e.odds > 0 else None
+                driver_starts = getattr(e, "driver_starts_year", 0) or 0
                 candidates.append({
                     "race_num": race.race_number,
                     "name": e.horse.name,
@@ -842,7 +844,9 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
                     "streck": e.bet_percentage,
                     "rank": model_rank,
                     "odds_est": odds_est,
+                    "live_odds": live_odds,
                     "driver": e.driver_name or "",
+                    "driver_starts": driver_starts,
                 })
 
     if not candidates:
@@ -851,14 +855,22 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
     rows = []
     for c in candidates:
         streck_pct = c["streck"] * 100
-        rank_badge = "🥇" if c["rank"] == 1 else "🥈"
+        rank_badge = "\U0001f947" if c["rank"] == 1 else "\U0001f948"
+        # Sniper indicator: 3-10% streck + kusk≥100
+        is_sniper = (
+            c["rank"] <= 2
+            and 0.03 <= c["streck"] <= 0.10
+            and c.get("driver_starts", 0) >= 100
+        )
+        sniper_badge = ' <span class="sniper-tag">🎯 SNIPER</span>' if is_sniper else ""
+        row_style = ' style="cursor:pointer;background:#fefce8"' if is_sniper else ' style="cursor:pointer"'
         rows.append(
-            f'<tr class="winbet-row" onclick="showDivision({c["race_num"]})" style="cursor:pointer">'
+            f'<tr class="winbet-row" onclick="showDivision({c["race_num"]})"{row_style}>'
             f'<td><strong>Avd {c["race_num"]}</strong></td>'
-            f'<td>{rank_badge} {c["post"]} {_esc(c["name"][:20])}</td>'
+            f'<td>{rank_badge} {c["post"]} {_esc(c["name"][:20])}{sniper_badge}</td>'
             f'<td><strong>{c["score"]:.0f}</strong></td>'
             f'<td>{streck_pct:.0f}%</td>'
-            f'<td>~{c["odds_est"]:.1f}x</td>'
+            f'<td>{_format_odds(c)}</td>'
             f'<td class="winbet-driver">{_esc(c["driver"][:15])}</td>'
             f'</tr>'
         )
@@ -1028,6 +1040,15 @@ def _sidebar_html(game_round: GameRound, has_system: bool = False, has_backlog: 
     )
 
 
+def _format_odds(c: dict) -> str:
+    """Format odds display — prefer live ATG odds, fall back to estimate."""
+    live = c.get("live_odds")
+    est = c.get("odds_est", 0)
+    if live:
+        return f'<span class="odds-live" title="ATG vinnarspel">{live:.1f}x</span>'
+    return f'<span class="odds-est" title="Estimat (1/streck)">~{est:.1f}x</span>'
+
+
 def _bet_view_html(game_round: GameRound) -> str:
     """Build the Bet recommendations view with multiple vinnarspel profiles.
 
@@ -1069,6 +1090,8 @@ def _bet_view_html(game_round: GameRound) -> str:
                 continue
 
             odds_est = round(1 / streck, 1) if streck > 0 else 0
+            # Live vinnarspel-odds from ATG pools (or finalOdds if finished)
+            live_odds = e.odds if e.odds and e.odds > 0 else None
 
             # Check result if finished
             won = False
@@ -1084,7 +1107,7 @@ def _bet_view_html(game_round: GameRound) -> str:
                     placement = str(plac)
                 won = plac == 1
                 if won:
-                    actual_odds = odds_est
+                    actual_odds = live_odds or odds_est
 
             all_candidates.append({
                 "race_num": race.race_number,
@@ -1094,6 +1117,7 @@ def _bet_view_html(game_round: GameRound) -> str:
                 "streck": streck,
                 "rank": model_rank,
                 "odds_est": odds_est,
+                "live_odds": live_odds,
                 "driver": e.driver_name or "",
                 "won": won,
                 "placement": placement,
@@ -1250,7 +1274,7 @@ def _bet_view_html(game_round: GameRound) -> str:
                 f'<td class="bet-horse">{rank_badge} {c["post"]} {_esc(c["name"][:22])}</td>'
                 f'<td class="bet-score">{c["score"]:.0f}</td>'
                 f'<td class="bet-streck">{streck_pct:.0f}%</td>'
-                f'<td class="bet-odds">~{c["odds_est"]:.1f}x</td>'
+                f'<td class="bet-odds">{_format_odds(c)}</td>'
                 f'<td class="bet-driver">{_esc(c["driver"][:15])}{driver_warn}</td>'
                 f'{result_cell}'
                 f'</tr>'
@@ -3024,6 +3048,11 @@ text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:2px
 .winbet-table tbody td{{padding:8px 10px;border-bottom:1px solid #f3f4f6}}
 .winbet-row:hover{{background:rgba(139,92,246,0.04)}}
 .winbet-driver{{color:#6b7280;font-size:.8rem}}
+.odds-live{{color:#15803d;font-weight:700}}
+.odds-est{{color:#94a3b8}}
+.sniper-tag{{display:inline-block;padding:1px 6px;border-radius:4px;
+background:#f59e0b;color:#ffffff;font-size:9px;font-weight:700;
+letter-spacing:.03em;margin-left:4px;vertical-align:middle}}
 .winbet-footnote{{margin-top:10px;font-size:.75rem;color:#94a3b8;font-style:italic}}
 .orc-winbet{{background:rgba(139,92,246,0.08);color:#7c3aed;font-size:.72rem;font-weight:600;
 padding:4px 8px;border-radius:6px;margin-top:6px;border:1px solid rgba(139,92,246,0.15)}}

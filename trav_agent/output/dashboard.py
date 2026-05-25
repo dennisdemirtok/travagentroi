@@ -864,7 +864,7 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
         )
 
     count = len(candidates)
-    roi_text = "+48% ROI historiskt"
+    roi_text = "+14% ROI (bas) · +44% ROI (sharp)"
 
     return (
         f'<div class="winbet-summary-card">'
@@ -879,7 +879,7 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
         f'<thead><tr><th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th><th>Odds</th><th>Kusk</th></tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
-        f'<div class="winbet-footnote">Flat bet 500kr/st → historisk vinst +82 053kr på 343 spel (12 mån). Walk-forward validerat.</div>'
+        f'<div class="winbet-footnote">Flat bet 500kr/st · Bas: +31 129kr (438 spel) · Sharp (kusk≥100, score≥45): +41 299kr (190 spel). 120 omgångar.</div>'
         f'</div>'
     )
 
@@ -1024,12 +1024,12 @@ def _sidebar_html(game_round: GameRound, has_system: bool = False, has_backlog: 
 def _bet_view_html(game_round: GameRound) -> str:
     """Build the Bet recommendations view with multiple vinnarspel profiles.
 
-    Profiles (from backtest, walk-forward validated):
-    1. Bred (rank≤2, 5-20%) — +48% ROI, 343 spel, 21% vinst
-    2. Sweet Spot (rank≤2, 5-15%) — +85% ROI, 141 spel, 20% vinst
-    3. Sniper (rank≤2, 3-10%) — +95% ROI, 50 spel, 14% vinst
-    4. Elite (score≥P90, 5-20%) — +87% ROI, 30 spel, 33% vinst
-    5. Alpha (rank=1, 5-20%) — +96% ROI, 12 spel, 33% vinst
+    Profiles (120 omgångar, jun 2025 → maj 2026, 438 kandidater):
+    1. Bas (rank≤2, 5-20%) — +14% ROI, 438 spel, 17.6% vinst
+    2. Pro (rank≤2, kusk≥100 st/år, 5-20%) — +27% ROI, 306 spel, 19.6% vinst
+    3. Sharp (rank≤2, score≥45, kusk≥100, 5-20%) — +44% ROI, 190 spel, 24.2% vinst
+    4. Sniper (rank≤2, kusk≥100, 3-10%) — +56% ROI, 31 spel, 12.9% vinst
+    5. Elite (score≥P90, 5-20%) — +29% ROI, 44 spel, 22.7% vinst
     """
     gt = _esc(game_round.game_type)
     date_str = str(game_round.round_date) if game_round.round_date else ""

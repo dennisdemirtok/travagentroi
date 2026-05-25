@@ -513,6 +513,16 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         reverse=True,
     )
 
+    # Build composite-only ranking for dual display
+    comp_sorted = sorted(
+        race.active_entries,
+        key=lambda e: e.composite_score,
+        reverse=True,
+    )
+    comp_rank_map: dict[int, int] = {
+        e.post_position: idx + 1 for idx, e in enumerate(comp_sorted)
+    }
+
     # Build actual placement lookup for finished races
     is_finished = race.status == RaceStatus.FINISHED and len(race.result_order) > 0
     actual_placement: dict[int, int] = {}
@@ -604,14 +614,37 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
             else:
                 proffs_cell = '<td class="proffs-cell" style="color:#6b7280">-</td>'
 
+        # Composite score and rank
+        comp_rank = comp_rank_map.get(e.post_position, 0)
+        comp_score = e.composite_score
+
+        # Estimated time (dennis_effective_form) — stored as km-time in seconds
+        # e.g. 75.3 means 1.15.3 (1 min 15.3 sec per km)
+        eff_form = e.dennis_effective_form
+        if eff_form and eff_form > 0:
+            eff_whole = int(eff_form)
+            eff_dec = eff_form - eff_whole
+            eff_str = f"1.{eff_whole - 60:02d}.{int(eff_dec * 10)}" if eff_form >= 60 else f"{eff_form:.1f}"
+        else:
+            eff_str = "-"
+
+        # Time edge coloring
+        te = e.dennis_time_edge
+        te_str = f"{te:+.1f}s" if te else ""
+        te_color = "#22c55e" if te and te > 0 else "#ef4444" if te and te < 0 else "#6b7280"
+
         rows.append(
             f'<tr class="horse-row{toggle_class}" data-horse="{e.post_position}">'
             f'<td class="pos">{e.post_position}</td>'
             f'<td class="horse-name">{toggle_icon}{_esc(e.horse.name)}{value_badge}{winbet_badge}{dennis_badge}</td>'
             f'<td class="score"><strong>{e.super_score:.0f}</strong></td>'
+            f'<td class="comp-score">{comp_score:.0f}</td>'
             f'<td class="bet">{bet_str}</td>'
             f'{proffs_cell}'
             f'<td><span class="rec-badge" style="background:{bg};color:{color}">{_rank_label(rec)}{model_rank}</span></td>'
+            f'<td class="comp-rank">{comp_rank}</td>'
+            f'<td class="est-time">{eff_str}'
+            f'<span style="color:{te_color};font-size:0.7em;margin-left:2px">{te_str}</span></td>'
             f'{result_cell}'
             f'<td class="driver">{_esc(e.driver_name)}</td>'
             f'<td class="trend-cell">{trend_cell}{sparkline}</td>'
@@ -697,9 +730,9 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         f'<div class="table-wrap">'
         f'<table>'
         f'<thead><tr>'
-        f'<th>#</th><th>Hast</th><th>Poang</th><th>Streck</th>'
+        f'<th>#</th><th>Hast</th><th>Poang</th><th>Comp</th><th>Streck</th>'
         f'{"<th>Proffs</th>" if proffs_horses else ""}'
-        f'<th>Rank</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
+        f'<th>Rank</th><th>CR</th><th>Est.tid</th>{result_header}<th>Kusk</th><th>Trend</th>{factor_headers}'
         f'</tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
@@ -3080,6 +3113,9 @@ font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .horse-name{{font-weight:600;white-space:nowrap;color:#1e293b}}
 .score{{font-size:1rem;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}}
 .score strong{{color:#f59e0b}}
+.comp-score{{color:#8b5cf6;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600}}
+.comp-rank{{color:#8b5cf6;font-family:'JetBrains Mono',monospace;font-size:.85rem;text-align:center;font-weight:700}}
+.est-time{{color:#0ea5e9;font-family:'JetBrains Mono',monospace;font-size:.82rem;white-space:nowrap}}
 .bet{{color:#6b7280;font-family:'JetBrains Mono',monospace;font-size:.82rem}}
 .driver{{color:#6b7280;font-size:.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .rec-badge{{padding:.2rem .65rem;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap;

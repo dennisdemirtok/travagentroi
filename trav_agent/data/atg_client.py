@@ -448,16 +448,23 @@ class ATGClient:
         # Karriärstatistik
         stats = horse_data.get("statistics", {})
         life_stats = stats.get("life", {})
+        placement = life_stats.get("placement", {})
         career = CareerStats(
             total_starts=life_stats.get("starts", 0),
-            wins=life_stats.get("wins", 0),
-            seconds=life_stats.get("seconds", 0),
-            thirds=life_stats.get("thirds", 0),
-            total_prize_money=life_stats.get("prizeMoney", 0),
+            wins=placement.get("1", 0),
+            seconds=placement.get("2", 0),
+            thirds=placement.get("3", 0),
+            total_prize_money=life_stats.get("earnings", 0) // 100,  # öre → kr
         )
         if career.total_starts > 0:
             career.win_rate = career.wins / career.total_starts
             career.top3_rate = (career.wins + career.seconds + career.thirds) / career.total_starts
+
+        # Snittodds från senaste 5 starter
+        last_five = stats.get("lastFiveStarts", {})
+        avg_odds_raw = last_five.get("averageOdds")
+        if avg_odds_raw and isinstance(avg_odds_raw, (int, float)):
+            career.avg_odds = avg_odds_raw / 100.0
 
         # Senaste starter
         past_starts = []

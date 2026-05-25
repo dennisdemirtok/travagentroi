@@ -864,7 +864,14 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
         )
 
     count = len(candidates)
-    roi_text = "+14% ROI (bas) · +44% ROI (sharp)"
+    roi_text = "🎯 Sniper +26.5% ROI"
+
+    # Count sniper candidates (3-10% + kusk≥100)
+    sniper_count = sum(
+        1 for c in candidates
+        if c.get("driver_starts", 0) >= 100 and 0.03 <= c["streck"] <= 0.10
+    )
+    sniper_note = f" · {sniper_count} Sniper-tips" if sniper_count > 0 else ""
 
     return (
         f'<div class="winbet-summary-card">'
@@ -873,13 +880,13 @@ def _vinnarspel_summary_html(game_round: GameRound) -> str:
         f'<span class="winbet-roi">{roi_text}</span>'
         f'</div>'
         f'<div class="winbet-desc">'
-        f'{count} kandidater denna omgång — modell topp-2, streck 5-20%'
+        f'{count} kandidater denna omgång — modell topp-2, streck 3-20%{sniper_note}'
         f'</div>'
         f'<table class="winbet-table">'
         f'<thead><tr><th>Lopp</th><th>Häst</th><th>Poäng</th><th>Streck</th><th>Odds</th><th>Kusk</th></tr></thead>'
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
-        f'<div class="winbet-footnote">Flat bet 500kr/st · Bas: +31 129kr (438 spel) · Sharp (kusk≥100, score≥45): +41 299kr (190 spel). 120 omgångar.</div>'
+        f'<div class="winbet-footnote">Bara Sniper-profilen (3-10% streck + kusk≥100 starter) är lönsam. 169 omgångar, riktiga ATG-odds.</div>'
         f'</div>'
     )
 
@@ -2688,19 +2695,58 @@ def generate_dashboard_html(
     next_disabled = " disabled" if not next_key else ""
     prev_href = f' data-key="{prev_key}"' if prev_key else ""
     next_href = f' data-key="{next_key}"' if next_key else ""
-    # Build sidebar round select (always visible on desktop in sidebar)
+    # Build sidebar round list (grouped by month, scrollable)
     sidebar_round_select = ""
     if norm_rounds and len(norm_rounds) >= 2:
-        sb_options = []
-        for key, gt, d_str, is_finished, track in sorted(norm_rounds, key=lambda r: r[2], reverse=True):
-            sel = " selected" if key == current_key else ""
-            status = "✓" if is_finished else "⏳"
-            track_str = f" {track}" if track else ""
-            sb_options.append(f'<option value="{key}"{sel}>{gt} — {d_str}{track_str} {status}</option>')
+        sorted_r = sorted(norm_rounds, key=lambda r: r[2], reverse=True)
+        # Group by YYYY-MM
+        months: dict[str, list] = {}
+        for key, gt, d_str, is_finished, track in sorted_r:
+            month_key = d_str[:7]  # YYYY-MM
+            months.setdefault(month_key, []).append((key, gt, d_str, is_finished, track))
+
+        MONTH_NAMES = {
+            "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+            "05": "Maj", "06": "Jun", "07": "Jul", "08": "Aug",
+            "09": "Sep", "10": "Okt", "11": "Nov", "12": "Dec",
+        }
+        GT_COLORS = {
+            "V75": "#f59e0b", "V85": "#3b82f6", "V86": "#8b5cf6",
+            "V64": "#10b981", "GS75": "#ec4899", "V4": "#6b7280",
+        }
+
+        sb_items = []
+        for month_key, rounds_in_month in months.items():
+            year = month_key[:4]
+            month_num = month_key[5:7]
+            month_name = MONTH_NAMES.get(month_num, month_num)
+            sb_items.append(
+                f'<div class="rp-month">{month_name} {year}</div>'
+            )
+            for key, gt, d_str, is_finished, track in rounds_in_month:
+                active_cls = " rp-active" if key == current_key else ""
+                status = "✓" if is_finished else "⏳"
+                gt_color = GT_COLORS.get(gt, "#6b7280")
+                day = d_str[8:10] if len(d_str) >= 10 else d_str
+                track_short = (track[:12] + "…") if len(track) > 12 else track
+                sb_items.append(
+                    f'<button class="rp-item{active_cls}" onclick="changeRoundTo(\'{key}\')">'
+                    f'<span class="rp-gt" style="background:{gt_color}">{gt}</span>'
+                    f'<span class="rp-date">{day}</span>'
+                    f'<span class="rp-track">{track_short}</span>'
+                    f'<span class="rp-status">{status}</span>'
+                    f'</button>'
+                )
+
         sidebar_round_select = (
-            '<select class="sidebar-round-select" onchange="changeRound(this)">'
-            + "".join(sb_options)
-            + '</select>'
+            '<div class="rp-toggle" onclick="toggleRoundPicker()">'
+            '<span>📅 Välj omgång</span>'
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            '<path d="M6 9l6 6 6-6"/></svg>'
+            '</div>'
+            '<div class="rp-panel" id="rp-panel">'
+            + "".join(sb_items)
+            + '</div>'
         )
 
     round_navigator = (
@@ -3585,10 +3631,34 @@ justify-content:center;transition:all .15s;flex-shrink:0;padding:0}}
 .round-nav-btn[disabled]{{opacity:.3;cursor:not-allowed}}
 .round-nav-label{{font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;
 letter-spacing:-0.01em;text-align:center;flex:1}}
-.sidebar-round-select{{width:100%;margin-top:8px;padding:6px 10px;border-radius:8px;
-border:1px solid #e5e7eb;background:#ffffff;color:#1e293b;font-size:12px;
-cursor:pointer;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
-.sidebar-round-select:hover{{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
+/* ── Round Picker ── */
+.rp-toggle{{display:flex;align-items:center;justify-content:space-between;gap:6px;
+margin-top:8px;padding:7px 10px;border-radius:8px;border:1px solid #e5e7eb;
+background:#ffffff;color:#475569;font-size:11px;font-weight:600;cursor:pointer;
+transition:all .2s;user-select:none}}
+.rp-toggle:hover{{border-color:#cbd5e1;background:#f8fafc;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
+.rp-toggle svg{{transition:transform .2s}}
+.rp-toggle.open svg{{transform:rotate(180deg)}}
+.rp-panel{{display:none;max-height:420px;overflow-y:auto;margin-top:6px;
+border-radius:10px;border:1px solid #e5e7eb;background:#ffffff;
+box-shadow:0 4px 16px rgba(0,0,0,0.08);scrollbar-width:thin}}
+.rp-panel.open{{display:block}}
+.rp-panel::-webkit-scrollbar{{width:5px}}
+.rp-panel::-webkit-scrollbar-track{{background:transparent}}
+.rp-panel::-webkit-scrollbar-thumb{{background:#cbd5e1;border-radius:4px}}
+.rp-month{{padding:8px 12px 4px;font-size:10px;font-weight:700;color:#94a3b8;
+text-transform:uppercase;letter-spacing:.06em;position:sticky;top:0;background:#ffffff;z-index:1}}
+.rp-item{{display:flex;align-items:center;gap:6px;width:100%;padding:6px 12px;
+border:none;background:none;cursor:pointer;font-family:inherit;font-size:12px;
+color:#475569;transition:background .15s;text-align:left}}
+.rp-item:hover{{background:#f1f5f9}}
+.rp-active{{background:#eff6ff !important;color:#1e40af;font-weight:600}}
+.rp-active:hover{{background:#dbeafe !important}}
+.rp-gt{{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;
+font-weight:700;color:#ffffff;min-width:36px;text-align:center;flex-shrink:0}}
+.rp-date{{font-weight:600;font-variant-numeric:tabular-nums;min-width:20px}}
+.rp-track{{flex:1;color:#6b7280;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.rp-status{{font-size:11px;flex-shrink:0}}
 
 /* ── Strategy cards (ROI tab) ── */
 .sc-section{{margin-bottom:24px}}
@@ -3928,6 +3998,21 @@ function closeDrawer(){{
 // ── Round dropdown ──
 function changeRound(sel){{
   window.location.href='/dashboard/'+sel.value;
+}}
+function changeRoundTo(key){{
+  window.location.href='/dashboard/'+key;
+}}
+function toggleRoundPicker(){{
+  const panel=document.getElementById('rp-panel');
+  const toggle=document.querySelector('.rp-toggle');
+  if(!panel||!toggle)return;
+  panel.classList.toggle('open');
+  toggle.classList.toggle('open');
+  // Scroll active item into view
+  if(panel.classList.contains('open')){{
+    const active=panel.querySelector('.rp-active');
+    if(active)active.scrollIntoView({{block:'center',behavior:'smooth'}});
+  }}
 }}
 
 // ── Backlog helpers ──

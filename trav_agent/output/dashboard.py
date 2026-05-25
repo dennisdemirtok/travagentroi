@@ -1093,69 +1093,76 @@ def _bet_view_html(game_round: GameRound) -> str:
                 "placement": placement,
                 "actual_odds": actual_odds,
                 "is_p90": e.super_score >= p90_threshold,
+                "driver_starts": getattr(e, "driver_starts_year", 0),
+                "driver_win_pct": getattr(e, "driver_win_pct", 0.0),
             })
 
-    # Define profiles
+    # Define profiles — ordered by selectivity (broadest → most selective)
+    # Backtest: 120 omgångar, juni 2025 → maj 2026, 438 kandidater
     PROFILES = [
         {
-            "id": "bred",
-            "name": "Bred",
+            "id": "bas",
+            "name": "Bas",
             "desc": "Rank A-B + streck 5-20%",
-            "badge_roi": "+48%",
-            "badge_color": "#7c3aed",
-            "bt_wins": "72/343",
-            "bt_winrate": "21.0%",
+            "badge_roi": "+14%",
+            "badge_color": "#6b7280",
+            "bt_wins": "77/438",
+            "bt_winrate": "17.6%",
             "bt_odds": "7.0x",
-            "bt_profit": "+82 053kr",
+            "bt_profit": "+31 129kr",
             "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20,
         },
         {
-            "id": "sweet",
-            "name": "Sweet Spot",
-            "desc": "Rank A-B + streck 5-15%",
-            "badge_roi": "+85%",
+            "id": "pro",
+            "name": "Pro",
+            "desc": "Rank A-B + kusk ≥100 st/år + 5-20%",
+            "badge_roi": "+27%",
+            "badge_color": "#7c3aed",
+            "bt_wins": "60/306",
+            "bt_winrate": "19.6%",
+            "bt_odds": "7.0x",
+            "bt_profit": "+41 498kr",
+            "filter": lambda c: (c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20
+                                 and c["driver_starts"] >= 100),
+        },
+        {
+            "id": "sharp",
+            "name": "Sharp",
+            "desc": "Score ≥45 + kusk ≥100 st/år + 5-20%",
+            "badge_roi": "+44%",
             "badge_color": "#15803d",
-            "bt_wins": "28/141",
-            "bt_winrate": "19.9%",
-            "bt_odds": "9.3x",
-            "bt_profit": "+59 699kr",
-            "filter": lambda c: c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.15,
+            "bt_wins": "46/190",
+            "bt_winrate": "24.2%",
+            "bt_odds": "6.0x",
+            "bt_profit": "+41 299kr",
+            "filter": lambda c: (c["rank"] <= 2 and 0.05 <= c["streck"] <= 0.20
+                                 and c["driver_starts"] >= 100
+                                 and c["score"] >= 45),
         },
         {
             "id": "sniper",
             "name": "Sniper",
-            "desc": "Rank A-B + streck 3-10%",
-            "badge_roi": "+95%",
+            "desc": "Rank A-B + kusk ≥100 st/år + 3-10%",
+            "badge_roi": "+56%",
             "badge_color": "#b45309",
-            "bt_wins": "7/50",
-            "bt_winrate": "14.0%",
-            "bt_odds": "13.9x",
-            "bt_profit": "+23 680kr",
-            "filter": lambda c: c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10,
+            "bt_wins": "4/31",
+            "bt_winrate": "12.9%",
+            "bt_odds": "12.8x",
+            "bt_profit": "+8 696kr",
+            "filter": lambda c: (c["rank"] <= 2 and 0.03 <= c["streck"] <= 0.10
+                                 and c["driver_starts"] >= 100),
         },
         {
             "id": "elite",
             "name": "Elite",
             "desc": "Score topp-10% + streck 5-20%",
-            "badge_roi": "+87%",
+            "badge_roi": "+29%",
             "badge_color": "#0369a1",
-            "bt_wins": "10/30",
-            "bt_winrate": "33.3%",
+            "bt_wins": "10/44",
+            "bt_winrate": "22.7%",
             "bt_odds": "5.6x",
-            "bt_profit": "+13 110kr",
+            "bt_profit": "+6 409kr",
             "filter": lambda c: c["is_p90"] and 0.05 <= c["streck"] <= 0.20,
-        },
-        {
-            "id": "alpha",
-            "name": "Alpha",
-            "desc": "Rank A (topp-1) + streck 5-20%",
-            "badge_roi": "+96%",
-            "badge_color": "#dc2626",
-            "bt_wins": "4/12",
-            "bt_winrate": "33.3%",
-            "bt_odds": "5.9x",
-            "bt_profit": "+5 783kr",
-            "filter": lambda c: c["rank"] == 1 and 0.05 <= c["streck"] <= 0.20,
         },
     ]
 
@@ -1221,6 +1228,9 @@ def _bet_view_html(game_round: GameRound) -> str:
         for c in filtered:
             rank_badge = "\U0001f947" if c["rank"] == 1 else "\U0001f948"
             streck_pct = c["streck"] * 100
+            driver_warn = ""
+            if c.get("driver_starts", 0) < 100:
+                driver_warn = ' <span class="bet-driver-warn" title="Under 100 starter/år">⚠</span>'
 
             if is_finished:
                 if c["won"]:
@@ -1241,7 +1251,7 @@ def _bet_view_html(game_round: GameRound) -> str:
                 f'<td class="bet-score">{c["score"]:.0f}</td>'
                 f'<td class="bet-streck">{streck_pct:.0f}%</td>'
                 f'<td class="bet-odds">~{c["odds_est"]:.1f}x</td>'
-                f'<td class="bet-driver">{_esc(c["driver"][:15])}</td>'
+                f'<td class="bet-driver">{_esc(c["driver"][:15])}{driver_warn}</td>'
                 f'{result_cell}'
                 f'</tr>'
             )
@@ -3111,6 +3121,7 @@ text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:2px
 .bet-streck{{color:#6b7280}}
 .bet-odds{{font-family:'JetBrains Mono',monospace;font-weight:600;color:#7c3aed}}
 .bet-driver{{color:#6b7280;font-size:.8rem}}
+.bet-driver-warn{{color:#f59e0b;font-size:.7rem;cursor:help}}
 .bet-empty{{text-align:center;padding:60px 20px;color:#94a3b8}}
 .bet-empty h3{{color:#1e293b;margin-bottom:8px}}
 .bet-empty p{{font-size:.85rem;max-width:400px;margin:0 auto}}

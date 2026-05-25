@@ -181,6 +181,20 @@ async def _refresh_live_rounds():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Pre-warm caches so first page load is instant
+    logger.info("Startup: pre-warming caches...")
+    try:
+        client = ATGClient()
+        # Parallel: fetch available rounds + load backlog
+        rounds_task = asyncio.create_task(_get_available_rounds(client))
+        backlog_task = asyncio.create_task(_load_backlog())
+        await asyncio.gather(rounds_task, backlog_task, return_exceptions=True)
+        n_rounds = len(_available_rounds_cache)
+        n_entries = len((_backlog_cache or {}).get("entries", []))
+        logger.info(f"Startup: {n_rounds} rounds, {n_entries} backlog entries cached")
+    except Exception as e:
+        logger.warning(f"Startup cache warming failed (non-fatal): {e}")
+
     task = asyncio.create_task(_refresh_live_rounds())
     yield
     task.cancel()
@@ -196,7 +210,7 @@ _dashboard_html_cache: dict[str, tuple[str, str]] = {}  # key -> (etag, html)
 async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_forward: int = 7) -> list[tuple]:
     """Fetch available rounds from ATG calendar for the round switcher.
 
-    Cached for 10 minutes to avoid 21 API calls per page load.
+    Cached for 10 minutes. Uses parallel fetches to avoid 21× sequential 1s delays.
     """
     global _available_rounds_cache, _available_rounds_ts
 
@@ -205,35 +219,41 @@ async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_for
         return _available_rounds_cache
 
     today = date.today()
-    rounds = []
-    for offset in range(-days_back, days_forward + 1):
-        d = today + timedelta(days=offset)
+    days = [today + timedelta(days=offset) for offset in range(-days_back, days_forward + 1)]
+
+    # Parallel fetch — ATG cache hits are instant, only uncached ones throttle
+    async def _fetch_day(d):
         try:
-            cal = await client.get_calendar(d)
-            cal_games = cal.get("games", {})
-            for gt, game_list in cal_games.items():
-                gt_upper = gt.upper()
-                if gt_upper not in MAIN_GAME_TYPES:
-                    continue
-                has_id = game_list and any(g.get("id") for g in game_list)
-                if not has_id:
-                    continue
-                track = ""
-                if game_list and game_list[0].get("tracks"):
-                    tracks = game_list[0]["tracks"]
-                    if isinstance(tracks, list) and tracks:
-                        first_track = tracks[0]
-                        if isinstance(first_track, dict):
-                            track = first_track.get("name", "")
-                    elif isinstance(tracks, dict):
-                        first_val = next(iter(tracks.values()), {})
-                        if isinstance(first_val, dict):
-                            track = first_val.get("name", "")
-                is_past = d < today
-                key = f"{gt_upper}/{d}"
-                rounds.append((key, gt_upper, str(d), is_past, track))
+            return d, await client.get_calendar(d)
         except Exception:
-            continue
+            return d, {}
+
+    results = await asyncio.gather(*[_fetch_day(d) for d in days])
+
+    rounds = []
+    for d, cal in results:
+        cal_games = cal.get("games", {})
+        for gt, game_list in cal_games.items():
+            gt_upper = gt.upper()
+            if gt_upper not in MAIN_GAME_TYPES:
+                continue
+            has_id = game_list and any(g.get("id") for g in game_list)
+            if not has_id:
+                continue
+            track = ""
+            if game_list and game_list[0].get("tracks"):
+                tracks = game_list[0]["tracks"]
+                if isinstance(tracks, list) and tracks:
+                    first_track = tracks[0]
+                    if isinstance(first_track, dict):
+                        track = first_track.get("name", "")
+                elif isinstance(tracks, dict):
+                    first_val = next(iter(tracks.values()), {})
+                    if isinstance(first_val, dict):
+                        track = first_val.get("name", "")
+            is_past = d < today
+            key = f"{gt_upper}/{d}"
+            rounds.append((key, gt_upper, str(d), is_past, track))
 
     _available_rounds_cache = rounds
     _available_rounds_ts = now
@@ -243,6 +263,17 @@ async def _get_available_rounds(client: ATGClient, days_back: int = 14, days_for
 
 @app.get("/")
 async def root():
+    # Use cached rounds if available (instant redirect)
+    if _available_rounds_cache:
+        today_str = str(date.today())
+        # Find closest round: today or nearest future, fallback to most recent past
+        future = [(k, gt, d, past, tr) for k, gt, d, past, tr in _available_rounds_cache if d >= today_str]
+        past = [(k, gt, d, past, tr) for k, gt, d, past, tr in _available_rounds_cache if d < today_str]
+        target = future[0] if future else (past[-1] if past else None)
+        if target:
+            return RedirectResponse(f"/dashboard/{target[1]}/{target[2]}")
+
+    # Fallback: quick calendar scan (only if cache empty)
     client = ATGClient()
     today = date.today()
     for offset in range(8):
@@ -301,31 +332,31 @@ async def dashboard(game_type: str, day: str, request: Request):
             except Exception as e:
                 logger.debug(f"Bet sync skipped: {e}")
 
-    available_rounds = await _get_available_rounds(client)
-    backlog_data = await _load_backlog()
+    # Fetch all auxiliary data in parallel (4 independent tasks)
+    async def _load_tips():
+        try:
+            from trav_agent.data.tips_scraper import load_tips_cache_raw
+            return load_tips_cache_raw(game_type, str(d))
+        except Exception:
+            return None
 
-    tips_raw = None
-    try:
-        from trav_agent.data.tips_scraper import load_tips_cache_raw
-        tips_raw = load_tips_cache_raw(game_type, str(d))
-    except Exception:
-        pass
+    async def _load_proffs():
+        try:
+            from pathlib import Path
+            proffs_dir = Path("proffs_cache")
+            if proffs_dir.exists():
+                candidates = list(proffs_dir.glob(f"{game_type}*{str(d)}*_pre.json"))
+                if candidates:
+                    import json as _json
+                    with open(candidates[0]) as _pf:
+                        return _json.load(_pf)
+        except Exception:
+            pass
+        return None
 
-    # Load proffs consensus data if available
-    proffs_data = None
-    try:
-        from pathlib import Path
-        proffs_dir = Path("proffs_cache")
-        if proffs_dir.exists():
-            date_str = str(d)
-            # Find matching pre-race file
-            candidates = list(proffs_dir.glob(f"{game_type}*{date_str}*_pre.json"))
-            if candidates:
-                import json as _json
-                with open(candidates[0]) as _pf:
-                    proffs_data = _json.load(_pf)
-    except Exception:
-        pass
+    available_rounds, backlog_data, tips_raw, proffs_data = await asyncio.gather(
+        _get_available_rounds(client), _load_backlog(), _load_tips(), _load_proffs()
+    )
 
     # Check ETag cache — return 304 if unchanged
     cache_entry = _dashboard_html_cache.get(key)
@@ -353,6 +384,19 @@ async def dashboard(game_type: str, day: str, request: Request):
             "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
         },
     )
+
+
+# ── Available Rounds API (AJAX round switcher) ───────────────────────────
+
+@app.get("/api/rounds")
+async def api_rounds():
+    """Return available rounds for the round switcher (loaded async via JS)."""
+    client = ATGClient()
+    rounds = await _get_available_rounds(client)
+    return JSONResponse([
+        {"key": key, "game_type": gt, "date": d, "is_past": past, "track": tr}
+        for key, gt, d, past, tr in rounds
+    ])
 
 
 # ── Bet Result API ─────────────────────────────────────────────────────────

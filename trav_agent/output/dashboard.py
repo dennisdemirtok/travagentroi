@@ -1636,7 +1636,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
     # ── ABCD + DB2 SMART system (ny strategi!) ──
     smart_cards = []
     try:
-        for budget in [300, 500]:
+        for budget in [300, 1500]:
             plan = build_system(game_round, budget=budget, strategy="smart",
                                 proffs_data=proffs_data)
 
@@ -1684,7 +1684,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             rows_str = "".join(pick_rows)
             cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
             prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
-            is_rec = budget == 300
+            is_rec = budget == 1500  # Dennis spelar normalt 1500kr
 
             # Count DB2 adds
             db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
@@ -1692,7 +1692,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             smart_cards.append(
                 f'<div class="system-card" style="border-left:3px solid #8b5cf6">'
                 f'<div class="system-header">'
-                f'<h3>\U0001f9e0 ABCD + DB2 Smart ({budget} kr){"  ★ NY" if is_rec else ""}</h3>'
+                f'<h3>\U0001f9e0 ABCD + DB2 Smart ({budget} kr){"  ★ Dennis" if is_rec else ""}</h3>'
                 f'<span class="system-meta">A/B kärna + DB2 skräll-radar | '
                 f'{plan.num_spikes} spik, {db2_count} lopp med DB2-gardering | '
                 f'P(hit) ≈ {prob_str}</span>'
@@ -1724,7 +1724,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
         # Upset analysis
         upset_analysis = analyze_upset_round(game_round)
 
-        for budget in [300, 500]:
+        for budget in [300, 1500]:
             plan = build_system(game_round, budget=budget, strategy="chansspik")
 
             pick_rows = []
@@ -1791,7 +1791,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
         pass
 
     # ── SPIKE EASIEST-system (breakeven, bästa systemstrategin) ──
-    budgets = [300, 500]
+    budgets = [300, 1500]
     cards = []
 
     for budget in budgets:

@@ -1633,85 +1633,201 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
     except ImportError:
         return ""
 
-    # ── ABCD + DB2 SMART system (ny strategi!) ──
+    # ── ABCD + DB2 SMART system — INTERACTIVE ──
+    # Default system (1500kr, auto spikes) rendered server-side.
+    # Interactive controls call /api/system/{game_type}/{day} via JS.
+    gt = game_round.game_type
+    rd_str = str(game_round.round_date)
     smart_cards = []
     try:
-        for budget in [300, 1500]:
-            plan = build_system(game_round, budget=budget, strategy="smart",
-                                proffs_data=proffs_data)
+        default_budget = 1500
+        plan = build_system(game_round, budget=default_budget, strategy="smart",
+                            proffs_data=proffs_data)
 
-            pick_rows = []
-            for leg in sorted(plan.legs, key=lambda l: l.race_number):
-                race = game_round.get_race(leg.race_number)
-                dist = race.distance if race else 0
-                method = (race.start_method.value if race else "?")[:4]
-
-                # Badge baserat på leg-typ och reasoning
-                is_spike = leg.leg_type == "spik"
-                has_db2 = "DB2" in leg.reasoning
-
-                if is_spike:
-                    type_badge = '\U0001f512 SPIK'
-                    border_style = 'border-left:3px solid #22c55e'
-                elif has_db2:
-                    type_badge = f'\U0001f9e0 {leg.num_picks}-val'
-                    border_style = 'border-left:3px solid #f59e0b'
-                else:
-                    type_badge = f'{leg.num_picks}-val'
-                    border_style = ''
-
-                picks_str = ", ".join(
-                    f"<strong>{p}</strong>"
-                    for p in leg.picks[:leg.num_picks]
-                )
-
-                diff_color = "#22c55e" if leg.difficulty < 25 else ("#f59e0b" if leg.difficulty < 45 else "#ef4444")
-
-                # Kort reasoning
-                reasoning_short = leg.reasoning.split("|")[0].strip() if leg.reasoning else ""
-
-                pick_rows.append(
-                    f'<tr style="{border_style}">'
-                    f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
-                    f'<td>{dist}m {method}</td>'
-                    f'<td style="color:{diff_color}">D{leg.difficulty:.0f}</td>'
-                    f'<td><small>{_esc(reasoning_short)}</small></td>'
-                    f'<td class="system-picks">{picks_str}</td>'
-                    f'<td>{leg.num_picks}</td>'
-                    f'</tr>'
-                )
-
-            rows_str = "".join(pick_rows)
-            cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
-            prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
-            is_rec = budget == 1500  # Dennis spelar normalt 1500kr
-
-            # Count DB2 adds
-            db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
-
-            smart_cards.append(
-                f'<div class="system-card" style="border-left:3px solid #8b5cf6">'
-                f'<div class="system-header">'
-                f'<h3>\U0001f9e0 ABCD + DB2 Smart ({budget} kr){"  ★ Dennis" if is_rec else ""}</h3>'
-                f'<span class="system-meta">A/B kärna + DB2 skräll-radar | '
-                f'{plan.num_spikes} spik, {db2_count} lopp med DB2-gardering | '
-                f'P(hit) ≈ {prob_str}</span>'
-                f'</div>'
-                f'<div class="system-stats">'
-                f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
-                f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
-                f'<div class="sys-stat"><span class="sys-val">{plan.num_spikes}</span><span class="sys-lbl">Spikar</span></div>'
-                f'<div class="sys-stat"><span class="sys-val">{db2_count}</span><span class="sys-lbl">DB2-lopp</span></div>'
-                f'</div>'
-                f'<div class="table-wrap">'
-                f'<table class="system-table">'
-                f'<thead><tr>'
-                f'<th>Lopp</th><th>Info</th><th>Diff</th><th>Logik</th><th>Picks</th><th>#</th>'
-                f'</tr></thead>'
-                f'<tbody>{rows_str}</tbody>'
-                f'</table></div>'
-                f'</div>'
+        # Build default table rows
+        pick_rows = []
+        for leg in sorted(plan.legs, key=lambda l: l.race_number):
+            race = game_round.get_race(leg.race_number)
+            dist = race.distance if race else 0
+            method = (race.start_method.value if race else "?")[:4]
+            is_spike = leg.leg_type == "spik"
+            has_db2 = "DB2" in leg.reasoning
+            if is_spike:
+                type_badge = '\U0001f512 SPIK'
+                border_style = 'border-left:3px solid #22c55e'
+            elif has_db2:
+                type_badge = f'\U0001f9e0 {leg.num_picks}-val'
+                border_style = 'border-left:3px solid #f59e0b'
+            else:
+                type_badge = f'{leg.num_picks}-val'
+                border_style = ''
+            picks_str = ", ".join(f"<strong>{p}</strong>" for p in leg.picks[:leg.num_picks])
+            diff_color = "#22c55e" if leg.difficulty < 25 else ("#f59e0b" if leg.difficulty < 45 else "#ef4444")
+            reasoning_short = leg.reasoning.split("|")[0].strip() if leg.reasoning else ""
+            pick_rows.append(
+                f'<tr style="{border_style}">'
+                f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
+                f'<td>{dist}m {method}</td>'
+                f'<td style="color:{diff_color}">D{leg.difficulty:.0f}</td>'
+                f'<td><small>{_esc(reasoning_short)}</small></td>'
+                f'<td class="system-picks">{picks_str}</td>'
+                f'<td>{leg.num_picks}</td>'
+                f'</tr>'
             )
+
+        rows_str = "".join(pick_rows)
+        cost_color = "#22c55e" if plan.total_cost <= default_budget else "#ef4444"
+        prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
+        db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
+
+        # Interactive Smart system card
+        smart_cards.append(
+            f'<div class="system-card" style="border-left:3px solid #8b5cf6" id="smart-system-card">'
+            f'<div class="system-header">'
+            f'<h3>\U0001f9e0 ABCD + DB2 Smart  ★ Dennis</h3>'
+            f'<span class="system-meta">A/B kärna + DB2 skräll-radar — interaktiv</span>'
+            f'</div>'
+
+            # ── Controls row: Budget + Spikes + Expert Tips ──
+            f'<div class="smart-controls" style="display:flex;flex-wrap:wrap;gap:1rem;padding:.75rem 1rem;'
+            f'background:#f3f0ff;border-radius:8px;margin:.5rem 0">'
+
+            # Budget slider
+            f'<div style="flex:1;min-width:200px">'
+            f'<label style="font-size:.8rem;font-weight:600;color:#6b21a8;display:block;margin-bottom:.25rem">'
+            f'\U0001f4b0 Budget</label>'
+            f'<div style="display:flex;align-items:center;gap:.5rem">'
+            f'<input type="range" id="smart-budget" min="200" max="5000" step="100" value="{default_budget}" '
+            f'style="flex:1;accent-color:#8b5cf6" oninput="smartBudgetVal.textContent=this.value+\' kr\';debouncedSmartRefresh()">'
+            f'<span id="smartBudgetVal" style="font-size:.85rem;font-weight:600;color:#8b5cf6;min-width:55px">'
+            f'{default_budget} kr</span>'
+            f'</div>'
+            f'</div>'
+
+            # Spike count buttons
+            f'<div style="min-width:140px">'
+            f'<label style="font-size:.8rem;font-weight:600;color:#6b21a8;display:block;margin-bottom:.25rem">'
+            f'\U0001f512 Spikar</label>'
+            f'<div style="display:flex;gap:.25rem" id="spike-btns">'
+            f'<button class="spike-btn active" data-spikes="-1" onclick="setSpikes(-1)" '
+            f'style="padding:4px 10px;border-radius:6px;border:1px solid #8b5cf6;background:#8b5cf6;color:#fff;'
+            f'cursor:pointer;font-size:.8rem;font-weight:600">Auto</button>'
+            f'<button class="spike-btn" data-spikes="1" onclick="setSpikes(1)" '
+            f'style="padding:4px 10px;border-radius:6px;border:1px solid #d4d4d8;background:#fff;color:#3f3f46;'
+            f'cursor:pointer;font-size:.8rem">1</button>'
+            f'<button class="spike-btn" data-spikes="2" onclick="setSpikes(2)" '
+            f'style="padding:4px 10px;border-radius:6px;border:1px solid #d4d4d8;background:#fff;color:#3f3f46;'
+            f'cursor:pointer;font-size:.8rem">2</button>'
+            f'<button class="spike-btn" data-spikes="3" onclick="setSpikes(3)" '
+            f'style="padding:4px 10px;border-radius:6px;border:1px solid #d4d4d8;background:#fff;color:#3f3f46;'
+            f'cursor:pointer;font-size:.8rem">3</button>'
+            f'</div>'
+            f'</div>'
+
+            # Expert tips input
+            f'<div style="flex:1.5;min-width:220px">'
+            f'<label style="font-size:.8rem;font-weight:600;color:#6b21a8;display:block;margin-bottom:.25rem">'
+            f'\U0001f4dd Expertips <small style="font-weight:400;color:#a78bfa">'
+            f'(avd:häst, t.ex. 1:5, 3:12)</small></label>'
+            f'<input type="text" id="smart-expert-tips" placeholder="1:5, 3:12, 6:2" '
+            f'style="width:100%;padding:5px 10px;border-radius:6px;border:1px solid #d4d4d8;'
+            f'font-size:.85rem;outline:none" oninput="debouncedSmartRefresh()">'
+            f'</div>'
+
+            f'</div>'  # end controls
+
+            # Stats row (updated by JS)
+            f'<div class="system-stats" id="smart-stats">'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-rows">{plan.total_rows:,}</span>'
+            f'<span class="sys-lbl">Rader</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-cost" style="color:{cost_color}">'
+            f'{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-spikes">{plan.num_spikes}</span>'
+            f'<span class="sys-lbl">Spikar</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-db2">{db2_count}</span>'
+            f'<span class="sys-lbl">DB2-lopp</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-prob">{prob_str}</span>'
+            f'<span class="sys-lbl">P(hit)</span></div>'
+            f'</div>'
+
+            # Table (updated by JS)
+            f'<div class="table-wrap" id="smart-table-wrap">'
+            f'<table class="system-table">'
+            f'<thead><tr>'
+            f'<th>Lopp</th><th>Info</th><th>Diff</th><th>Logik</th><th>Picks</th><th>#</th>'
+            f'</tr></thead>'
+            f'<tbody id="smart-tbody">{rows_str}</tbody>'
+            f'</table></div>'
+
+            # Loading indicator
+            f'<div id="smart-loading" style="display:none;text-align:center;padding:.5rem;color:#8b5cf6">'
+            f'<span style="animation:pulse 1s infinite">⏳</span> Bygger system...</div>'
+
+            f'</div>'  # end card
+
+            # ── JavaScript for interactive controls ──
+            f'<script>'
+            f'var _smartGameType="{gt}",_smartDay="{rd_str}",_smartSpikes=-1,_smartTimer=null;'
+
+            f'function setSpikes(n){{'
+            f'_smartSpikes=n;'
+            f'document.querySelectorAll("#spike-btns .spike-btn").forEach(function(b){{'
+            f'var s=parseInt(b.getAttribute("data-spikes"));'
+            f'if(s===n){{b.style.background="#8b5cf6";b.style.color="#fff";b.style.borderColor="#8b5cf6";'
+            f'b.classList.add("active")}}'
+            f'else{{b.style.background="#fff";b.style.color="#3f3f46";b.style.borderColor="#d4d4d8";'
+            f'b.classList.remove("active")}}'
+            f'}});'
+            f'debouncedSmartRefresh();'
+            f'}}'
+
+            f'function debouncedSmartRefresh(){{'
+            f'if(_smartTimer)clearTimeout(_smartTimer);'
+            f'_smartTimer=setTimeout(refreshSmartSystem,400);'
+            f'}}'
+
+            f'function refreshSmartSystem(){{'
+            f'var budget=document.getElementById("smart-budget").value;'
+            f'var expert=document.getElementById("smart-expert-tips").value.trim();'
+            f'var url="/api/system/"+_smartGameType+"/"+_smartDay'
+            f'+"?budget="+budget+"&max_spikes="+_smartSpikes;'
+            f'if(expert)url+="&expert_tips="+encodeURIComponent(expert);'
+            f'document.getElementById("smart-loading").style.display="block";'
+            f'fetch(url).then(function(r){{return r.json()}}).then(function(d){{'
+            f'if(d.error){{console.error(d.error);return}}'
+            f'document.getElementById("smart-rows").textContent=d.total_rows.toLocaleString();'
+            f'var costEl=document.getElementById("smart-cost");'
+            f'costEl.textContent=d.total_cost.toLocaleString()+" kr";'
+            f'costEl.style.color=d.total_cost<=parseInt(budget)?"#22c55e":"#ef4444";'
+            f'document.getElementById("smart-spikes").textContent=d.num_spikes;'
+            f'document.getElementById("smart-db2").textContent=d.db2_count;'
+            f'document.getElementById("smart-prob").textContent=d.predicted_hit_prob;'
+            # Build table rows
+            f'var tbody="";'
+            f'd.legs.forEach(function(leg){{'
+            f'var isSpike=leg.is_spike,hasDb2=leg.has_db2,hasExpert=leg.has_expert;'
+            f'var badge=isSpike?"\\ud83d\\udd12 SPIK":(hasDb2?"\\ud83e\\udde0 "+leg.num_picks+"-val":leg.num_picks+"-val");'
+            f'if(hasExpert)badge+=" \\ud83d\\udcdd";'
+            f'var bs=isSpike?"border-left:3px solid #22c55e":(hasDb2?"border-left:3px solid #f59e0b":'
+            f'(hasExpert?"border-left:3px solid #a78bfa":""));'
+            f'var dc=leg.difficulty<25?"#22c55e":(leg.difficulty<45?"#f59e0b":"#ef4444");'
+            f'var picks=leg.picks.map(function(p){{return"<strong>"+p.num+"</strong>"}}).join(", ");'
+            f'var reason=leg.reasoning.split("|")[0].trim();'
+            f'tbody+="<tr style=\\""+bs+"\\">"'
+            f'+"<td class=\\"race-link\\">Avd "+leg.race_number+" <small>"+badge+"</small></td>"'
+            f'+"<td>"+leg.distance+"m "+leg.start_method+"</td>"'
+            f'+"<td style=\\"color:"+dc+"\\">D"+Math.round(leg.difficulty)+"</td>"'
+            f'+"<td><small>"+reason+"</small></td>"'
+            f'+"<td class=\\"system-picks\\">"+picks+"</td>"'
+            f'+"<td>"+leg.num_picks+"</td></tr>";'
+            f'}});'
+            f'document.getElementById("smart-tbody").innerHTML=tbody;'
+            f'document.getElementById("smart-loading").style.display="none";'
+            f'}}).catch(function(e){{console.error(e);'
+            f'document.getElementById("smart-loading").style.display="none"}});'
+            f'}}'
+            f'</script>'
+        )
     except Exception as exc:
         import traceback
         smart_cards.append(f'<!-- ABCD+DB2 error: {_esc(str(exc))} -->')
@@ -3684,6 +3800,7 @@ font-size:.85rem;font-family:inherit;margin:12px 0;outline:none;transition:borde
 .tips-parsing .spinner{{display:inline-block;width:28px;height:28px;border:3px solid #e5e7eb;
 border-top-color:#f59e0b;border-radius:50%;animation:spin 0.8s linear infinite}}
 @keyframes spin{{to{{transform:rotate(360deg)}}}}
+@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.4}}}}
 .tips-preview-data{{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;
 padding:14px;margin:12px 0;max-height:300px;overflow-y:auto}}
 .tips-preview-data h4{{font-size:.8rem;font-weight:700;color:#1e293b;margin-bottom:8px}}

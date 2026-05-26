@@ -483,7 +483,9 @@ def _spike_easiest_rest4(
 
 
 def _abcd_db2_smart(
-    game_round: GameRound, max_rows: int
+    game_round: GameRound, max_rows: int,
+    max_spikes: int | None = None,
+    expert_tips: dict[int, list[int]] | None = None,
 ) -> list[LegAssignment]:
     """ABCD + DB2 Smart system — intelligent horsval baserat på ranking-data.
 
@@ -605,10 +607,23 @@ def _abcd_db2_smart(
     # ── MULTI-SPIKE: spika ALLA lopp med ensam A-häst ──
     # Dennis-insikt: "om modellen säger A-häst, ska vi spika den"
     # Fler spikar = fler rader kvar till gardering i osäkra lopp
-    spike_indices = set()
+    spike_candidates = []
     for i, rd in enumerate(race_data):
         if len(rd["a_horses"]) == 1:
-            # Ensam A-häst → SPIK
+            # Ensam A-häst → spike-kandidat, prioritera lägst difficulty
+            spike_candidates.append((i, rd["diff"]))
+
+    # Sortera kandidater: lägst difficulty först (tryggaste spiken)
+    spike_candidates.sort(key=lambda x: x[1])
+
+    spike_indices = set()
+    if max_spikes is not None and max_spikes >= 0:
+        # Begränsa antal spikar
+        for i, _diff in spike_candidates[:max_spikes]:
+            spike_indices.add(i)
+    else:
+        # Ingen begränsning — spika ALLA ensamma A-hästar
+        for i, _diff in spike_candidates:
             spike_indices.add(i)
 
     # Fallback: om inga A-hästar finns, spika lättaste loppet
@@ -700,11 +715,26 @@ def _abcd_db2_smart(
                     db2_protected_count += 1
                 db2_added.append(f"{entry.post_position}(DB2:{db2_rank})")
 
+        # ── Expert tips: lägg till anvndarens egna picks ──
+        expert_add_count = 0
+        expert_added = []
+        if expert_tips and race.race_number in expert_tips:
+            for horse_num in expert_tips[race.race_number]:
+                if horse_num not in core_picks:
+                    # Verifiera att hästen finns i loppet
+                    valid_positions = {e.post_position for e in entries}
+                    if horse_num in valid_positions:
+                        core_picks.append(horse_num)
+                        expert_add_count += 1
+                        expert_added.append(str(horse_num))
+
         reasoning_parts = [f"{len(rd['a_horses'])}A+{len(b_list)}B"]
         if swapped:
             reasoning_parts.append(f"swap: {', '.join(swapped)}")
         if db2_add_count > 0:
             reasoning_parts.append(f"+{db2_add_count} DB2 [{', '.join(db2_added)}]")
+        if expert_add_count > 0:
+            reasoning_parts.append(f"+{expert_add_count} EXPERT [{', '.join(expert_added)}]")
         reasoning_parts.append(f"diff {diff:.0f}")
 
         all_picks_data.append({
@@ -852,6 +882,8 @@ def build_system(
     row_price: Optional[float] = None,
     strategy: str = "optimal",
     proffs_data: Optional[dict] = None,
+    max_spikes: int | None = None,
+    expert_tips: dict[int, list[int]] | None = None,
 ) -> SystemPlan:
     """Bygg system — den ENDA bevisade strategin.
 
@@ -883,7 +915,10 @@ def build_system(
     max_rows = int(budget / row_price)
 
     if strategy == "smart":
-        return _build_smart_system(game_round, budget, row_price, max_rows, proffs_data)
+        return _build_smart_system(
+            game_round, budget, row_price, max_rows, proffs_data,
+            max_spikes=max_spikes, expert_tips=expert_tips,
+        )
 
     if strategy == "chansspik":
         from .upset_system import build_upset_system
@@ -1016,13 +1051,22 @@ def _build_smart_system(
     row_price: float,
     max_rows: int,
     proffs_data: Optional[dict] = None,
+    max_spikes: int | None = None,
+    expert_tips: dict[int, list[int]] | None = None,
 ) -> SystemPlan:
     """ABCD + DB2 Smart system.
 
     Använder ABCD-klassificering som kärna + Dennis Brain DB2
     som skräll-radar. Se _abcd_db2_smart() för detaljer.
+
+    max_spikes: Begränsa antal spikar (None = auto, alla ensamma A-hästar)
+    expert_tips: {race_number: [horse_numbers]} — extra picks från expert/användare
     """
-    legs, predicted_prob = _abcd_db2_smart(game_round, max_rows)
+    legs, predicted_prob = _abcd_db2_smart(
+        game_round, max_rows,
+        max_spikes=max_spikes,
+        expert_tips=expert_tips,
+    )
 
     plan = SystemPlan(
         game_type=game_round.game_type,

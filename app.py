@@ -433,6 +433,121 @@ async def api_rounds():
     ])
 
 
+# ── Interactive System Builder API ─────────────────────────────────────────
+
+@app.get("/api/system/{game_type}/{day}")
+async def api_system(
+    game_type: str,
+    day: str,
+    budget: int = 1500,
+    max_spikes: int = -1,
+    expert_tips: str = "",
+):
+    """Build a Smart system with custom parameters (AJAX from dashboard).
+
+    budget: 300-5000kr
+    max_spikes: -1 = auto (all lone A-horses), 0-5 = limit
+    expert_tips: comma-separated "race:horse,race:horse" e.g. "1:5,3:12,6:2"
+    """
+    game_type = game_type.upper()
+    if game_type not in GAME_TYPES:
+        return JSONResponse({"error": f"Ogiltig spelform: {game_type}"}, status_code=400)
+
+    try:
+        d = date.fromisoformat(day)
+    except ValueError:
+        return JSONResponse({"error": f"Ogiltigt datum: {day}"}, status_code=400)
+
+    budget = max(100, min(10000, budget))
+    spikes_param = None if max_spikes < 0 else max(0, min(8, max_spikes))
+
+    # Parse expert_tips: "1:5,3:12,6:2" → {1: [5], 3: [12], 6: [2]}
+    expert_dict: dict[int, list[int]] = {}
+    if expert_tips:
+        for part in expert_tips.split(","):
+            part = part.strip()
+            if ":" in part:
+                try:
+                    race_num, horse_num = part.split(":", 1)
+                    r = int(race_num.strip())
+                    h = int(horse_num.strip())
+                    expert_dict.setdefault(r, []).append(h)
+                except (ValueError, IndexError):
+                    continue
+
+    # Get game round from cache or fetch
+    key = f"{game_type}/{d}"
+    game_round = _round_cache.get(key)
+    if not game_round:
+        client = ATGClient()
+        game_round = await client.fetch_full_round(game_type, d)
+        if not game_round:
+            return JSONResponse({"error": f"Ingen {game_type} hittad för {day}"}, status_code=404)
+        analyzer = CompositeAnalyzer()
+        analyzer.analyze_round(game_round)
+        _round_cache[key] = game_round
+
+    try:
+        from trav_agent.analysis.system_builder import build_system
+        plan = build_system(
+            game_round,
+            budget=budget,
+            strategy="smart",
+            max_spikes=spikes_param,
+            expert_tips=expert_dict if expert_dict else None,
+        )
+    except Exception as e:
+        logger.error(f"System build error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Build JSON response
+    legs_json = []
+    for leg in sorted(plan.legs, key=lambda l: l.race_number):
+        race = game_round.get_race(leg.race_number)
+        dist = race.distance if race else 0
+        method = (race.start_method.value if race else "?")[:4]
+        is_spike = leg.leg_type == "spik"
+        has_db2 = "DB2" in leg.reasoning
+        has_expert = "EXPERT" in leg.reasoning
+
+        # Horse names for picks
+        pick_details = []
+        for p in leg.picks[:leg.num_picks]:
+            entry = next((e for e in (race.entries if race else []) if e.post_position == p), None)
+            name = entry.horse_name[:16] if entry and entry.horse_name else f"#{p}"
+            pick_details.append({"num": p, "name": name})
+
+        legs_json.append({
+            "race_number": leg.race_number,
+            "distance": dist,
+            "start_method": method,
+            "difficulty": round(leg.difficulty, 1),
+            "num_picks": leg.num_picks,
+            "picks": pick_details,
+            "is_spike": is_spike,
+            "has_db2": has_db2,
+            "has_expert": has_expert,
+            "reasoning": leg.reasoning,
+        })
+
+    # Count categories
+    db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
+    expert_count = sum(1 for leg in plan.legs if "EXPERT" in leg.reasoning)
+    prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
+
+    return JSONResponse({
+        "budget": budget,
+        "max_spikes": plan.num_spikes,
+        "total_rows": plan.total_rows,
+        "total_cost": round(plan.total_cost, 0),
+        "num_spikes": plan.num_spikes,
+        "db2_count": db2_count,
+        "expert_count": expert_count,
+        "predicted_hit_prob": prob_str,
+        "legs": legs_json,
+    })
+
+
 # ── Bet Result API ─────────────────────────────────────────────────────────
 
 @app.get("/api/bets")
@@ -870,69 +985,7 @@ async def api_backlog(strategy: str = None, game_type: str = None, limit: int = 
     return {"entries": entries[:limit], "strategies": backlog_data.get("strategies", {})}
 
 
-# ── System Generation ────────────────────────────────────────────────────────
-
-@app.get("/api/system/{game_type}/{day}")
-async def api_system(game_type: str, day: str, budget: int = 2500):
-    game_type = game_type.upper()
-    key = f"{game_type}/{day}"
-
-    game_round = _round_cache.get(key)
-    if not game_round:
-        try:
-            d = date.fromisoformat(day)
-        except ValueError:
-            raise HTTPException(400, f"Ogiltigt datum: {day}")
-
-        client = ATGClient()
-        game_round = await client.fetch_full_round(game_type, d)
-        if not game_round:
-            raise HTTPException(404, f"Ingen {game_type} hittad för {day}")
-
-        analyzer = CompositeAnalyzer()
-        analyzer.analyze_round(game_round)
-
-    try:
-        from trav_agent.betting.system_generator import SystemGenerator
-
-        strategies = [
-            ("I_streck_1st", "avg_upset_lt_40", budget, 0, 0, 0),
-            ("I_streck_1st", "avg_upset_lt_40", budget, 1, 75, 12),
-            ("Q_dom_x_mktgap", "avg_upset_lt_40", budget, 0, 0, 0),
-            ("D_market_gap", "avg_upset_lt_40", budget, 0, 0, 0),
-        ]
-
-        results = []
-        for strat, filt, b, spikes, conf, gap in strategies:
-            gen = SystemGenerator(
-                budget=b, strategy=strat, selective_filter=filt,
-                max_spikes=spikes, spike_conf_threshold=conf, spike_score_gap=gap,
-            )
-            system = gen.generate(game_round)
-            results.append({
-                "strategy": strat,
-                "skip": system.skip_round,
-                "skip_reason": system.skip_reason,
-                "total_rows": system.total_rows,
-                "total_cost": system.total_cost,
-                "avg_confidence": system.avg_confidence,
-                "races": [
-                    {
-                        "race_number": rp.race_number,
-                        "picks": rp.picks,
-                        "pick_names": rp.pick_names,
-                        "num_picks": rp.num_picks,
-                        "confidence": rp.confidence,
-                        "upset_risk": rp.upset_risk,
-                    }
-                    for rp in system.race_picks
-                ] if not system.skip_round else [],
-            })
-
-        return {"systems": results}
-    except Exception as e:
-        logger.error(f"System generation error: {e}")
-        raise HTTPException(500, str(e))
+# ── Legacy System Generation (replaced by /api/system/ above) ──
 
 
 @app.get("/api/chansspik/{game_type}/{day}")

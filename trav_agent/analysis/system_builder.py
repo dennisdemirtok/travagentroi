@@ -478,6 +478,289 @@ def _spike_easiest_rest4(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ABCD + DB2 Smart Strategy — ABCD-klassificering + Dennis Brain skräll-radar
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _abcd_db2_smart(
+    game_round: GameRound, max_rows: int
+) -> list[LegAssignment]:
+    """ABCD + DB2 Smart system — intelligent horsval baserat på ranking-data.
+
+    Insikt (2 veckors backtest, 81 lopp):
+    - A/B-hästar vinner 76.5% av loppen → ryggraden
+    - DB2 (effective_form) rankar vinnaren top-3 i 44% av skrällarna
+    - Marknad hittar 0% av skrällvinnarna i top-3
+
+    Strategi:
+    1. SPIKE: Loppet med starkast A-häst + lägst difficulty → 1 val (A-hästen)
+    2. KÄRNA: I varje annat lopp — alla A+B hästar (top 35% av fältet)
+    3. DB2-GARDERING: C-hästar med DB2 rank ≤ 3 läggs till i risklopp
+       → dessa är outsiders som tidsanalysen flaggar som farliga
+    4. BUDGET-TRIM: Om för dyrt, ta bort svagaste DB2-adds först
+
+    Picks-ordning (per lopp):
+      A-hästar → B-hästar → DB2-topprankade C-hästar → övriga C (om budget)
+
+    Varför detta borde slå spike_easiest:
+    - spike_easiest tar alltid top-4 by super_score → missar outsiders
+    - ABCD+DB2 tar A+B (kärna) + DB2-flaggade outsiders → bättre skrälltäckning
+    - DB2 hittar 44% av skrällar i top-3, super_score bara 20%
+    """
+    legs: list[LegAssignment] = []
+    race_data = []
+
+    for race in game_round.races:
+        entries = race.active_entries
+        if not entries:
+            continue
+
+        diff = predict_difficulty(race)
+        n_starters = len(entries)
+
+        # Sortera efter super_score (primär ranking)
+        sorted_by_score = sorted(entries, key=lambda e: e.super_score, reverse=True)
+
+        # DB2 ranking: sortera efter effective_form (lägre = snabbare = bättre)
+        valid_ef = [
+            e for e in entries
+            if e.dennis_effective_form and e.dennis_effective_form > 0
+        ]
+        db2_sorted = sorted(valid_ef, key=lambda e: e.dennis_effective_form)
+        db2_rank_map = {
+            e.post_position: idx + 1
+            for idx, e in enumerate(db2_sorted)
+        }
+
+        # Samla A/B/C/D-klassificerade hästar
+        a_horses = []
+        b_horses = []
+        c_horses = []
+
+        for entry in sorted_by_score:
+            rec = entry.recommendation or ""
+            if rec == "spik":
+                a_horses.append(entry)
+            elif rec in ("2-val", "3-val"):
+                b_horses.append(entry)
+            elif rec == "gardering":
+                c_horses.append(entry)
+            # D (strykning) ignoreras
+
+        # DB2-flaggade C-hästar: C-rank men DB2 top-3 → skräll-kandidat
+        db2_outsiders = []
+        for entry in c_horses:
+            db2_rank = db2_rank_map.get(entry.post_position, 99)
+            if db2_rank <= 3:
+                db2_outsiders.append((entry, db2_rank))
+        # Sortera: bäst DB2 först
+        db2_outsiders.sort(key=lambda x: x[1])
+
+        # DB2-rank för alla hästar (för swap-beslut)
+        b_with_db2 = [
+            (entry, db2_rank_map.get(entry.post_position, 99))
+            for entry in b_horses
+        ]
+
+        # Bestäm om A-häst finns (spike-kandidat)
+        has_a = len(a_horses) > 0
+        gap_to_second = 0
+        if len(sorted_by_score) >= 2:
+            gap_to_second = sorted_by_score[0].super_score - sorted_by_score[1].super_score
+
+        race_data.append({
+            "race": race,
+            "diff": diff,
+            "n_starters": n_starters,
+            "a_horses": a_horses,
+            "b_horses": b_horses,
+            "b_with_db2": b_with_db2,
+            "c_horses": c_horses,
+            "db2_outsiders": db2_outsiders,
+            "has_a": has_a,
+            "gap": gap_to_second,
+            "sorted": sorted_by_score,
+        })
+
+    # ── Hitta bästa spike-lopp: A-häst + lägst difficulty ──
+    spike_candidates = [
+        (i, rd) for i, rd in enumerate(race_data)
+        if rd["has_a"]
+    ]
+    spike_idx = -1
+    if spike_candidates:
+        # Bästa spike = lägst difficulty bland de med A-häst
+        spike_idx = min(spike_candidates, key=lambda x: x[1]["diff"])[0]
+    else:
+        # Fallback: spike lättaste loppet (som spike_easiest)
+        spike_idx = min(range(len(race_data)), key=lambda i: race_data[i]["diff"])
+
+    # ── Bygg picks per lopp ──
+    all_picks_data = []  # (race_idx, picks_list, leg_type, reasoning)
+
+    for i, rd in enumerate(race_data):
+        race = rd["race"]
+        diff = rd["diff"]
+
+        if i == spike_idx:
+            # SPIKE: 1 val — A-hästen eller rank-1
+            if rd["a_horses"]:
+                picks = [rd["a_horses"][0].post_position]
+            else:
+                picks = [rd["sorted"][0].post_position]
+
+            all_picks_data.append({
+                "race_idx": i,
+                "picks": picks,
+                "core_count": 1,
+                "db2_adds": 0,
+                "reasoning": f"SPIK — {'A-häst' if rd['has_a'] else 'rank 1'}, diff {diff:.0f}",
+            })
+            continue
+
+        # ICKE-SPIKE: A+B kärna + DB2 outsiders
+        #
+        # Nyckelidé: i SVÅRA lopp (diff ≥ 35), byt ut svagaste B
+        # mot DB2-outsider om DB2-outsider har bättre tidsform.
+        # I LÄTTA lopp, behåll rena A+B (super_score driven).
+        #
+        # Varför: DB2 hittar 44% av skrällar i top-3, men i lätta
+        # lopp vinner favoriten ändå → onödig risk att byta.
+
+        core_picks = []
+        for entry in rd["a_horses"]:
+            core_picks.append(entry.post_position)
+
+        # I svåra lopp: möjlig swap av svagaste B mot starkaste DB2 outsider
+        b_list = list(rd["b_horses"])
+        swapped = []
+        if diff >= 35 and rd["db2_outsiders"] and len(b_list) >= 2:
+            # Hitta svagaste B (högst DB2-rank = sämst tidsform)
+            b_db2 = rd["b_with_db2"]
+            if b_db2:
+                weakest_b = max(b_db2, key=lambda x: x[1])
+                best_db2_outsider = rd["db2_outsiders"][0]
+
+                # Swap om DB2-outsider har klart bättre tidsform
+                # (DB2 rank ≤ 2 och svagaste B har DB2 rank ≥ 5)
+                if (
+                    best_db2_outsider[1] <= 2
+                    and weakest_b[1] >= 5
+                    and len(b_list) >= 2  # Behåll minst 1 B
+                ):
+                    b_list = [e for e in b_list if e.post_position != weakest_b[0].post_position]
+                    swapped.append(
+                        f"↔{weakest_b[0].post_position}→"
+                        f"{best_db2_outsider[0].post_position}(DB2:{best_db2_outsider[1]})"
+                    )
+                    # Lägg till DB2-outsider som ersättning
+                    core_picks.append(best_db2_outsider[0].post_position)
+
+        for entry in b_list:
+            if entry.post_position not in core_picks:
+                core_picks.append(entry.post_position)
+
+        # Säkerställ minst 2 picks
+        if len(core_picks) < 2:
+            for entry in rd["sorted"]:
+                if entry.post_position not in core_picks:
+                    core_picks.append(entry.post_position)
+                if len(core_picks) >= 2:
+                    break
+
+        # Lägg till DB2 outsiders som EXTRA gardering (utöver eventuell swap)
+        db2_add_count = 0
+        db2_added = []
+        for entry, db2_rank in rd["db2_outsiders"]:
+            if entry.post_position not in core_picks:
+                core_picks.append(entry.post_position)
+                db2_add_count += 1
+                db2_added.append(f"{entry.post_position}(DB2:{db2_rank})")
+
+        reasoning_parts = [f"{len(rd['a_horses'])}A+{len(b_list)}B"]
+        if swapped:
+            reasoning_parts.append(f"swap: {', '.join(swapped)}")
+        if db2_add_count > 0:
+            reasoning_parts.append(f"+{db2_add_count} DB2 [{', '.join(db2_added)}]")
+        reasoning_parts.append(f"diff {diff:.0f}")
+
+        all_picks_data.append({
+            "race_idx": i,
+            "picks": core_picks,
+            "core_count": len(core_picks) - db2_add_count,
+            "db2_adds": db2_add_count,
+            "reasoning": " | ".join(reasoning_parts),
+        })
+
+    # ── Budget-trimning ──
+    def total_rows():
+        r = 1
+        for pd in all_picks_data:
+            r *= len(pd["picks"])
+        return r
+
+    # Fas 1: Om för dyrt, ta bort DB2-adds (svagaste först)
+    while total_rows() > max_rows:
+        # Hitta lopp med DB2-adds att ta bort
+        removable = [
+            (j, pd) for j, pd in enumerate(all_picks_data)
+            if pd["db2_adds"] > 0 and len(pd["picks"]) > 2
+        ]
+        if not removable:
+            break
+        # Ta bort från det bredaste loppet
+        widest_j = max(removable, key=lambda x: len(x[1]["picks"]))[0]
+        pd = all_picks_data[widest_j]
+        pd["picks"].pop()  # Ta bort sist tillagda (svagaste DB2)
+        pd["db2_adds"] -= 1
+
+    # Fas 2: Om fortfarande för dyrt, reducera B-hästar
+    while total_rows() > max_rows:
+        # Hitta bredaste icke-spike med >2 picks
+        candidates = [
+            (j, pd) for j, pd in enumerate(all_picks_data)
+            if len(pd["picks"]) > 2 and j != spike_idx
+        ]
+        if not candidates:
+            # Reducera ner till 2 om möjligt
+            candidates = [
+                (j, pd) for j, pd in enumerate(all_picks_data)
+                if len(pd["picks"]) > 1 and j != spike_idx
+            ]
+        if not candidates:
+            break
+        widest_j = max(candidates, key=lambda x: len(x[1]["picks"]))[0]
+        all_picks_data[widest_j]["picks"].pop()
+
+    # ── Bygg LegAssignment-objekt ──
+    total_log_prob = 0.0
+    for pd in all_picks_data:
+        rd = race_data[pd["race_idx"]]
+        race = rd["race"]
+        diff = rd["diff"]
+        n_picks = len(pd["picks"])
+
+        cov_prob = _coverage_prob(diff, n_picks)
+        total_log_prob += math.log(max(cov_prob, 1e-10))
+        confidence = min(95, max(10, cov_prob * 100))
+
+        leg_type = _picks_to_type(n_picks)
+
+        legs.append(LegAssignment(
+            race_number=race.race_number,
+            leg_type=leg_type,
+            num_picks=n_picks,
+            picks=pd["picks"],
+            confidence=confidence,
+            upset_risk=race.upset_risk,
+            difficulty=diff,
+            reasoning=pd["reasoning"],
+        ))
+
+    return legs, math.exp(total_log_prob)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Legacy fixed configs (behålls för jämförelse)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -521,6 +804,7 @@ def build_system(
 
     Strategier:
     - "optimal": spike_easiest + rest4 (BEVISAT BÄST)
+    - "smart": ABCD + DB2 — intelligent pick-selection (A/B kärna + DB2 skrällar)
     - "chansspik": Upset-targeting — siktar på 25-100k utdelning
     - "greedy": Balanced greedy (mer hits vid hög budget, lägre ROI)
     - "fixed": Legacy fast bredd (2S+rest4 etc)
@@ -530,6 +814,9 @@ def build_system(
         row_price = ROW_PRICES.get(game_round.game_type, 0.50)
 
     max_rows = int(budget / row_price)
+
+    if strategy == "smart":
+        return _build_smart_system(game_round, budget, row_price, max_rows, proffs_data)
 
     if strategy == "chansspik":
         from .upset_system import build_upset_system
@@ -649,6 +936,34 @@ def build_system(
         row_price=row_price,
         budget=budget,
         strategy_name=f"Spike Easiest + Rest4 — {budget:.0f}kr",
+        predicted_hit_prob=predicted_prob,
+    )
+    plan.calc_rows()
+
+    return plan
+
+
+def _build_smart_system(
+    game_round: GameRound,
+    budget: float,
+    row_price: float,
+    max_rows: int,
+    proffs_data: Optional[dict] = None,
+) -> SystemPlan:
+    """ABCD + DB2 Smart system.
+
+    Använder ABCD-klassificering som kärna + Dennis Brain DB2
+    som skräll-radar. Se _abcd_db2_smart() för detaljer.
+    """
+    legs, predicted_prob = _abcd_db2_smart(game_round, max_rows)
+
+    plan = SystemPlan(
+        game_type=game_round.game_type,
+        round_date=str(game_round.round_date),
+        legs=legs,
+        row_price=row_price,
+        budget=budget,
+        strategy_name=f"ABCD + DB2 Smart — {budget:.0f}kr",
         predicted_hit_prob=predicted_prob,
     )
     plan.calc_rows()
@@ -786,18 +1101,25 @@ def _build_reasoning(race: Race, difficulty: float, picks: int,
 def build_multiple_systems(
     game_round: GameRound,
     budgets: list[float] | None = None,
+    proffs_data: Optional[dict] = None,
 ) -> list[SystemPlan]:
-    """Bygg system vid flera budgetnivåer — BÅDA strategierna.
+    """Bygg system vid flera budgetnivåer — TRE strategier.
 
     Inkluderar:
-    1. Spike Easiest (favorit-optimerad, bevisad +112% ROI)
-    2. Chansspik (upset-optimerad, siktar på 25-100k utdelning)
+    1. ABCD + DB2 Smart (ABCD kärna + DB2 skräll-radar) ★ NY
+    2. Spike Easiest (favorit-optimerad, bevisad +112% ROI)
+    3. Chansspik (upset-optimerad, siktar på 25-100k utdelning)
+
+    ABCD+DB2 Smart (ny):
+    - A/B-hästar vinner 76.5% → ryggrad
+    - DB2 hittar 44% av skrällar i top-3 → gardering
+    - Intelligent picks istället för mekanisk top-4
 
     Resultat spike_easiest (336 omgångar):
     - 300kr: 18 hits (5.4%), +112% ROI ★ SÄKRAST
     - 500kr: 20 hits (6.0%), +41% ROI
 
-    Chansspik (ny):
+    Chansspik:
     - Lägre hit rate men högre snitt-utdelning
     - Mål: fånga 1-2 upsets per omgång
     """
@@ -806,11 +1128,17 @@ def build_multiple_systems(
 
     plans = []
     for budget in budgets:
-        # Strategy 1: Spike Easiest (proven, consistent)
-        plan = build_system(game_round, budget=budget, strategy="optimal")
+        # Strategy 1: ABCD + DB2 Smart (intelligent picks) ★ NY
+        plan_smart = build_system(game_round, budget=budget, strategy="smart",
+                                  proffs_data=proffs_data)
+        plans.append(plan_smart)
+
+        # Strategy 2: Spike Easiest (proven, consistent)
+        plan = build_system(game_round, budget=budget, strategy="optimal",
+                           proffs_data=proffs_data)
         plans.append(plan)
 
-        # Strategy 2: Chansspik (upset-targeting, higher payout)
+        # Strategy 3: Chansspik (upset-targeting, higher payout)
         plan_upset = build_system(game_round, budget=budget, strategy="chansspik")
         plans.append(plan_upset)
 

@@ -1627,11 +1627,94 @@ def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
 
 
 def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
-    """System-rekommendationer — Spike Easiest (säker) + Chansspik (25-100k)."""
+    """System-rekommendationer — ABCD+DB2 Smart + Spike Easiest + Chansspik."""
     try:
         from ..analysis.system_builder import build_system
     except ImportError:
         return ""
+
+    # ── ABCD + DB2 SMART system (ny strategi!) ──
+    smart_cards = []
+    try:
+        for budget in [300, 500]:
+            plan = build_system(game_round, budget=budget, strategy="smart",
+                                proffs_data=proffs_data)
+
+            pick_rows = []
+            for leg in sorted(plan.legs, key=lambda l: l.race_number):
+                race = game_round.get_race(leg.race_number)
+                dist = race.distance if race else 0
+                method = (race.start_method.value if race else "?")[:4]
+
+                # Badge baserat på leg-typ och reasoning
+                is_spike = leg.leg_type == "spik"
+                has_db2 = "DB2" in leg.reasoning
+
+                if is_spike:
+                    type_badge = '\U0001f512 SPIK'
+                    border_style = 'border-left:3px solid #22c55e'
+                elif has_db2:
+                    type_badge = f'\U0001f9e0 {leg.num_picks}-val'
+                    border_style = 'border-left:3px solid #f59e0b'
+                else:
+                    type_badge = f'{leg.num_picks}-val'
+                    border_style = ''
+
+                picks_str = ", ".join(
+                    f"<strong>{p}</strong>"
+                    for p in leg.picks[:leg.num_picks]
+                )
+
+                diff_color = "#22c55e" if leg.difficulty < 25 else ("#f59e0b" if leg.difficulty < 45 else "#ef4444")
+
+                # Kort reasoning
+                reasoning_short = leg.reasoning.split("|")[0].strip() if leg.reasoning else ""
+
+                pick_rows.append(
+                    f'<tr style="{border_style}">'
+                    f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
+                    f'<td>{dist}m {method}</td>'
+                    f'<td style="color:{diff_color}">D{leg.difficulty:.0f}</td>'
+                    f'<td><small>{_esc(reasoning_short)}</small></td>'
+                    f'<td class="system-picks">{picks_str}</td>'
+                    f'<td>{leg.num_picks}</td>'
+                    f'</tr>'
+                )
+
+            rows_str = "".join(pick_rows)
+            cost_color = "#22c55e" if plan.total_cost <= budget else "#ef4444"
+            prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
+            is_rec = budget == 300
+
+            # Count DB2 adds
+            db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
+
+            smart_cards.append(
+                f'<div class="system-card" style="border-left:3px solid #8b5cf6">'
+                f'<div class="system-header">'
+                f'<h3>\U0001f9e0 ABCD + DB2 Smart ({budget} kr){"  ★ NY" if is_rec else ""}</h3>'
+                f'<span class="system-meta">A/B kärna + DB2 skräll-radar | '
+                f'{plan.num_spikes} spik, {db2_count} lopp med DB2-gardering | '
+                f'P(hit) ≈ {prob_str}</span>'
+                f'</div>'
+                f'<div class="system-stats">'
+                f'<div class="sys-stat"><span class="sys-val">{plan.total_rows:,}</span><span class="sys-lbl">Rader</span></div>'
+                f'<div class="sys-stat"><span class="sys-val" style="color:{cost_color}">{plan.total_cost:,.0f} kr</span><span class="sys-lbl">Kostnad</span></div>'
+                f'<div class="sys-stat"><span class="sys-val">{plan.num_spikes}</span><span class="sys-lbl">Spikar</span></div>'
+                f'<div class="sys-stat"><span class="sys-val">{db2_count}</span><span class="sys-lbl">DB2-lopp</span></div>'
+                f'</div>'
+                f'<div class="table-wrap">'
+                f'<table class="system-table">'
+                f'<thead><tr>'
+                f'<th>Lopp</th><th>Info</th><th>Diff</th><th>Logik</th><th>Picks</th><th>#</th>'
+                f'</tr></thead>'
+                f'<tbody>{rows_str}</tbody>'
+                f'</table></div>'
+                f'</div>'
+            )
+    except Exception as exc:
+        import traceback
+        smart_cards.append(f'<!-- ABCD+DB2 error: {_esc(str(exc))} -->')
 
     # ── CHANSSPIK-system (Dennis mål: 25-100k utdelning) ──
     chansspik_cards = []
@@ -1776,7 +1859,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'</div>'
         )
 
-    return "".join(chansspik_cards) + "".join(cards)
+    return "".join(smart_cards) + "".join(chansspik_cards) + "".join(cards)
 
 
 def _stats_html(backlog_data: dict | None = None) -> str:

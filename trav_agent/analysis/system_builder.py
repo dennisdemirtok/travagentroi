@@ -528,11 +528,25 @@ def _abcd_db2_smart(
         sorted_by_score = sorted(entries, key=lambda e: e.super_score, reverse=True)
 
         # DB2 ranking: sortera efter effective_form (lägre = snabbare = bättre)
+        # Tillägg-korrigering: hästar med tillägg (extra distans) får penalty
+        # pga taktisk nackdel — måste springa fortare bara för att hänga med.
+        # ~0.3s per 20m tillägg (konservativ uppskattning)
+        race_base_dist = race.distance
         valid_ef = [
             e for e in entries
             if e.dennis_effective_form and e.dennis_effective_form > 0
         ]
-        db2_sorted = sorted(valid_ef, key=lambda e: e.dennis_effective_form)
+
+        def db2_adjusted_form(e):
+            """Effective form med tilläggsjustering."""
+            ef = e.dennis_effective_form
+            if race_base_dist > 0 and e.distance > race_base_dist:
+                extra_m = e.distance - race_base_dist
+                # ~0.3s penalty per 20m tillägg (taktisk nackdel + extra distans)
+                ef += extra_m * 0.015  # 0.015 s/m ≈ 0.3s per 20m
+            return ef
+
+        db2_sorted = sorted(valid_ef, key=db2_adjusted_form)
         db2_rank_map = {
             e.post_position: idx + 1
             for idx, e in enumerate(db2_sorted)
@@ -588,27 +602,28 @@ def _abcd_db2_smart(
             "sorted": sorted_by_score,
         })
 
-    # ── Hitta bästa spike-lopp: A-häst + lägst difficulty ──
-    spike_candidates = [
-        (i, rd) for i, rd in enumerate(race_data)
-        if rd["has_a"]
-    ]
-    spike_idx = -1
-    if spike_candidates:
-        # Bästa spike = lägst difficulty bland de med A-häst
-        spike_idx = min(spike_candidates, key=lambda x: x[1]["diff"])[0]
-    else:
-        # Fallback: spike lättaste loppet (som spike_easiest)
-        spike_idx = min(range(len(race_data)), key=lambda i: race_data[i]["diff"])
+    # ── MULTI-SPIKE: spika ALLA lopp med ensam A-häst ──
+    # Dennis-insikt: "om modellen säger A-häst, ska vi spika den"
+    # Fler spikar = fler rader kvar till gardering i osäkra lopp
+    spike_indices = set()
+    for i, rd in enumerate(race_data):
+        if len(rd["a_horses"]) == 1:
+            # Ensam A-häst → SPIK
+            spike_indices.add(i)
+
+    # Fallback: om inga A-hästar finns, spika lättaste loppet
+    if not spike_indices:
+        easiest = min(range(len(race_data)), key=lambda i: race_data[i]["diff"])
+        spike_indices.add(easiest)
 
     # ── Bygg picks per lopp ──
-    all_picks_data = []  # (race_idx, picks_list, leg_type, reasoning)
+    all_picks_data = []
 
     for i, rd in enumerate(race_data):
         race = rd["race"]
         diff = rd["diff"]
 
-        if i == spike_idx:
+        if i in spike_indices:
             # SPIKE: 1 val — A-hästen eller rank-1
             if rd["a_horses"]:
                 picks = [rd["a_horses"][0].post_position]
@@ -618,21 +633,19 @@ def _abcd_db2_smart(
             all_picks_data.append({
                 "race_idx": i,
                 "picks": picks,
-                "core_count": 1,
+                "b_count": 0,
                 "db2_adds": 0,
-                "reasoning": f"SPIK — {'A-häst' if rd['has_a'] else 'rank 1'}, diff {diff:.0f}",
+                "db2_protected": 0,
+                "is_spike": True,
+                "reasoning": f"SPIK — A-häst, diff {diff:.0f}",
             })
             continue
 
         # ICKE-SPIKE: A+B kärna + DB2 outsiders
         #
-        # Nyckelidé: i svåra/medel-lopp (diff ≥ 25), byt ut svagaste B
-        # mot DB2-outsider om DB2-outsider har bättre tidsform.
-        # I riktigt LÄTTA lopp (diff < 25), behåll rena A+B.
-        #
-        # DB2 rank ≤ 2 outsiders är SKYDDADE — överlever budget-trim fas 1.
-        # V85 maj 23: Avd 6 (diff 19, DB2:3) och Avd 7 (diff 34, DB2:2)
-        # missades pga trim + högt tröskelvärde. Sänkt till 25, skydd tillagt.
+        # Alla B-hästar är HELIGA — trimmas aldrig bort.
+        # DB2-swap i svåra/medel-lopp (diff ≥ 25).
+        # DB2 rank ≤ 2 outsiders är skyddade i trim.
 
         core_picks = []
         for entry in rd["a_horses"]:
@@ -642,30 +655,30 @@ def _abcd_db2_smart(
         b_list = list(rd["b_horses"])
         swapped = []
         if diff >= 25 and rd["db2_outsiders"] and len(b_list) >= 2:
-            # Hitta svagaste B (högst DB2-rank = sämst tidsform)
             b_db2 = rd["b_with_db2"]
             if b_db2:
                 weakest_b = max(b_db2, key=lambda x: x[1])
                 best_db2_outsider = rd["db2_outsiders"][0]
 
-                # Swap om DB2-outsider har klart bättre tidsform
-                # Sänkt krav: DB2 rank ≤ 2 och svagaste B har DB2 rank ≥ 4
                 if (
                     best_db2_outsider[1] <= 2
                     and weakest_b[1] >= 4
-                    and len(b_list) >= 2  # Behåll minst 1 B
+                    and len(b_list) >= 2
                 ):
                     b_list = [e for e in b_list if e.post_position != weakest_b[0].post_position]
                     swapped.append(
                         f"↔{weakest_b[0].post_position}→"
                         f"{best_db2_outsider[0].post_position}(DB2:{best_db2_outsider[1]})"
                     )
-                    # Lägg till DB2-outsider som ersättning
                     core_picks.append(best_db2_outsider[0].post_position)
 
+        # ALLA B-hästar är med (heliga — aldrig trimmas)
+        b_positions = set()
         for entry in b_list:
             if entry.post_position not in core_picks:
                 core_picks.append(entry.post_position)
+            b_positions.add(entry.post_position)
+        b_count = len(b_positions)
 
         # Säkerställ minst 2 picks
         if len(core_picks) < 2:
@@ -675,8 +688,7 @@ def _abcd_db2_smart(
                 if len(core_picks) >= 2:
                     break
 
-        # Lägg till DB2 outsiders som EXTRA gardering (utöver eventuell swap)
-        # Tracka rank för varje add — rank ≤ 2 blir "skyddade" i budget-trim
+        # Lägg till DB2 outsiders som EXTRA gardering
         db2_add_count = 0
         db2_protected_count = 0
         db2_added = []
@@ -698,39 +710,71 @@ def _abcd_db2_smart(
         all_picks_data.append({
             "race_idx": i,
             "picks": core_picks,
-            "core_count": len(core_picks) - db2_add_count,
+            "b_count": b_count,  # Antal B-hästar (heliga)
             "db2_adds": db2_add_count,
-            "db2_protected": db2_protected_count,  # Rank ≤ 2: skyddade mot fas 1 trim
+            "db2_protected": db2_protected_count,
+            "is_spike": False,
             "reasoning": " | ".join(reasoning_parts),
         })
 
-    # ── Budget-fyllning: expandera till budget ──
-    # Smart-kärnan (A+B+DB2) ger ofta bara 300-500 rader vid 1500kr budget.
-    # Fyll upp genom att lägga till nästa rankat häst i svåraste lopp först.
-    # Detta ger samma approach som spike_easiest (top-N) men med DB2-kärna bevarad.
+    # ── Budget-hantering ──
     def total_rows():
         r = 1
         for pd in all_picks_data:
             r *= len(pd["picks"])
         return r
 
-    # Sortera lopp efter svårighetsgrad (svårast först → mest nytta av extra pick)
-    non_spike = [
-        (j, pd) for j, pd in enumerate(all_picks_data)
-        if j != spike_idx
-    ]
+    # ── Fas 0: Budget-trimning INNAN fyllning ──
+    # Om kärnan (A+B+DB2) redan överstiger budget, trimma:
+    #   0a: Ta bort oskyddade DB2-adds (rank 3)
+    #   0b: Ta bort skyddade DB2 + C-fills
+    #   B-hästar trimmas ALDRIG.
+
+    # Fas 0a: Ta bort oskyddade DB2-adds
+    while total_rows() > max_rows:
+        removable = [
+            (j, pd) for j, pd in enumerate(all_picks_data)
+            if not pd["is_spike"]
+            and pd["db2_adds"] > pd.get("db2_protected", 0)
+            and len(pd["picks"]) > max(2, pd["b_count"] + len(race_data[pd["race_idx"]]["a_horses"]))
+        ]
+        if not removable:
+            break
+        widest_j = max(removable, key=lambda x: len(x[1]["picks"]))[0]
+        pd = all_picks_data[widest_j]
+        pd["picks"].pop()
+        pd["db2_adds"] -= 1
+
+    # Fas 0b: Ta bort skyddade DB2-adds (men ALDRIG under A+B count)
+    while total_rows() > max_rows:
+        ab_floor = lambda pd: pd["b_count"] + len(race_data[pd["race_idx"]]["a_horses"])
+        candidates = [
+            (j, pd) for j, pd in enumerate(all_picks_data)
+            if not pd["is_spike"]
+            and len(pd["picks"]) > max(2, ab_floor(pd))
+        ]
+        if not candidates:
+            break
+        widest_j = max(candidates, key=lambda x: len(x[1]["picks"]))[0]
+        pd = all_picks_data[widest_j]
+        pd["picks"].pop()
+        if pd["db2_adds"] > 0:
+            pd["db2_adds"] -= 1
+            if pd.get("db2_protected", 0) > 0:
+                pd["db2_protected"] -= 1
+
+    # ── Fas 1: Budget-fyllning — expandera till budget ──
+    # Med multi-spike frigörs rader. Fyll svåraste lopp först.
     non_spike_by_diff = sorted(
-        non_spike,
+        [(j, pd) for j, pd in enumerate(all_picks_data) if not pd["is_spike"]],
         key=lambda x: race_data[x[1]["race_idx"]]["diff"],
         reverse=True,
     )
 
-    # Expandera tills vi når budget (max 100 iterationer som säkerhet)
     for _ in range(100):
         if total_rows() >= max_rows:
             break
 
-        # Hitta bästa expansion: lopp med högst difficulty som har plats
         expanded = False
         for j, pd in non_spike_by_diff:
             rd = race_data[pd["race_idx"]]
@@ -738,14 +782,12 @@ def _abcd_db2_smart(
             n_starters = rd["n_starters"]
 
             if len(current_picks) >= n_starters:
-                continue  # Alla hästar redan valda
+                continue
 
-            # Kan vi lägga till en häst utan att spräcka budget?
             new_rows = total_rows() * (len(pd["picks"]) + 1) // len(pd["picks"])
             if new_rows > max_rows:
                 continue
 
-            # Hitta nästa bästa häst (super_score ordning) som inte redan är vald
             for entry in rd["sorted"]:
                 if entry.post_position not in current_picks:
                     pd["picks"].append(entry.post_position)
@@ -755,45 +797,7 @@ def _abcd_db2_smart(
                 break
 
         if not expanded:
-            break  # Inget mer att expandera
-
-    # ── Budget-trimning (3 faser) ──
-    # Fas 1: Ta bort OSKYDDADE DB2-adds (rank 3, svagaste)
-    # DB2 rank ≤ 2 är skyddade — de överlever denna fas
-    while total_rows() > max_rows:
-        removable = [
-            (j, pd) for j, pd in enumerate(all_picks_data)
-            if pd["db2_adds"] > pd.get("db2_protected", 0)  # Bara oskyddade
-            and len(pd["picks"]) > 2
-        ]
-        if not removable:
             break
-        widest_j = max(removable, key=lambda x: len(x[1]["picks"]))[0]
-        pd = all_picks_data[widest_j]
-        pd["picks"].pop()  # Ta bort sist tillagda (svagaste DB2 = rank 3)
-        pd["db2_adds"] -= 1
-
-    # Fas 2: Om fortfarande för dyrt, reducera B-hästar och skyddade DB2
-    while total_rows() > max_rows:
-        candidates = [
-            (j, pd) for j, pd in enumerate(all_picks_data)
-            if len(pd["picks"]) > 2 and j != spike_idx
-        ]
-        if not candidates:
-            candidates = [
-                (j, pd) for j, pd in enumerate(all_picks_data)
-                if len(pd["picks"]) > 1 and j != spike_idx
-            ]
-        if not candidates:
-            break
-        widest_j = max(candidates, key=lambda x: len(x[1]["picks"]))[0]
-        pd = all_picks_data[widest_j]
-        pd["picks"].pop()
-        # Uppdatera counters
-        if pd["db2_adds"] > 0:
-            pd["db2_adds"] -= 1
-            if pd.get("db2_protected", 0) > 0:
-                pd["db2_protected"] -= 1
 
     # ── Bygg LegAssignment-objekt ──
     total_log_prob = 0.0

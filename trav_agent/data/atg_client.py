@@ -288,10 +288,21 @@ class ATGClient:
 
     # ── Fullständig omgångshämtning ──────────────────────────────────────────
 
-    async def fetch_full_round(self, game_type: str, day: date) -> Optional[GameRound]:
+    async def fetch_full_round(
+        self,
+        game_type: str,
+        day: date,
+        *,
+        skip_horse_history: bool = False,
+    ) -> Optional[GameRound]:
         """Hämta en komplett spelomgång med alla lopp och hästar.
 
         Detta är huvudmetoden — den hämtar allt som behövs för analys.
+
+        Args:
+            skip_horse_history: Hoppa över /horses/{id}/results-anropet
+                (som alltid går mot nätet). Använd för offline-regenerering
+                från cache, t.ex. backlog-bygge, för att inte spamma ATG.
         """
         # 1. Hitta game_id
         game_id = await self.find_game_id(game_type, day)
@@ -313,16 +324,18 @@ class ATGClient:
                 self._enrich_race(game_round.races[i], detailed)
 
         # 5. Hämta färsk starthistorik per häst via /horses/{id}/results
-        #    och fyll i saknade starter som speldata kan missa (ofta veckor efter)
-        horse_ids_fetched: set[int] = set()
-        for race in game_round.races:
-            for entry in race.entries:
-                horse_id = entry.horse.id
-                if horse_id and horse_id not in horse_ids_fetched:
-                    horse_ids_fetched.add(horse_id)
-                    records = await self.get_horse_results(horse_id)
-                    if records:
-                        self._merge_missing_starts(entry.horse, records)
+        #    och fyll i saknade starter som speldata kan missa (ofta veckor efter).
+        #    Hoppas över i offline-läge (cachat speldata har redan past_starts).
+        if not skip_horse_history:
+            horse_ids_fetched: set[int] = set()
+            for race in game_round.races:
+                for entry in race.entries:
+                    horse_id = entry.horse.id
+                    if horse_id and horse_id not in horse_ids_fetched:
+                        horse_ids_fetched.add(horse_id)
+                        records = await self.get_horse_results(horse_id)
+                        if records:
+                            self._merge_missing_starts(entry.horse, records)
 
         logger.info(
             f"Hämtade {game_round.game_type} {game_round.round_date}: "

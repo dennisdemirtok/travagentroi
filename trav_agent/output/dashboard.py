@@ -4212,6 +4212,10 @@ border-radius:10px;border:1px solid #e5e7eb}}
 .hamburger-btn svg{{display:block}}
 .sidebar-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99;
 backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}}
+.swipe-hint{{position:fixed;top:50%;transform:translateY(-50%);z-index:300;pointer-events:none;
+background:rgba(30,41,59,0.9);color:#fff;font-weight:700;font-size:.78rem;padding:8px 14px;
+border-radius:999px;opacity:0;transition:opacity .2s ease}}
+.swipe-hint.show{{opacity:1}}
 
 /* ── Mobile bottom nav ── */
 .mobile-bottom-nav{{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
@@ -4287,6 +4291,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
   </div>
 </nav>
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+<div class="swipe-hint" id="swipe-hint"></div>
 
 <div class="app-layout">
 
@@ -4655,6 +4660,88 @@ function toggleMobileSidebar(){{
   if(sb)sb.classList.toggle('mobile-open');
   if(ov)ov.classList.toggle('open');
 }}
+function closeMobileSidebar(){{
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  if(sb)sb.classList.remove('mobile-open');
+  if(ov)ov.classList.remove('open');
+}}
+
+// ── Swipe gestures (mobile) ──
+(function(){{
+  if(!('ontouchstart' in window))return;
+  let x0=null,y0=null,t0=0,tracking=false;
+  const EDGE=28, MIN_X=60, MAX_Y=50, MAX_T=600;
+
+  // List of division numbers present in the sidebar, ascending
+  function divNums(){{
+    return Array.from(document.querySelectorAll('#sidebar-dashboard .div-item[data-div]'))
+      .map(b=>parseInt(b.dataset.div,10)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  }}
+  function currentDiv(){{
+    const a=document.querySelector('#sidebar-dashboard .div-item.active[data-div]');
+    return a?parseInt(a.dataset.div,10):null;
+  }}
+  function dashboardActive(){{
+    const v=document.getElementById('view-dashboard');
+    return v&&v.classList.contains('active');
+  }}
+  function inRaceSection(){{
+    const sec=document.querySelector('#view-dashboard .dashboard-section.active');
+    return sec&&sec.id&&sec.id.indexOf('s-race-')===0;
+  }}
+  function flash(dir){{
+    const el=document.getElementById('swipe-hint');
+    if(!el)return;
+    el.textContent=dir>0?'Avd \\u2192':'\\u2190 Avd';
+    el.style.left=dir>0?'auto':'14px';
+    el.style.right=dir>0?'14px':'auto';
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t=setTimeout(()=>el.classList.remove('show'),450);
+  }}
+  function go(dir){{
+    if(!dashboardActive()||!inRaceSection())return false;
+    const nums=divNums();if(!nums.length)return false;
+    let cur=currentDiv();
+    let idx=cur==null?0:nums.indexOf(cur);
+    if(idx<0)idx=0;
+    const next=idx+(dir>0?1:-1);
+    if(next<0||next>=nums.length)return false;
+    showDivision(nums[next]);
+    flash(dir);
+    return true;
+  }}
+
+  document.addEventListener('touchstart',function(e){{
+    if(e.touches.length!==1)return;
+    const t=e.touches[0];
+    // Ignore swipes that start inside a horizontally scrollable table —
+    // those should scroll the table, not flip avdelning.
+    const tw=t.target&&t.target.closest&&t.target.closest('.table-wrap');
+    if(tw&&tw.scrollWidth>tw.clientWidth+4){{tracking=false;x0=null;return;}}
+    x0=t.clientX;y0=t.clientY;t0=Date.now();tracking=true;
+  }},{{passive:true}});
+
+  document.addEventListener('touchend',function(e){{
+    if(!tracking||x0==null)return;tracking=false;
+    const t=(e.changedTouches&&e.changedTouches[0])||null;if(!t)return;
+    const dx=t.clientX-x0, dy=t.clientY-y0, dt=Date.now()-t0;
+    x0=null;y0=null;
+    if(dt>MAX_T)return;
+    if(Math.abs(dx)<MIN_X||Math.abs(dy)>MAX_Y)return;
+    if(Math.abs(dx)<Math.abs(dy)*1.5)return;
+    const sb=document.getElementById('sidebar');
+    const sbOpen=sb&&sb.classList.contains('mobile-open');
+    // Edge swipe right from left edge → open sidebar
+    if(dx>0&&!sbOpen&&(t.clientX-dx)<=EDGE){{toggleMobileSidebar();return;}}
+    // Swipe left while sidebar open → close it
+    if(dx<0&&sbOpen){{closeMobileSidebar();return;}}
+    if(sbOpen)return;
+    // Otherwise navigate divisions: swipe left → next, swipe right → prev
+    go(dx<0?1:-1);
+  }},{{passive:true}});
+}})();
 
 // ── Clock ──
 (function(){{

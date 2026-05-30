@@ -25,6 +25,7 @@ from trav_agent.data.atg_client import ATGClient
 from trav_agent.analysis.composite import CompositeAnalyzer
 from trav_agent.betting.system_generator import SystemGenerator
 from trav_agent.backtest.runner import BacktestRunner
+sys.path.insert(0, str(Path(__file__).parent / "analysis_scripts"))
 from roi_backtest_integrated import count_correct, _count_winning_rows_in_system
 
 # Alla speltyper som ska ingå i backlogen
@@ -149,15 +150,26 @@ async def main():
     print(f"  Totalt: {len(dates_to_load)} omgångar att processa")
 
     rounds = []
+    skipped_unfinished = 0
     for game_type, game_date in dates_to_load:
         try:
-            gr = await client.fetch_full_round(game_type, date.fromisoformat(game_date))
-            if gr and gr.races:
-                rounds.append(gr)
+            # Offline-läge: hoppa /horses/{id}/results (alltid nät) — cachat
+            # speldata räcker för backtest och vi spammar inte ATG.
+            gr = await client.fetch_full_round(
+                game_type, date.fromisoformat(game_date), skip_horse_history=True
+            )
+            if not gr or not gr.races:
+                continue
+            # Bara avslutade omgångar med utdelningar är meningsfulla i backlogen
+            if not (gr.is_finished and gr.dividends):
+                if not (all(r.result_order for r in gr.races) and gr.dividends):
+                    skipped_unfinished += 1
+                    continue
+            rounds.append(gr)
         except Exception:
             continue
 
-    print(f"Laddade {len(rounds)} omgångar")
+    print(f"Laddade {len(rounds)} omgångar ({skipped_unfinished} ofärdiga hoppades över)")
 
     # ── Full leakage prevention (3 lager) ──
     # 1. Ta bort framtida starter + omberäkna karriärstatistik
@@ -165,18 +177,24 @@ async def main():
     for gr in rounds:
         BacktestRunner._filter_future_starts(gr)
         BacktestRunner._neutralize_closing_odds(gr)
+        for race in gr.races:
+            for entry in race.entries:
+                entry.horse.recompute_career_from_starts()
 
     for gr in rounds:
         analyzer.analyze_round(gr)
     print("Alla omgångar analyserade (full leakage prevention aktiv)\n")
 
-    # ── Strategier v6: Bara validerade strategier (no-leakage backtest) ──
-    # D_smart bäst av SystemGenerator (-33% ROI vid 500kr)
-    # Alla system-strategier är olönsamma — vinnarspel (Bet) är den enda edgen
+    # ── Strategier v7: Bara D_smart (ersätter gamla A/B/C + fake I_streck/Q_dom) ──
+    # D_smart = SystemGenerator smart-strategi. De gamla A_union/B_marknad/C_bred
+    # och fake-strategierna (I_streck_*, Q_dom_*, D_market_gap) var alla A_union
+    # under huven (data leakage) — borttagna helt ur backlogen.
     # (strategy, filter, budget, max_spikes, spike_conf, spike_gap, label)
     strategies = [
         ("D_smart",   "none",  500, 0, 0, 0, "D_smart_500"),
         ("D_smart",   "none", 1000, 0, 0, 0, "D_smart_1000"),
+        ("D_smart",   "none", 1500, 0, 0, 0, "D_smart_1500"),
+        ("D_smart",   "none", 2000, 0, 0, 0, "D_smart_2000"),
     ]
 
     all_entries = []
@@ -407,6 +425,15 @@ async def main():
     with open("backlog.json", "w") as f:
         json.dump(output, f, indent=2, default=str)
     print(f"Sparat till backlog.json ({len(all_entries)} entries)")
+
+    # Komprimera till .gz (appen laddar .gz först)
+    import gzip
+    with open("backlog.json", "rb") as f_in, gzip.open("backlog.json.gz", "wb") as f_out:
+        f_out.write(f_in.read())
+    gz_size = Path("backlog.json.gz").stat().st_size
+    json_size = Path("backlog.json").stat().st_size
+    print(f"Komprimerat till backlog.json.gz ({gz_size/1024/1024:.1f} MB, "
+          f"ratio {gz_size/json_size:.1%})")
 
 
 if __name__ == "__main__":

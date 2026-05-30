@@ -1241,6 +1241,91 @@ def dashboard(game_type: str | None, days: tuple[str, ...], port: int,
         server.shutdown()
 
 
+# ── Tips-kommandon ───────────────────────────────────────────────────────────
+
+
+@cli.group()
+def tips():
+    """Proffstips-pipeline — strukturera artikeltext + bygg konsensus."""
+    pass
+
+
+@tips.command("ingest")
+@click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
+@click.argument("day", type=str)
+@click.argument("source_name", type=str)
+@click.option("--file", "-f", "file_path", type=str, default=None,
+              help="Textfil med rå artikeltext (annars läses stdin)")
+@click.option("--no-rebuild", is_flag=True, default=False,
+              help="Bygg INTE om konsensus efteråt")
+def tips_ingest(game_type: str, day: str, source_name: str,
+                file_path: str | None, no_rebuild: bool):
+    """Strukturera rå artikeltext → tips_cache-källa via LLM.
+
+    Ex: python -m trav_agent.cli tips ingest V85 2026-05-30 expressen_edholm -f artikel.txt
+        pbpaste | python -m trav_agent.cli tips ingest V85 2026-05-30 sharps_jensa
+    """
+    if file_path:
+        raw_text = open(file_path, encoding="utf-8").read()
+    else:
+        click.echo("Klistra in artikeltext, avsluta med Ctrl-D:", err=True)
+        raw_text = sys.stdin.read()
+
+    if not raw_text.strip():
+        click.echo("✗ Ingen text given.")
+        return
+
+    async def _run():
+        client = ATGClient()
+        d = parse_date(day)
+        gt = game_type.upper()
+        click.echo(f"Hämtar startlista för roster ({gt} {d})...")
+        game_round = await client.fetch_full_round(gt, d)
+        roster = None
+        n_legs = 8
+        if game_round:
+            from .data.tips_pipeline import build_roster_from_round
+            roster = build_roster_from_round(game_round)
+            n_legs = len(game_round.races)
+        else:
+            click.echo("⚠ Ingen startlista — LLM mappar utan roster.")
+
+        from .data.tips_pipeline import ingest_raw_text
+        click.echo(f"Strukturerar källa '{source_name}' via LLM...")
+        result = await ingest_raw_text(
+            gt, str(d), source_name, raw_text,
+            roster=roster, rebuild_consensus=not no_rebuild, n_legs=n_legs,
+        )
+        if not result.get("ok"):
+            click.echo(f"✗ {result.get('error', 'okänt fel')}")
+            return
+        click.echo(f"✓ Källa '{source_name}' sparad till tips_cache/{gt}_{d}.json")
+        et = result.get("expert_tips") or {}
+        if et:
+            click.echo("\nNytt expertkonsensus (leg → hästar):")
+            for leg in sorted(et, key=int):
+                click.echo(f"  Avd {leg}: {et[leg]}")
+
+    asyncio.run(_run())
+
+
+@tips.command("rebuild")
+@click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
+@click.argument("day", type=str)
+def tips_rebuild(game_type: str, day: str):
+    """Räkna om expert_tips-konsensus från befintliga källor i cachen."""
+    from .data.tips_pipeline import build_consensus_from_sources
+    gt = game_type.upper()
+    d = parse_date(day)
+    res = build_consensus_from_sources(gt, str(d))
+    if not res:
+        click.echo("✗ Kunde inte bygga konsensus (saknas cache/källor?).")
+        return
+    click.echo(f"✓ expert_tips uppdaterat i tips_cache/{gt}_{d}.json")
+    for leg in sorted(res["expert_tips"], key=int):
+        click.echo(f"  Avd {leg}: {res['expert_tips'][leg]}")
+
+
 # ── DB-kommandon ─────────────────────────────────────────────────────────────
 
 

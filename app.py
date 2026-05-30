@@ -607,6 +607,91 @@ async def api_bets(game_type: str = None, profile: str = "sniper", days: int = 3
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# ── Proffstips-pipeline ────────────────────────────────────────────────────
+
+@app.post("/api/tips/ingest")
+async def api_tips_ingest(request: Request):
+    """Strukturera rå artikeltext → tips_cache-källa + bygg om konsensus.
+
+    Body: {game_type, day, source_name, text, rebuild?(bool)}
+    """
+    if not ANTHROPIC_API_KEY:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY saknas"}, status_code=500)
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    game_type = (data.get("game_type") or "").upper()
+    day = data.get("day") or ""
+    source_name = data.get("source_name") or ""
+    text = data.get("text") or ""
+    rebuild = data.get("rebuild", True)
+    if not (game_type and day and source_name and text.strip()):
+        return JSONResponse(
+            {"error": "game_type, day, source_name och text krävs"}, status_code=400
+        )
+
+    # Roster från cachad/ny omgång så LLM mappar namn → nummer
+    key = f"{game_type}/{day}"
+    game_round = _round_cache.get(key)
+    if not game_round:
+        try:
+            client = ATGClient()
+            gr = await client.fetch_full_round(game_type, date.fromisoformat(day))
+            if gr:
+                CompositeAnalyzer().analyze_round(gr)
+                _round_cache[key] = gr
+                game_round = gr
+        except Exception as e:
+            logger.warning(f"tips ingest: kunde inte hämta omgång: {e}")
+
+    roster = None
+    n_legs = 8
+    if game_round:
+        from trav_agent.data.tips_pipeline import build_roster_from_round
+        roster = build_roster_from_round(game_round)
+        n_legs = len(game_round.races)
+
+    try:
+        from trav_agent.data.tips_pipeline import ingest_raw_text
+        result = await ingest_raw_text(
+            game_type, day, source_name, text,
+            roster=roster, api_key=ANTHROPIC_API_KEY,
+            rebuild_consensus=rebuild, n_legs=n_legs,
+        )
+        # Invalidera tips-cachen så chatten ser nya källan direkt
+        _tips_cache.pop(f"{game_type}:{day}", None)
+        status = 200 if result.get("ok") else 422
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        logger.error(f"tips ingest error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/tips/rebuild")
+async def api_tips_rebuild(request: Request):
+    """Räkna om expert_tips-konsensus från befintliga källor."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+    game_type = (data.get("game_type") or "").upper()
+    day = data.get("day") or ""
+    if not (game_type and day):
+        return JSONResponse({"error": "game_type och day krävs"}, status_code=400)
+    try:
+        from trav_agent.data.tips_pipeline import build_consensus_from_sources
+        res = build_consensus_from_sources(game_type, day)
+        if not res:
+            return JSONResponse({"error": "ingen cache/källor"}, status_code=404)
+        _tips_cache.pop(f"{game_type}:{day}", None)
+        return JSONResponse({"ok": True, **res})
+    except Exception as e:
+        logger.error(f"tips rebuild error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── AI Chat (SSE Streaming) ────────────────────────────────────────────────
 
 @app.post("/api/chat")

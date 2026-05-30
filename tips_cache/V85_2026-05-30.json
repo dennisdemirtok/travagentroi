@@ -1,0 +1,151 @@
+{
+  "game_type": "V85",
+  "round_date": "2026-05-30",
+  "track": "Solvalla — Elitloppshelgen (lördag)",
+  "leg_to_track_race": {
+    "1": 5, "2": 6, "3": 8, "4": 9, "5": 10, "6": 11, "7": 12, "8": 13
+  },
+  "sources": {
+    "proffs_konsensus": {
+      "author": "Proffskonsensus (13 experter: Aftonbladet, Expressen, Sharps, Travcash)",
+      "published": "2026-05-29",
+      "summary": "V85 Solvalla 30/5 (Elitloppshelgen). 3 enhälliga spikar: 8 Clarissa (V85-1), 1 Jackpot Mearas (V85-3, omgångens bästa), 7 Bold Eagle Sun (V85-8, 10/10 obesegrad). 2 favorit-i-fara/bankerfällor: 8 Masters Dunderbeda (V85-4) och 4 Gaining Experience (V85-7). Skrälloppen: V85-4 och V85-7.",
+      "picks": {
+        "V85-1": "SPIK: 8 Clarissa (enhälligt, alla 13 experter)",
+        "V85-2": "3 Mellby Note (splittrat: 6 Merlin Mearas / 2 Einstein Face / 5 Maker's Wall Ås / 1 Villiam Avenue)",
+        "V85-3": "SPIK: 1 Jackpot Mearas (enhälligt — omgångens bästa, bara att spika)",
+        "V85-4": "8 Masters Dunderbeda (favorit i fara). Storskräll: 14 Rania Zon",
+        "V85-5": "SPIK-strid: 5 Brother Day vs 3 Global Federation",
+        "V85-6": "SPIK: 10 Chribo Hill (trots bakspår)",
+        "V85-7": "Öppet. Skräll: 15 Harley Gema (Edholm tippar etta). Favorit i fara: 4 Gaining Experience",
+        "V85-8": "SPIK: 7 Bold Eagle Sun (10/10 obesegrad)"
+      },
+      "rankings": {
+        "V85-1": "8-4-9-5-7-10",
+        "V85-2": "3-1-6-2-5-12",
+        "V85-3": "1-4-12-10-2",
+        "V85-4": "8-15-4-14-10-1-5",
+        "V85-5": "5-3-10-7-11-1",
+        "V85-6": "10-4-1-6-8-11-9",
+        "V85-7": "4-15-7-11-9-12-1",
+        "V85-8": "7-2-9-1-10"
+      },
+      "best_spike": "1 Jackpot Mearas (V85-3) — enhälligt omgångens bästa spik",
+      "best_drag": "15 Harley Gema (V85-7) — Edholm tippar etta, Tidsrank 12,0 bäst. Även 14 Rania Zon (V85-4)",
+      "skrallar": {
+        "V85-1": [10, 7],
+        "V85-4": [14, 5],
+        "V85-5": [7],
+        "V85-6": [8, 11, 9],
+        "V85-7": [15, 11],
+        "V85-8": [10, 9]
+      }
+    },
+    "sharps_jens_sjoden": {
+      "author": "Jens Sjödén (Sharps)",
+      "summary": "Spiksystem 8/1/1/7 — breda 4,5,6,7-loppen. ~320 kr.",
+      "picks": {
+        "V85-1": "8 Clarissa (spik)",
+        "V85-3": "1 Jackpot Mearas (spik)",
+        "V85-8": "7 Bold Eagle Sun (spik)"
+      }
+    },
+    "tom_parneborg": {
+      "author": "Tom Parneborg",
+      "summary": "System ~1344 kr.",
+      "picks": {
+        "V85-1": "8",
+        "V85-2": "2,3,5,6",
+        "V85-3": "1,2,4,12",
+        "V85-4": "3,4,5,8,11,14,15",
+        "V85-5": "5",
+        "V85-6": "8,9,10,11",
+        "V85-7": "4,8,9,11,12,15",
+        "V85-8": "7"
+      }
+    },
+    "julia_bjorklund": {
+      "author": "Julia Björklund",
+      "summary": "System ~840 kr.",
+      "picks": {
+        "V85-1": "8",
+        "V85-3": "1,4",
+        "V85-4": "3,4,8,11,15",
+        "V85-5": "3",
+        "V85-7": "11,12,15",
+        "V85-8": "7"
+      }
+    },
+    "magnus_nygren": {
+      "author": "Magnus Nygren",
+      "summary": "System ~1512 kr.",
+      "picks": {
+        "V85-1": "8",
+        "V85-3": "1",
+        "V85-5": "3,5,10",
+        "V85-7": "4",
+        "V85-8": "2,7,9"
+      }
+    }
+  },
+  "spetstrid": {
+    "V85-1": {
+      "predicted_leader": "4 Urbina Southwind",
+      "confidence": "medel",
+      "contenders": ["4 Urbina Southwind", "8 Clarissa", "5 Fantastica Doda"],
+      "notes": "Tränaren vill ha tät med 4 Urbina, men 8 Clarissa kan överta. Tryck från 5 Fantastica."
+    },
+    "V85-2": {
+      "predicted_leader": "1 Villiam Avenue",
+      "confidence": "medel",
+      "contenders": ["1 Villiam Avenue", "4 Mustang Norrgård", "6 Merlin Mearas"],
+      "notes": "1 Villiam effektiv bakom bil + amerikansk vagn."
+    },
+    "V85-3": {
+      "predicted_leader": "1 Jackpot Mearas",
+      "confidence": "hög",
+      "contenders": ["1 Jackpot Mearas"],
+      "notes": "Spets från innerspår, bara att spika och bläddra."
+    },
+    "V85-4": {
+      "predicted_leader": "4 Howtoreach W.F.",
+      "confidence": "låg",
+      "contenders": ["1 Madame Mearas", "3 Evangelista", "4 Howtoreach W.F.", "8 Masters Dunderbeda"],
+      "notes": "Knapp fördel 4 Howtoreach. 8 Masters offensiv utifrån men svårt från spår 8."
+    },
+    "V85-5": {
+      "predicted_leader": "3 Global Federation",
+      "confidence": "låg",
+      "contenders": ["3 Global Federation", "5 Brother Day"],
+      "notes": "3 Global Federation & 5 Brother Day kivas — Bergh ger sig aldrig."
+    },
+    "V85-6": {
+      "predicted_leader": "6 Ebbot Rice",
+      "confidence": "medel",
+      "contenders": ["6 Ebbot Rice", "3 Blixt Lane"],
+      "notes": "Oenighet: Nils & Berglund = 6 Ebbot Rice (kan hålla hela vägen); Edholm = 3 Blixt Lane."
+    },
+    "V85-7": {
+      "predicted_leader": "4 Gaining Experience",
+      "confidence": "låg",
+      "contenders": ["1 Valla d'Gaagaa", "4 Gaining Experience"],
+      "notes": "1 Valla håller upp, 4 Gaining övertar OM felfri volt (galopperade i kvalet, voltdebut, spår 4)."
+    },
+    "V85-8": {
+      "predicted_leader": "7 Bold Eagle Sun",
+      "confidence": "hög",
+      "contenders": ["7 Bold Eagle Sun", "5 J.Kagan Brick", "1 Daniel Hazelaar"],
+      "notes": "7 Bold Eagle Sun offensiv till tät."
+    }
+  },
+  "expert_tips": {
+    "1": [8],
+    "2": [3, 6, 2],
+    "3": [1, 12],
+    "4": [8, 14, 5],
+    "5": [5, 3, 7],
+    "6": [10, 8, 11],
+    "7": [4, 15, 11],
+    "8": [7, 9]
+  }
+}

@@ -486,6 +486,7 @@ def _abcd_db2_smart(
     game_round: GameRound, max_rows: int,
     max_spikes: int | None = None,
     expert_tips: dict[int, list[int]] | None = None,
+    width_overrides: dict[int, int] | None = None,
 ) -> list[LegAssignment]:
     """ABCD + DB2 Smart system — intelligent horsval baserat på ranking-data.
 
@@ -621,13 +622,26 @@ def _abcd_db2_smart(
         # Begränsa antal spikar
         for i, _diff in spike_candidates[:max_spikes]:
             spike_indices.add(i)
+        # TVINGA fler spikar än antal ensam-A-lopp: spika lättaste återstående
+        # lopp tills vi når max_spikes (Dennis vill kunna sätta t.ex. 3 spikar
+        # även om bara 1 lopp har en ensam A-häst).
+        if len(spike_indices) < max_spikes:
+            remaining = sorted(
+                [i for i in range(len(race_data)) if i not in spike_indices],
+                key=lambda i: race_data[i]["diff"],
+            )
+            for i in remaining:
+                if len(spike_indices) >= max_spikes:
+                    break
+                spike_indices.add(i)
     else:
         # Ingen begränsning — spika ALLA ensamma A-hästar
         for i, _diff in spike_candidates:
             spike_indices.add(i)
 
-    # Fallback: om inga A-hästar finns, spika lättaste loppet
-    if not spike_indices:
+    # Fallback: om inga A-hästar finns, spika lättaste loppet.
+    # Respektera dock max_spikes=0 (användaren vill INTE ha någon spik).
+    if not spike_indices and (max_spikes is None or max_spikes > 0):
         easiest = min(range(len(race_data)), key=lambda i: race_data[i]["diff"])
         spike_indices.add(easiest)
 
@@ -747,6 +761,36 @@ def _abcd_db2_smart(
             "reasoning": " | ".join(reasoning_parts),
         })
 
+    # ── Per-lopp bredd-override (Dennis +/- knappar) — appliceras FÖRE budget ──
+    # Manuellt val LÅSER loppet: budget-trim/fyllning rör det aldrig, och övriga
+    # lopp anpassas runt det. Behåller starkaste picks (by super_score), fyller
+    # på med nästa bästa, eller kapar svagaste.
+    for pd in all_picks_data:
+        pd["locked"] = False
+    if width_overrides:
+        for pd in all_picks_data:
+            rn = race_data[pd["race_idx"]]["race"].race_number
+            if rn not in width_overrides:
+                continue
+            rd = race_data[pd["race_idx"]]
+            target = max(1, min(int(width_overrides[rn]), rd["n_starters"]))
+            score_map = {e.post_position: e.super_score for e in rd["sorted"]}
+            ordered = sorted(
+                pd["picks"], key=lambda p: score_map.get(p, 0.0), reverse=True
+            )
+            if len(ordered) > target:
+                ordered = ordered[:target]
+            else:
+                for e in rd["sorted"]:
+                    if len(ordered) >= target:
+                        break
+                    if e.post_position not in ordered:
+                        ordered.append(e.post_position)
+            pd["picks"] = ordered
+            pd["locked"] = True
+            pd["manual_override"] = True
+            pd["reasoning"] = f"MANUELL bredd ({len(ordered)} val) | " + pd["reasoning"]
+
     # ── Budget-hantering ──
     def total_rows():
         r = 1
@@ -764,7 +808,7 @@ def _abcd_db2_smart(
     while total_rows() > max_rows:
         removable = [
             (j, pd) for j, pd in enumerate(all_picks_data)
-            if not pd["is_spike"]
+            if not pd["is_spike"] and not pd.get("locked")
             and pd["db2_adds"] > pd.get("db2_protected", 0)
             and len(pd["picks"]) > max(2, pd["b_count"] + len(race_data[pd["race_idx"]]["a_horses"]))
         ]
@@ -780,7 +824,7 @@ def _abcd_db2_smart(
         ab_floor = lambda pd: pd["b_count"] + len(race_data[pd["race_idx"]]["a_horses"])
         candidates = [
             (j, pd) for j, pd in enumerate(all_picks_data)
-            if not pd["is_spike"]
+            if not pd["is_spike"] and not pd.get("locked")
             and len(pd["picks"]) > max(2, ab_floor(pd))
         ]
         if not candidates:
@@ -793,10 +837,37 @@ def _abcd_db2_smart(
             if pd.get("db2_protected", 0) > 0:
                 pd["db2_protected"] -= 1
 
+    # ── Fas 0c: HÅRD budget-cap — trimma svagaste B-hästar ──
+    # Budget är en HÅRD gräns. När A+B-golvet fortfarande överstiger budget
+    # (t.ex. många heliga B-hästar i breda lopp), kapar vi svagaste icke-A-hästen
+    # från det BREDASTE loppet. A-hästar (modellens spik-val) bevaras in i det
+    # sista; bara om ett lopp består enbart av A-hästar kapas svagaste A.
+    while total_rows() > max_rows:
+        candidates = [
+            (j, pd) for j, pd in enumerate(all_picks_data)
+            if not pd["is_spike"] and not pd.get("locked") and len(pd["picks"]) > 1
+        ]
+        if not candidates:
+            break
+        widest_j = max(candidates, key=lambda x: len(x[1]["picks"]))[0]
+        pd = all_picks_data[widest_j]
+        rd = race_data[pd["race_idx"]]
+        a_positions = {e.post_position for e in rd["a_horses"]}
+        score_map = {e.post_position: e.super_score for e in rd["sorted"]}
+        # Föredra att kapa icke-A-hästar (svagaste B först); annars svagaste A
+        removable = [p for p in pd["picks"] if p not in a_positions]
+        if not removable:
+            removable = list(pd["picks"])
+        weakest = min(removable, key=lambda p: score_map.get(p, 0.0))
+        pd["picks"].remove(weakest)
+        if weakest not in a_positions and pd["b_count"] > 0:
+            pd["b_count"] -= 1
+
     # ── Fas 1: Budget-fyllning — expandera till budget ──
     # Med multi-spike frigörs rader. Fyll svåraste lopp först.
     non_spike_by_diff = sorted(
-        [(j, pd) for j, pd in enumerate(all_picks_data) if not pd["is_spike"]],
+        [(j, pd) for j, pd in enumerate(all_picks_data)
+         if not pd["is_spike"] and not pd.get("locked")],
         key=lambda x: race_data[x[1]["race_idx"]]["diff"],
         reverse=True,
     )
@@ -884,6 +955,7 @@ def build_system(
     proffs_data: Optional[dict] = None,
     max_spikes: int | None = None,
     expert_tips: dict[int, list[int]] | None = None,
+    width_overrides: dict[int, int] | None = None,
 ) -> SystemPlan:
     """Bygg system — den ENDA bevisade strategin.
 
@@ -918,6 +990,7 @@ def build_system(
         return _build_smart_system(
             game_round, budget, row_price, max_rows, proffs_data,
             max_spikes=max_spikes, expert_tips=expert_tips,
+            width_overrides=width_overrides,
         )
 
     if strategy == "chansspik":
@@ -1053,6 +1126,7 @@ def _build_smart_system(
     proffs_data: Optional[dict] = None,
     max_spikes: int | None = None,
     expert_tips: dict[int, list[int]] | None = None,
+    width_overrides: dict[int, int] | None = None,
 ) -> SystemPlan:
     """ABCD + DB2 Smart system.
 
@@ -1061,11 +1135,13 @@ def _build_smart_system(
 
     max_spikes: Begränsa antal spikar (None = auto, alla ensamma A-hästar)
     expert_tips: {race_number: [horse_numbers]} — extra picks från expert/användare
+    width_overrides: {race_number: antal_hästar} — manuell bredd per lopp (+/-)
     """
     legs, predicted_prob = _abcd_db2_smart(
         game_round, max_rows,
         max_spikes=max_spikes,
         expert_tips=expert_tips,
+        width_overrides=width_overrides,
     )
 
     plan = SystemPlan(

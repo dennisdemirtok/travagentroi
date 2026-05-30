@@ -442,12 +442,16 @@ async def api_system(
     budget: int = 1500,
     max_spikes: int = -1,
     expert_tips: str = "",
+    width: str = "",
+    auto_expert: int = 1,
 ):
     """Build a Smart system with custom parameters (AJAX from dashboard).
 
-    budget: 300-5000kr
-    max_spikes: -1 = auto (all lone A-horses), 0-5 = limit
-    expert_tips: comma-separated "race:horse,race:horse" e.g. "1:5,3:12,6:2"
+    budget: 300-5000kr (hård cap — trimmar svagaste B-hästar för att rymmas)
+    max_spikes: -1 = auto (all lone A-horses), 0-8 = exakt antal (tvingar fler)
+    expert_tips: comma-separated "race:horse,race:horse" e.g. "5:8,8:1,13:7"
+    width: per-lopp bredd-override "race:n" e.g. "9:6,12:9" (+/- knappar)
+    auto_expert: 1 = auto-ladda expertkonsensus från tips_cache om inget anges
     """
     game_type = game_type.upper()
     if game_type not in GAME_TYPES:
@@ -461,7 +465,7 @@ async def api_system(
     budget = max(100, min(10000, budget))
     spikes_param = None if max_spikes < 0 else max(0, min(8, max_spikes))
 
-    # Parse expert_tips: "1:5,3:12,6:2" → {1: [5], 3: [12], 6: [2]}
+    # Parse expert_tips: "5:8,8:1,13:7" → {5: [8], 8: [1], 13: [7]}
     expert_dict: dict[int, list[int]] = {}
     if expert_tips:
         for part in expert_tips.split(","):
@@ -472,6 +476,37 @@ async def api_system(
                     r = int(race_num.strip())
                     h = int(horse_num.strip())
                     expert_dict.setdefault(r, []).append(h)
+                except (ValueError, IndexError):
+                    continue
+
+    # Auto-ladda expertkonsensus från tips_cache om inget angetts manuellt
+    expert_autoloaded = False
+    if not expert_dict and auto_expert:
+        try:
+            from trav_agent.data.tips_scraper import load_tips_cache_raw
+            raw = load_tips_cache_raw(game_type, day)
+            etips = (raw or {}).get("expert_tips") or {}
+            for rk, horses in etips.items():
+                try:
+                    r = int(rk)
+                except (ValueError, TypeError):
+                    continue
+                nums = [int(h) for h in horses if isinstance(h, (int, str)) and str(h).isdigit()]
+                if nums:
+                    expert_dict[r] = nums
+            expert_autoloaded = bool(expert_dict)
+        except Exception as e:
+            logger.warning(f"Auto-load expert tips failed: {e}")
+
+    # Parse width overrides: "9:6,12:9" → {9: 6, 12: 9}
+    width_dict: dict[int, int] = {}
+    if width:
+        for part in width.split(","):
+            part = part.strip()
+            if ":" in part:
+                try:
+                    race_num, n = part.split(":", 1)
+                    width_dict[int(race_num.strip())] = int(n.strip())
                 except (ValueError, IndexError):
                     continue
 
@@ -495,6 +530,7 @@ async def api_system(
             strategy="smart",
             max_spikes=spikes_param,
             expert_tips=expert_dict if expert_dict else None,
+            width_overrides=width_dict if width_dict else None,
         )
     except Exception as e:
         logger.error(f"System build error: {e}")
@@ -509,12 +545,13 @@ async def api_system(
         is_spike = leg.leg_type == "spik"
         has_db2 = "DB2" in leg.reasoning
         has_expert = "EXPERT" in leg.reasoning
+        is_manual = "MANUELL" in leg.reasoning
 
         # Horse names for picks
         pick_details = []
         for p in leg.picks[:leg.num_picks]:
             entry = next((e for e in (race.entries if race else []) if e.post_position == p), None)
-            name = entry.horse_name[:16] if entry and entry.horse_name else f"#{p}"
+            name = entry.horse.name[:16] if entry and entry.horse and entry.horse.name else f"#{p}"
             pick_details.append({"num": p, "name": name})
 
         legs_json.append({
@@ -527,6 +564,7 @@ async def api_system(
             "is_spike": is_spike,
             "has_db2": has_db2,
             "has_expert": has_expert,
+            "is_manual": is_manual,
             "reasoning": leg.reasoning,
         })
 
@@ -543,6 +581,7 @@ async def api_system(
         "num_spikes": plan.num_spikes,
         "db2_count": db2_count,
         "expert_count": expert_count,
+        "expert_autoloaded": expert_autoloaded,
         "predicted_hit_prob": prob_str,
         "legs": legs_json,
     })

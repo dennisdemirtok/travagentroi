@@ -1672,6 +1672,10 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
                 f'<td><small>{_esc(reasoning_short)}</small></td>'
                 f'<td class="system-picks">{picks_str}</td>'
                 f'<td>{leg.num_picks}</td>'
+                f'<td style="text-align:center;white-space:nowrap">'
+                f'<button class="wbtn" onclick="bumpWidth({leg.race_number},{leg.num_picks},-1)">−</button>'
+                f'<button class="wbtn" onclick="bumpWidth({leg.race_number},{leg.num_picks},1)">+</button>'
+                f'</td>'
                 f'</tr>'
             )
 
@@ -1736,6 +1740,17 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
 
             f'</div>'  # end controls
 
+            # Hint row: expert auto-load + width reset
+            f'<style>.wbtn{{padding:2px 9px;margin:0 1px;border-radius:5px;border:1px solid #d4d4d8;'
+            f'background:#fff;color:#6b21a8;cursor:pointer;font-size:.9rem;font-weight:700;line-height:1}}'
+            f'.wbtn:hover{{background:#f3f0ff;border-color:#8b5cf6}}</style>'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'font-size:.78rem;color:#8b5cf6;margin:.25rem 0 .5rem">'
+            f'<span id="smart-expert-hint">\U0001f4dd Expertkonsensus auto-laddas (lämna fältet tomt)</span>'
+            f'<a href="#" onclick="resetWidths();return false" '
+            f'style="color:#8b5cf6;text-decoration:underline">↺ Återställ bredd</a>'
+            f'</div>'
+
             # Stats row (updated by JS)
             f'<div class="system-stats" id="smart-stats">'
             f'<div class="sys-stat"><span class="sys-val" id="smart-rows">{plan.total_rows:,}</span>'
@@ -1755,6 +1770,7 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'<table class="system-table">'
             f'<thead><tr>'
             f'<th>Lopp</th><th>Info</th><th>Diff</th><th>Logik</th><th>Picks</th><th>#</th>'
+            f'<th style="text-align:center">Bredd</th>'
             f'</tr></thead>'
             f'<tbody id="smart-tbody">{rows_str}</tbody>'
             f'</table></div>'
@@ -1767,7 +1783,15 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
 
             # ── JavaScript for interactive controls ──
             f'<script>'
-            f'var _smartGameType="{gt}",_smartDay="{rd_str}",_smartSpikes=-1,_smartTimer=null;'
+            f'var _smartGameType="{gt}",_smartDay="{rd_str}",_smartSpikes=-1,_smartTimer=null,_smartWidths={{}};'
+
+            f'function bumpWidth(race,cur,delta){{'
+            f'var t=cur+delta;if(t<1)t=1;'
+            f'_smartWidths[race]=t;'
+            f'refreshSmartSystem();'
+            f'}}'
+
+            f'function resetWidths(){{_smartWidths={{}};refreshSmartSystem();}}'
 
             f'function setSpikes(n){{'
             f'_smartSpikes=n;'
@@ -1792,6 +1816,8 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'var url="/api/system/"+_smartGameType+"/"+_smartDay'
             f'+"?budget="+budget+"&max_spikes="+_smartSpikes;'
             f'if(expert)url+="&expert_tips="+encodeURIComponent(expert);'
+            f'var wparts=[];for(var k in _smartWidths){{wparts.push(k+":"+_smartWidths[k]);}}'
+            f'if(wparts.length)url+="&width="+encodeURIComponent(wparts.join(","));'
             f'document.getElementById("smart-loading").style.display="block";'
             f'fetch(url).then(function(r){{return r.json()}}).then(function(d){{'
             f'if(d.error){{console.error(d.error);return}}'
@@ -1802,14 +1828,20 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'document.getElementById("smart-spikes").textContent=d.num_spikes;'
             f'document.getElementById("smart-db2").textContent=d.db2_count;'
             f'document.getElementById("smart-prob").textContent=d.predicted_hit_prob;'
+            f'var hintEl=document.getElementById("smart-expert-hint");'
+            f'if(hintEl){{hintEl.textContent=d.expert_autoloaded?'
+            f'("\\ud83d\\udcdd Expertkonsensus auto-laddad ("+d.expert_count+" lopp)"):'
+            f'(expert?"\\ud83d\\udcdd Egna expertips aktiva":"\\ud83d\\udcdd Inga expertips för denna omgång");}}'
             # Build table rows
             f'var tbody="";'
             f'd.legs.forEach(function(leg){{'
-            f'var isSpike=leg.is_spike,hasDb2=leg.has_db2,hasExpert=leg.has_expert;'
+            f'var isSpike=leg.is_spike,hasDb2=leg.has_db2,hasExpert=leg.has_expert,isManual=leg.is_manual;'
             f'var badge=isSpike?"\\ud83d\\udd12 SPIK":(hasDb2?"\\ud83e\\udde0 "+leg.num_picks+"-val":leg.num_picks+"-val");'
             f'if(hasExpert)badge+=" \\ud83d\\udcdd";'
-            f'var bs=isSpike?"border-left:3px solid #22c55e":(hasDb2?"border-left:3px solid #f59e0b":'
-            f'(hasExpert?"border-left:3px solid #a78bfa":""));'
+            f'if(isManual)badge+=" \\u270f\\ufe0f";'
+            f'var bs=isManual?"border-left:3px solid #8b5cf6":'
+            f'(isSpike?"border-left:3px solid #22c55e":(hasDb2?"border-left:3px solid #f59e0b":'
+            f'(hasExpert?"border-left:3px solid #a78bfa":"")));'
             f'var dc=leg.difficulty<25?"#22c55e":(leg.difficulty<45?"#f59e0b":"#ef4444");'
             f'var picks=leg.picks.map(function(p){{return"<strong>"+p.num+"</strong>"}}).join(", ");'
             f'var reason=leg.reasoning.split("|")[0].trim();'
@@ -1819,7 +1851,11 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'+"<td style=\\"color:"+dc+"\\">D"+Math.round(leg.difficulty)+"</td>"'
             f'+"<td><small>"+reason+"</small></td>"'
             f'+"<td class=\\"system-picks\\">"+picks+"</td>"'
-            f'+"<td>"+leg.num_picks+"</td></tr>";'
+            f'+"<td>"+leg.num_picks+"</td>"'
+            f'+"<td style=\\"text-align:center;white-space:nowrap\\">"'
+            f'+"<button class=\\"wbtn\\" onclick=\\"bumpWidth("+leg.race_number+","+leg.num_picks+",-1)\\">\\u2212</button>"'
+            f'+"<button class=\\"wbtn\\" onclick=\\"bumpWidth("+leg.race_number+","+leg.num_picks+",1)\\">+</button>"'
+            f'+"</td></tr>";'
             f'}});'
             f'document.getElementById("smart-tbody").innerHTML=tbody;'
             f'document.getElementById("smart-loading").style.display="none";'

@@ -1604,7 +1604,7 @@ def _accuracy_html(game_round: GameRound) -> str:
     )
 
 
-def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
+def _system_html(game_round: GameRound, proffs_data: dict | None = None, tips_raw: dict | None = None) -> str:
     """Generera system-sektion — bara validerade strategier.
 
     Backtested 21 strategier på 165 omgångar med no-leakage (2025-2026):
@@ -1612,7 +1612,7 @@ def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
     - Chansspik 500kr: -41% ROI — hög varians, sällan hit men stor utdelning
     - Vinnarspel (Bet-fliken): +8-80% ROI — den enda bevisade edgen
     """
-    dennis_html = _dennis_system_html(game_round, proffs_data=proffs_data)
+    dennis_html = _dennis_system_html(game_round, proffs_data=proffs_data, tips_raw=tips_raw)
 
     return (
         f'<div id="system" class="summary-card system-section">'
@@ -1626,7 +1626,7 @@ def _system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
     )
 
 
-def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) -> str:
+def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None, tips_raw: dict | None = None) -> str:
     """System-rekommendationer — ABCD+DB2 Smart + Spike Easiest + Chansspik."""
     try:
         from ..analysis.system_builder import build_system
@@ -1643,6 +1643,13 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
         default_budget = 1500
         plan = build_system(game_round, budget=default_budget, strategy="smart",
                             proffs_data=proffs_data)
+
+        # Skrällindex per avd (expertkonsensus + modellsvårighet)
+        try:
+            from ..analysis.skrall_index import compute_skrall_index
+            _skrall_idx = compute_skrall_index(game_round, tips_raw)
+        except Exception:
+            _skrall_idx = {}
 
         # Build default table rows
         pick_rows = []
@@ -1664,9 +1671,16 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             picks_str = ", ".join(f"<strong>{p}</strong>" for p in leg.picks[:leg.num_picks])
             diff_color = "#22c55e" if leg.difficulty < 25 else ("#f59e0b" if leg.difficulty < 45 else "#ef4444")
             reasoning_short = leg.reasoning.split("|")[0].strip() if leg.reasoning else ""
+            _sk = _skrall_idx.get(leg.race_number, {})
+            _sklvl = _sk.get("level", "")
+            _skc = "#ef4444" if _sklvl == "hög" else ("#f59e0b" if _sklvl == "medel" else "#22c55e")
+            _sktitle = (f'Skräll {_sklvl} ({_sk.get("score", 0):.0f}): '
+                        + ", ".join(_sk.get("reasons", []))) if _sklvl else ""
+            _skdot = (f'<span title="{_esc(_sktitle)}" style="display:inline-block;width:8px;height:8px;'
+                      f'border-radius:50%;background:{_skc};margin-right:5px;vertical-align:middle"></span>') if _sklvl else ""
             pick_rows.append(
                 f'<tr style="{border_style}">'
-                f'<td class="race-link">Avd {leg.race_number} <small>{type_badge}</small></td>'
+                f'<td class="race-link">{_skdot}Avd {leg.race_number} <small>{type_badge}</small></td>'
                 f'<td>{dist}m {method}</td>'
                 f'<td style="color:{diff_color}">D{leg.difficulty:.0f}</td>'
                 f'<td><small>{_esc(reasoning_short)}</small></td>'
@@ -1747,8 +1761,12 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'<div style="display:flex;justify-content:space-between;align-items:center;'
             f'font-size:.78rem;color:#8b5cf6;margin:.25rem 0 .5rem">'
             f'<span id="smart-expert-hint">\U0001f4dd Expertkonsensus auto-laddas (lämna fältet tomt)</span>'
+            f'<span style="display:flex;gap:1rem">'
+            f'<a href="#" onclick="downloadSmartXlsx();return false" '
+            f'style="color:#16a34a;text-decoration:underline;font-weight:600">⬇ Excel</a>'
             f'<a href="#" onclick="resetWidths();return false" '
             f'style="color:#8b5cf6;text-decoration:underline">↺ Återställ bredd</a>'
+            f'</span>'
             f'</div>'
 
             # Stats row (updated by JS)
@@ -1763,6 +1781,21 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'<span class="sys-lbl">DB2-lopp</span></div>'
             f'<div class="sys-stat"><span class="sys-val" id="smart-prob">{prob_str}</span>'
             f'<span class="sys-lbl">P(hit)</span></div>'
+            f'<div class="sys-stat"><span class="sys-val" id="smart-skrall" style="color:#ef4444">'
+            f'{sum(1 for v in _skrall_idx.values() if v.get("level")=="hög")}</span>'
+            f'<span class="sys-lbl">Skräll-lopp</span></div>'
+            f'</div>'
+
+            # Skräll-legend
+            f'<div style="font-size:.72rem;color:#94a3b8;margin:0 0 .4rem;display:flex;gap:.9rem;align-items:center">'
+            f'<span>Skrällrisk:</span>'
+            f'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+            f'background:#ef4444;margin-right:3px"></span>hög</span>'
+            f'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+            f'background:#f59e0b;margin-right:3px"></span>medel</span>'
+            f'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+            f'background:#22c55e;margin-right:3px"></span>låg</span>'
+            f'<span style="color:#cbd5e1">— expertkonsensus + modellsvårighet (hovra för detalj)</span>'
             f'</div>'
 
             # Table (updated by JS)
@@ -1792,6 +1825,17 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'}}'
 
             f'function resetWidths(){{_smartWidths={{}};refreshSmartSystem();}}'
+
+            f'function downloadSmartXlsx(){{'
+            f'var budget=document.getElementById("smart-budget").value;'
+            f'var expert=document.getElementById("smart-expert-tips").value.trim();'
+            f'var url="/api/system/"+_smartGameType+"/"+_smartDay+"/export.xlsx"'
+            f'+"?budget="+budget+"&max_spikes="+_smartSpikes;'
+            f'if(expert)url+="&expert_tips="+encodeURIComponent(expert);'
+            f'var wparts=[];for(var k in _smartWidths){{wparts.push(k+":"+_smartWidths[k]);}}'
+            f'if(wparts.length)url+="&width="+encodeURIComponent(wparts.join(","));'
+            f'window.location.href=url;'
+            f'}}'
 
             f'function setSpikes(n){{'
             f'_smartSpikes=n;'
@@ -1828,6 +1872,8 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'document.getElementById("smart-spikes").textContent=d.num_spikes;'
             f'document.getElementById("smart-db2").textContent=d.db2_count;'
             f'document.getElementById("smart-prob").textContent=d.predicted_hit_prob;'
+            f'var skEl=document.getElementById("smart-skrall");'
+            f'if(skEl)skEl.textContent=(d.skrall_high||0);'
             f'var hintEl=document.getElementById("smart-expert-hint");'
             f'if(hintEl){{hintEl.textContent=d.expert_autoloaded?'
             f'("\\ud83d\\udcdd Expertkonsensus auto-laddad ("+d.expert_count+" lopp)"):'
@@ -1845,8 +1891,14 @@ def _dennis_system_html(game_round: GameRound, proffs_data: dict | None = None) 
             f'var dc=leg.difficulty<25?"#22c55e":(leg.difficulty<45?"#f59e0b":"#ef4444");'
             f'var picks=leg.picks.map(function(p){{return"<strong>"+p.num+"</strong>"}}).join(", ");'
             f'var reason=leg.reasoning.split("|")[0].trim();'
+            # Skräll-indikator (kopplar expertkonsensus + modellsvårighet)
+            f'var skc=leg.skrall_level==="hög"?"#ef4444":(leg.skrall_level==="medel"?"#f59e0b":"#22c55e");'
+            f'var sktitle=leg.skrall_level?("Skräll "+leg.skrall_level+" ("+Math.round(leg.skrall_score)+")"+'
+            f'(leg.skrall_reasons&&leg.skrall_reasons.length?": "+leg.skrall_reasons.join(", "):"")):"";'
+            f'var skdot=leg.skrall_level?("<span title=\\""+sktitle+"\\" style=\\"display:inline-block;width:8px;'
+            f'height:8px;border-radius:50%;background:"+skc+";margin-right:5px;vertical-align:middle\\"></span>"):"";'
             f'tbody+="<tr style=\\""+bs+"\\">"'
-            f'+"<td class=\\"race-link\\">Avd "+leg.race_number+" <small>"+badge+"</small></td>"'
+            f'+"<td class=\\"race-link\\">"+skdot+"Avd "+leg.race_number+" <small>"+badge+"</small></td>"'
             f'+"<td>"+leg.distance+"m "+leg.start_method+"</td>"'
             f'+"<td style=\\"color:"+dc+"\\">D"+Math.round(leg.difficulty)+"</td>"'
             f'+"<td><small>"+reason+"</small></td>"'
@@ -3056,7 +3108,7 @@ def generate_dashboard_html(
     summary = _summary_html(game_round)
     ranking = _ranking_html(game_round)
     consensus_ranking = _consensus_ranking_html(game_round, tips_raw)
-    system_section = _system_html(game_round, proffs_data=proffs_data)
+    system_section = _system_html(game_round, proffs_data=proffs_data, tips_raw=tips_raw)
     stats_section = _stats_html(backlog_data)
     backlog_section = _backlog_html(game_round, backlog_data)
     accuracy = _accuracy_html(game_round)

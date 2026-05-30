@@ -435,32 +435,28 @@ async def api_rounds():
 
 # ── Interactive System Builder API ─────────────────────────────────────────
 
-@app.get("/api/system/{game_type}/{day}")
-async def api_system(
+async def _resolve_system_plan(
     game_type: str,
     day: str,
-    budget: int = 1500,
-    max_spikes: int = -1,
-    expert_tips: str = "",
-    width: str = "",
-    auto_expert: int = 1,
+    budget: int,
+    max_spikes: int,
+    expert_tips: str,
+    width: str,
+    auto_expert: int,
 ):
-    """Build a Smart system with custom parameters (AJAX from dashboard).
+    """Parse params, fetch round, build Smart system plan.
 
-    budget: 300-5000kr (hård cap — trimmar svagaste B-hästar för att rymmas)
-    max_spikes: -1 = auto (all lone A-horses), 0-8 = exakt antal (tvingar fler)
-    expert_tips: comma-separated "race:horse,race:horse" e.g. "5:8,8:1,13:7"
-    width: per-lopp bredd-override "race:n" e.g. "9:6,12:9" (+/- knappar)
-    auto_expert: 1 = auto-ladda expertkonsensus från tips_cache om inget anges
+    Returns (plan, game_round, expert_autoloaded) on success, or
+    (JSONResponse, None, None) on error.
     """
     game_type = game_type.upper()
     if game_type not in GAME_TYPES:
-        return JSONResponse({"error": f"Ogiltig spelform: {game_type}"}, status_code=400)
+        return JSONResponse({"error": f"Ogiltig spelform: {game_type}"}, status_code=400), None, None
 
     try:
         d = date.fromisoformat(day)
     except ValueError:
-        return JSONResponse({"error": f"Ogiltigt datum: {day}"}, status_code=400)
+        return JSONResponse({"error": f"Ogiltigt datum: {day}"}, status_code=400), None, None
 
     budget = max(100, min(10000, budget))
     spikes_param = None if max_spikes < 0 else max(0, min(8, max_spikes))
@@ -473,9 +469,7 @@ async def api_system(
             if ":" in part:
                 try:
                     race_num, horse_num = part.split(":", 1)
-                    r = int(race_num.strip())
-                    h = int(horse_num.strip())
-                    expert_dict.setdefault(r, []).append(h)
+                    expert_dict.setdefault(int(race_num.strip()), []).append(int(horse_num.strip()))
                 except (ValueError, IndexError):
                     continue
 
@@ -517,9 +511,8 @@ async def api_system(
         client = ATGClient()
         game_round = await client.fetch_full_round(game_type, d)
         if not game_round:
-            return JSONResponse({"error": f"Ingen {game_type} hittad för {day}"}, status_code=404)
-        analyzer = CompositeAnalyzer()
-        analyzer.analyze_round(game_round)
+            return JSONResponse({"error": f"Ingen {game_type} hittad för {day}"}, status_code=404), None, None
+        CompositeAnalyzer().analyze_round(game_round)
         _round_cache[key] = game_round
 
     try:
@@ -534,7 +527,44 @@ async def api_system(
         )
     except Exception as e:
         logger.error(f"System build error: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse({"error": str(e)}, status_code=500), None, None
+
+    return plan, game_round, expert_autoloaded
+
+
+@app.get("/api/system/{game_type}/{day}")
+async def api_system(
+    game_type: str,
+    day: str,
+    budget: int = 1500,
+    max_spikes: int = -1,
+    expert_tips: str = "",
+    width: str = "",
+    auto_expert: int = 1,
+):
+    """Build a Smart system with custom parameters (AJAX from dashboard).
+
+    budget: 300-5000kr (hård cap — trimmar svagaste B-hästar för att rymmas)
+    max_spikes: -1 = auto (all lone A-horses), 0-8 = exakt antal (tvingar fler)
+    expert_tips: comma-separated "race:horse,race:horse" e.g. "5:8,8:1,13:7"
+    width: per-lopp bredd-override "race:n" e.g. "9:6,12:9" (+/- knappar)
+    auto_expert: 1 = auto-ladda expertkonsensus från tips_cache om inget anges
+    """
+    plan, game_round, expert_autoloaded = await _resolve_system_plan(
+        game_type, day, budget, max_spikes, expert_tips, width, auto_expert,
+    )
+    if isinstance(plan, JSONResponse):
+        return plan
+
+    # Skrällindex per avd (kopplar expertkonsensus + modellsvårighet)
+    skrall_idx = {}
+    try:
+        from trav_agent.analysis.skrall_index import compute_skrall_index
+        from trav_agent.data.tips_scraper import load_tips_cache_raw
+        tips_raw = load_tips_cache_raw(game_type.upper(), day)
+        skrall_idx = compute_skrall_index(game_round, tips_raw)
+    except Exception as e:
+        logger.warning(f"Skräll-index error: {e}")
 
     # Build JSON response
     legs_json = []
@@ -554,6 +584,7 @@ async def api_system(
             name = entry.horse.name[:16] if entry and entry.horse and entry.horse.name else f"#{p}"
             pick_details.append({"num": p, "name": name})
 
+        sk = skrall_idx.get(leg.race_number, {})
         legs_json.append({
             "race_number": leg.race_number,
             "distance": dist,
@@ -566,12 +597,17 @@ async def api_system(
             "has_expert": has_expert,
             "is_manual": is_manual,
             "reasoning": leg.reasoning,
+            "skrall_level": sk.get("level", ""),
+            "skrall_score": sk.get("score", 0),
+            "skrall_horses": sk.get("skrall_horses", []),
+            "skrall_reasons": sk.get("reasons", []),
         })
 
     # Count categories
     db2_count = sum(1 for leg in plan.legs if "DB2" in leg.reasoning)
     expert_count = sum(1 for leg in plan.legs if "EXPERT" in leg.reasoning)
     prob_str = f"{plan.predicted_hit_prob:.1%}" if plan.predicted_hit_prob > 0 else "—"
+    skrall_high = sum(1 for v in skrall_idx.values() if v.get("level") == "hög")
 
     return JSONResponse({
         "budget": budget,
@@ -583,8 +619,42 @@ async def api_system(
         "expert_count": expert_count,
         "expert_autoloaded": expert_autoloaded,
         "predicted_hit_prob": prob_str,
+        "skrall_high": skrall_high,
         "legs": legs_json,
     })
+
+
+@app.get("/api/system/{game_type}/{day}/export.xlsx")
+async def api_system_export(
+    game_type: str,
+    day: str,
+    budget: int = 1500,
+    max_spikes: int = -1,
+    expert_tips: str = "",
+    width: str = "",
+    auto_expert: int = 1,
+):
+    """Exportera samma Smart-system som /api/system till en .xlsx-fil."""
+    plan, game_round, _ = await _resolve_system_plan(
+        game_type, day, budget, max_spikes, expert_tips, width, auto_expert,
+    )
+    if isinstance(plan, JSONResponse):
+        return plan
+
+    try:
+        from trav_agent.output.excel_export import system_to_xlsx_bytes
+        blob = system_to_xlsx_bytes(plan, game_round)
+    except Exception as e:
+        logger.error(f"Excel export error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    from fastapi.responses import Response
+    fname = f"{game_type.upper()}_{day}_system.xlsx"
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 # ── Bet Result API ─────────────────────────────────────────────────────────

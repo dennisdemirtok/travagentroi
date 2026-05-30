@@ -289,6 +289,46 @@ def report(game_type: str, day: str, output: str):
     asyncio.run(_run())
 
 
+@cli.command("export-xlsx")
+@click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
+@click.argument("day", type=str)
+@click.option("--budget", "-b", type=float, default=1500.0, help="Budget i kr")
+@click.option("--max-spikes", type=int, default=-1, help="-1=auto, 0-8=exakt antal")
+@click.option("--output", "-o", type=str, default=None, help="Output-fil (.xlsx)")
+def export_xlsx(game_type: str, day: str, budget: float, max_spikes: int, output: str):
+    """Exportera Smart-systemet till en Excel-fil (.xlsx)."""
+
+    async def _run():
+        client = ATGClient()
+        d = parse_date(day)
+        gt = game_type.upper()
+        click.echo(f"Bygger Smart-system {gt} {d} (budget {budget:.0f} kr)...")
+
+        game_round = await client.fetch_full_round(gt, d)
+        if not game_round:
+            click.echo(f"✗ Ingen {gt} hittad")
+            return
+        CompositeAnalyzer().analyze_round(game_round)
+
+        from .analysis.system_builder import build_system
+        from .output.excel_export import save_system_xlsx
+
+        plan = build_system(
+            game_round, budget=budget, strategy="smart",
+            max_spikes=None if max_spikes < 0 else max_spikes,
+        )
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        path = output or str(OUTPUT_DIR / f"{gt}_{d}_system.xlsx")
+        save_system_xlsx(plan, game_round, path)
+        click.echo(
+            f"✓ Excel sparad: {path}\n"
+            f"  {plan.total_rows} rader · {plan.total_cost:.0f} kr · "
+            f"{plan.num_spikes} spik(ar)"
+        )
+
+    asyncio.run(_run())
+
+
 @cli.command()
 @click.argument("game_type", type=click.Choice(GAME_TYPES, case_sensitive=False))
 @click.option("--from", "from_date", required=True, type=str, help="Startdatum YYYY-MM-DD")

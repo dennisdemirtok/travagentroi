@@ -434,3 +434,52 @@ def build_tips_context(tips: dict[str, str]) -> str:
     )
 
     return "\n".join(lines)
+
+
+def build_interviews_context(tips_raw: Optional[dict]) -> str:
+    """Bygg kontexttext av kusk-/tränarintervjuer för AI-agenten.
+
+    Läser top-level ``interviews``-blocket {leg: [post, ...]} som bookmarklet-
+    pipelinen skapar. Returnerar tom sträng om inga intervjuer finns.
+    """
+    if not tips_raw:
+        return ""
+    interviews = tips_raw.get("interviews") or {}
+    if not isinstance(interviews, dict) or not interviews:
+        return ""
+
+    _SENT = {"positiv": "➕", "negativ": "➖", "neutral": "·"}
+
+    def _leg_sort_key(k: str):
+        # "V85-3" → 3
+        try:
+            return int(str(k).split("-")[-1])
+        except (ValueError, IndexError):
+            return 999
+
+    lines = ["=" * 50, "KUSK- & TRÄNARINTERVJUER (från inloggade källor)", "=" * 50]
+    for leg_key in sorted(interviews.keys(), key=_leg_sort_key):
+        posts = interviews.get(leg_key) or []
+        if not isinstance(posts, list) or not posts:
+            continue
+        lines.append(f"\n--- Avd {str(leg_key).split('-')[-1]} ---")
+        for p in posts:
+            if not isinstance(p, dict):
+                continue
+            num = p.get("num", "?")
+            name = p.get("name", "") or ""
+            role = p.get("role", "") or ""
+            person = p.get("person", "") or ""
+            quote = (p.get("quote", "") or "").strip()
+            sent = _SENT.get(str(p.get("sentiment", "")).lower(), "")
+            who = f"{role}" + (f" {person}" if person else "")
+            head = f"  {sent} #{num} {name}".rstrip()
+            if who.strip():
+                head += f" ({who.strip()})"
+            lines.append(head + (f": \"{quote}\"" if quote else ""))
+
+    lines.append(
+        "\nOBS: Intervjuerna speglar vad kuskar/tränare själva säger inför loppet "
+        "— värdefull mjukdata, men väg alltid mot modellens hårda fakta."
+    )
+    return "\n".join(lines)

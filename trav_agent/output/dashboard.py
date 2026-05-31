@@ -506,7 +506,54 @@ def _horse_detail_html(entry: RaceEntry, race: Race) -> str:
     )
 
 
-def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -> str:
+def _interviews_html(posts: list | None) -> str:
+    """Render kusk-/tränarintervjuer för en avdelning som kort."""
+    if not posts or not isinstance(posts, list):
+        return ""
+    _SENT = {
+        "positiv": ("#16a34a", "rgba(22,163,74,0.08)", "➕"),
+        "negativ": ("#dc2626", "rgba(220,38,38,0.08)", "➖"),
+        "neutral": ("#6b7280", "rgba(107,114,128,0.06)", "·"),
+    }
+    cards = []
+    for p in posts:
+        if not isinstance(p, dict):
+            continue
+        quote = (p.get("quote", "") or "").strip()
+        if not quote:
+            continue
+        num = p.get("num", "?")
+        name = _esc(str(p.get("name", "") or ""))
+        role = _esc(str(p.get("role", "") or ""))
+        person = _esc(str(p.get("person", "") or ""))
+        source = _esc(str(p.get("source", "") or ""))
+        color, bg, icon = _SENT.get(str(p.get("sentiment", "")).lower(), _SENT["neutral"])
+        who = role + (f" {person}" if person else "")
+        meta = who.strip()
+        if source:
+            meta += f' · <span class="iv-src">{source}</span>' if meta else f'<span class="iv-src">{source}</span>'
+        cards.append(
+            f'<div class="iv-card" style="border-left-color:{color};background:{bg}">'
+            f'<div class="iv-head"><span class="iv-num">{icon} #{num} {name}</span>'
+            f'<span class="iv-who">{meta}</span></div>'
+            f'<div class="iv-quote">"{_esc(quote)}"</div>'
+            f'</div>'
+        )
+    if not cards:
+        return ""
+    return (
+        f'<div class="iv-block">'
+        f'<div class="iv-title">🎤 Kusk- &amp; tränarintervjuer</div>'
+        f'{"".join(cards)}'
+        f'</div>'
+    )
+
+
+def _race_table_html(
+    race: Race,
+    proffs_horses: dict[int, dict] | None = None,
+    interviews: list | None = None,
+) -> str:
     sorted_entries = sorted(
         race.active_entries,
         key=lambda e: e.super_score,
@@ -790,6 +837,7 @@ def _race_table_html(race: Race, proffs_horses: dict[int, dict] | None = None) -
         f'<tbody>{"".join(rows)}</tbody>'
         f'</table>'
         f'</div>'
+        f'{_interviews_html(interviews)}'
         f'</div>'
     )
 
@@ -3103,8 +3151,26 @@ def generate_dashboard_html(
                 h["number"]: h for h in pr.get("horses", [])
             }
 
+    # Intervjuer per avdelning (top-level interviews-block från bokmärket)
+    interviews_block = (tips_raw or {}).get("interviews") or {}
+    gt_key = game_round.game_type
+
+    def _race_interviews(rn: int) -> list | None:
+        if not isinstance(interviews_block, dict):
+            return None
+        return (
+            interviews_block.get(f"{gt_key}-{rn}")
+            or interviews_block.get(str(rn))
+            or None
+        )
+
     # Generera sektioner
-    race_htmls = {r.race_number: _race_table_html(r, proffs_by_race.get(r.race_number)) for r in game_round.races}
+    race_htmls = {
+        r.race_number: _race_table_html(
+            r, proffs_by_race.get(r.race_number), _race_interviews(r.race_number)
+        )
+        for r in game_round.races
+    }
     summary = _summary_html(game_round)
     ranking = _ranking_html(game_round)
     consensus_ranking = _consensus_ranking_html(game_round, tips_raw)
@@ -3750,6 +3816,16 @@ font-size:.75rem;font-weight:600;white-space:nowrap;border:1px solid rgba(234,17
 .upset-candidates{{background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.12);
 border-radius:8px;padding:.5rem .8rem;margin-top:.4rem;font-size:.82rem;color:#b45309;font-weight:500}}
 .upset-desc{{color:#94a3b8;font-size:.75rem;font-weight:400}}
+
+/* Kusk- & tränarintervjuer */
+.iv-block{{margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb}}
+.iv-title{{font-size:.85rem;font-weight:700;color:#1a1a2e;margin-bottom:8px}}
+.iv-card{{border-left:3px solid #6b7280;border-radius:8px;padding:8px 12px;margin-bottom:8px}}
+.iv-head{{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}}
+.iv-num{{font-weight:600;font-size:.82rem;color:#1a1a2e}}
+.iv-who{{font-size:.72rem;color:#6b7280;text-transform:capitalize}}
+.iv-src{{color:#94a3b8}}
+.iv-quote{{font-size:.82rem;color:#374151;font-style:italic;margin-top:3px;line-height:1.45}}
 
 /* Heatmap risk bar */
 .heatmap-wrapper{{background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;

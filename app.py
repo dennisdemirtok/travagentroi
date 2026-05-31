@@ -999,7 +999,8 @@ async def api_chat(request: Request):
             get_learnings_context, save_session,
         )
         from trav_agent.data.tips_scraper import (
-            build_tips_context, load_tips_cache_raw, scrape_tips,
+            build_interviews_context, build_tips_context,
+            load_tips_cache_raw, scrape_tips,
         )
 
         round_ctx = build_round_context(game_round) if game_round else "Ingen omgångsdata."
@@ -1021,6 +1022,11 @@ async def api_chat(request: Request):
 
             tips_raw = load_tips_cache_raw(game_type, round_date)
             consensus_ctx = build_consensus_ranking(game_round, tips_raw)
+
+            # Kusk-/tränarintervjuer (från bokmärket) → lägg in i tips-kontexten
+            interviews_ctx = build_interviews_context(tips_raw)
+            if interviews_ctx:
+                tips_ctx = (tips_ctx + "\n\n" + interviews_ctx) if tips_ctx else interviews_ctx
 
         # Build model performance context
         model_perf_ctx = ""

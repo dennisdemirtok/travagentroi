@@ -3390,6 +3390,10 @@ position:relative;border-radius:0}}
 height:2px;background:#f59e0b;border-radius:2px}}
 .nav-right{{display:flex;align-items:center;gap:14px;flex-shrink:0}}
 .nav-clock{{font-family:'JetBrains Mono',monospace;font-size:12px;color:#94a3b8;font-weight:400}}
+.nav-bookmarklet{{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:10px;
+  background:#f59e0b;color:#1a1a2e;font-size:.82rem;font-weight:600;text-decoration:none;
+  white-space:nowrap;transition:background .15s}}
+.nav-bookmarklet:hover{{background:#d97706}}
 .round-select{{padding:7px 14px;border-radius:10px;border:1px solid #e5e7eb;
 background:#ffffff;color:#1e293b;font-size:13px;cursor:pointer;outline:none;
 font-family:inherit;transition:border-color .2s,box-shadow .2s;flex-shrink:0;min-width:0}}
@@ -4362,6 +4366,7 @@ font-family:inherit;cursor:pointer;transition:color .2s}}
     <button class="nav-tab" data-view="backtest" onclick="showView('backtest')">Backtest</button>
   </div>
   <div class="nav-right">
+    <a class="nav-bookmarklet" href="/bookmarklet" target="_blank" title="Hämta dagens tips & intervjuer automatiskt från inloggade sajter">📋 Hämta tips</a>
     <span class="nav-clock" id="nav-clock"></span>
     {round_dropdown}
   </div>

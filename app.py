@@ -773,31 +773,22 @@ async def api_tips_rebuild(request: Request):
 
 def _render_bookmarklet_page(base: str) -> str:
     """Bygg /bookmarklet-sidan med ett dra-och-släpp-bokmärke."""
-    # Bokmärkets JS körs PÅ den inloggade sidan (aftonbladet, expressen, ...)
-    # och POSTar hela sidtexten till vårt backend. Använder bara enkla citattecken
-    # internt så hela strängen kan ligga i en href="..." utan att kollidera.
+    # Bokmärket körs PÅ den inloggade sidan (aftonbladet, expressen, ...). Deras
+    # Content-Security-Policy blockerar fetch() direkt till oss, så vi öppnar i
+    # stället ett popup-fönster på VÅR domän (/tips-relay) och skickar sidtexten
+    # dit via postMessage. Popupen tillhör vår origin → dess fetch är inte CSP-
+    # blockerad. Endast enkla citattecken internt så allt får plats i href="...".
     js = (
         "javascript:(function(){"
-        "var b=document.body?document.body.innerText:'';"
-        "var u=location.href,t=document.title;"
-        "var n=document.createElement('div');"
-        "n.style.cssText='position:fixed;top:12px;right:12px;z-index:2147483647;"
-        "background:#1e293b;color:#fff;padding:12px 16px;border-radius:10px;"
-        "font:14px -apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:340px';"
-        "n.textContent='Skickar tips till Kungens Trav...';"
-        "document.body.appendChild(n);"
-        "fetch('" + base + "/api/tips/ingest-page',{method:'POST',"
-        "headers:{'Content-Type':'application/json'},"
-        "body:JSON.stringify({url:u,title:t,text:b})})"
-        ".then(function(r){return r.json();})"
-        ".then(function(d){"
-        "if(d.ok){n.style.background='#15803d';"
-        "n.textContent='\\u2713 '+d.game_type+' '+d.day+(d.track?' ('+d.track+')':'')"
-        "+' sparat \\u2022 '+d.interviews_count+' intervjuer';}"
-        "else{n.style.background='#b91c1c';n.textContent='\\u2717 '+(d.error||'misslyckades');}"
-        "setTimeout(function(){n.remove();},7000);})"
-        ".catch(function(e){n.style.background='#b91c1c';"
-        "n.textContent='\\u2717 '+e;setTimeout(function(){n.remove();},7000);});"
+        "var p={url:location.href,title:document.title,"
+        "text:(document.body?document.body.innerText:'').slice(0,40000)};"
+        "var w=window.open('" + base + "/tips-relay','travtips',"
+        "'width=470,height=400');"
+        "if(!w){alert('Tillåt popup-fönster för den här sidan och klicka igen.');return;}"
+        "var sent=false;"
+        "window.addEventListener('message',function(ev){"
+        "if(ev.data&&ev.data.travtips_ready&&!sent){sent=true;"
+        "w.postMessage({travtips_payload:p},'*');}});"
         "})();"
     )
     js_attr = js.replace("&", "&amp;").replace('"', "&quot;")
@@ -840,13 +831,83 @@ def _render_bookmarklet_page(base: str) -> str:
       <code>travronden.se</code> eller <code>kungenstrav.se</code>.</li>
       <li>Öppna artikeln med dagens tips/spelförslag.</li>
       <li>Klicka på <strong>Hämta travtips</strong> i bokmärkesraden.</li>
-      <li>En liten ruta uppe till höger bekräftar vilken omgång som sparades och
-      hur många intervjuer som hittades.</li>
+      <li>Ett litet popup-fönster öppnas och bekräftar vilken omgång som sparades
+      och hur många intervjuer som hittades.</li>
     </ol>
     <p class="note" style="margin-bottom:0">Backend listar själv ut vilken omgång
-    (V85/V75/V64…) och dag artikeln gäller — du behöver inte välja något.</p>
+    (V85/V75/V64…) och dag artikeln gäller — du behöver inte välja något.
+    Tillåt popup-fönster för tipssajten första gången.</p>
   </div>
 </div></body></html>"""
+
+
+def _render_tips_relay_page() -> str:
+    """Popup-sida på vår origin som tar emot sidtexten via postMessage och POSTar
+    den till /api/tips/ingest-page. Kringgår tipssajternas CSP (deras sida får
+    inte fetcha oss direkt — men det här fönstret tillhör vår domän)."""
+    return """<!DOCTYPE html>
+<html lang="sv"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hämtar tips…</title>
+<style>
+  body{font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:#0f172a;color:#e2e8f0;margin:0;padding:28px 24px;text-align:center;}
+  .ico{font-size:40px;margin-bottom:10px;}
+  h1{font-size:18px;margin:0 0 6px;}
+  #msg{color:#94a3b8;font-size:14px;min-height:40px;}
+  .ok{color:#4ade80;} .err{color:#f87171;}
+  .spin{display:inline-block;width:26px;height:26px;border:3px solid #334155;
+    border-top-color:#f59e0b;border-radius:50%;animation:r .8s linear infinite;}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .small{font-size:12px;color:#64748b;margin-top:18px;}
+</style></head>
+<body>
+  <div class="ico" id="ico"><span class="spin"></span></div>
+  <h1 id="title">Väntar på sidan…</h1>
+  <div id="msg">Tar emot artikeltext från fliken…</div>
+  <div class="small">Du kan stänga det här fönstret när du är klar.</div>
+<script>
+(function(){
+  var title=document.getElementById('title');
+  var msg=document.getElementById('msg');
+  var ico=document.getElementById('ico');
+  function set(t,m,cls){title.textContent=t;msg.textContent=m;msg.className=cls||'';}
+  function spin(on){ico.innerHTML=on?'<span class="spin"></span>':'';}
+  var done=false;
+  function ingest(p){
+    if(done)return; done=true;
+    set('Tolkar artikeln…','Skickar till modellen och läser ut omgång + intervjuer…');
+    fetch('/api/tips/ingest-page',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(p)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      spin(false);
+      if(d.ok){ico.textContent='✅';
+        set(d.game_type+' '+d.day+(d.track?' · '+d.track:''),
+          'Sparat ✓  •  '+d.interviews_count+' intervjuer  •  källa: '+(d.source||'webb'),'ok');}
+      else{ico.textContent='⚠️';set('Kunde inte spara',(d.error||'okänt fel'),'err');}
+    })
+    .catch(function(e){spin(false);ico.textContent='⚠️';
+      set('Nätverksfel',String(e),'err');});
+  }
+  window.addEventListener('message',function(ev){
+    var d=ev.data;
+    if(d&&d.travtips_payload){ingest(d.travtips_payload);}
+  });
+  // Signalera till bokmärket (öppnaren) att vi är redo att ta emot texten
+  if(window.opener){
+    try{window.opener.postMessage({travtips_ready:true},'*');}catch(e){}
+    var tries=0,iv=setInterval(function(){
+      if(done||tries++>20){clearInterval(iv);return;}
+      try{window.opener.postMessage({travtips_ready:true},'*');}catch(e){}
+    },250);
+  }else{
+    spin(false);ico.textContent='ℹ️';
+    set('Öppna via bokmärket','Den här sidan ska öppnas av tips-bokmärket, inte direkt.');
+  }
+})();
+</script>
+</body></html>"""
 
 
 @app.post("/api/tips/ingest-page")
@@ -950,6 +1011,15 @@ async def bookmarklet_page(request: Request):
     """Sida med dra-och-släpp-bokmärke som scrapar inloggade tipssajter."""
     base = str(request.base_url).rstrip("/")
     return HTMLResponse(_render_bookmarklet_page(base))
+
+
+@app.get("/tips-relay", response_class=HTMLResponse)
+async def tips_relay_page():
+    """Popup-relä som tar emot sidtext via postMessage och POSTar till oss.
+
+    Kringgår tipssajternas CSP — popupen tillhör vår egen origin.
+    """
+    return HTMLResponse(_render_tips_relay_page())
 
 
 # ── AI Chat (SSE Streaming) ────────────────────────────────────────────────

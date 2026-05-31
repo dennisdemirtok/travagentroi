@@ -944,19 +944,46 @@ async def api_tips_ingest_page(request: Request):
     meta = await detect_round_meta(text, title=title, url=url, api_key=ANTHROPIC_API_KEY)
     if not meta:
         return JSONResponse(
-            {"ok": False, "error": "kunde inte avgöra vilken omgång sidan gäller"},
+            {"ok": False, "error": "kunde inte avgöra spelform (V85/V75/V64…) på sidan — "
+             "scrolla in tipsdelen och försök igen, eller klistra in manuellt"},
             status_code=422,
         )
     game_type = meta["game_type"]
-    day = meta["date"]
+    day = meta.get("date")
     source_name = meta["source_name"]
+
+    # 1b. Lös datumet mot ATG-kalendern: verifiera LLM:ens datum eller, om det
+    #     saknas/inte stämmer, snäpp till närmaste omgång med rätt spelform.
+    client = ATGClient()
+    try:
+        cal_rounds = await _get_available_rounds(client)
+        same_gt = [r for r in cal_rounds if r[1] == game_type]
+        valid_dates = {r[2] for r in same_gt}
+        if not day or day not in valid_dates:
+            if same_gt:
+                today = date.today()
+                same_gt.sort(key=lambda r: (
+                    abs((date.fromisoformat(r[2]) - today).days),
+                    0 if date.fromisoformat(r[2]) >= today else 1,
+                ))
+                resolved = same_gt[0][2]
+                logger.info(f"ingest-page: datum {day!r} → kalender-snäppt till {resolved} ({game_type})")
+                day = resolved
+    except Exception as e:
+        logger.warning(f"ingest-page: kalenderupplösning misslyckades: {e}")
+
+    if not day:
+        return JSONResponse(
+            {"ok": False, "error": f"hittade spelform {game_type} men inget speldatum — "
+             "ingen sådan omgång i ATG-kalendern just nu"},
+            status_code=422,
+        )
 
     # 2. Hämta roster för omgången så LLM mappar namn → nummer
     key = f"{game_type}/{day}"
     game_round = _round_cache.get(key)
     if not game_round:
         try:
-            client = ATGClient()
             gr = await client.fetch_full_round(game_type, date.fromisoformat(day))
             if gr:
                 CompositeAnalyzer().analyze_round(gr)

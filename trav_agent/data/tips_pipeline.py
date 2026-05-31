@@ -441,27 +441,38 @@ async def detect_round_meta(
 ) -> Optional[dict]:
     """Lista ut vilken spelomgång en artikel handlar om.
 
-    Returnerar {"game_type": "V85", "date": "2026-05-31", "track": "Solvalla",
-    "source_name": "aftonbladet"} eller None om det inte går att avgöra.
+    Returnerar {"game_type": "V85", "date": "2026-05-31"|None, "track": "Solvalla",
+    "source_name": "aftonbladet"}. ``date`` kan vara None om spelform hittades men
+    inte datum — då löser anroparen datumet via ATG-kalendern. Returnerar None
+    bara om spelform inte gick att avgöra alls.
     """
     api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
-    snippet = (text or "")[:6000]
+
+    # Bättre textunderlag: ta med början OCH ett fönster runt första trav-ordet
+    # (tipsdelen ligger ofta långt ner medan menyer äter upp toppen).
+    full = text or ""
+    snippet = full[:9000]
+    m = re.search(r"\b(V75|V86|V85|V64|V65|GS75)\b", full, re.IGNORECASE)
+    if m and m.start() > 7000:
+        s = max(0, m.start() - 1500)
+        snippet += "\n[...]\n" + full[s:s + 4000]
+
     today = _dt.date.today().isoformat()
     prompt = f"""Avgör vilken svensk trav-spelomgång nedanstående webbsida handlar om.
 Dagens datum är {today}. Sidans titel: "{title}". URL: "{url}".
 
 Returnera ENBART giltig JSON:
-{{"game_type": "<V75|V85|V86|V64|GS75|V65|okänt>", "date": "<YYYY-MM-DD>", "track": "<bana eller ''>", "source_name": "<kort källnyckel, t.ex. aftonbladet, expressen, travronden, kungenstrav>"}}
+{{"game_type": "<V75|V85|V86|V64|GS75|V65|okänt>", "date": "<YYYY-MM-DD eller okänt>", "track": "<bana eller ''>", "source_name": "<kort källnyckel, t.ex. aftonbladet, expressen, travronden, kungenstrav>"}}
 
 Regler:
-- game_type = den spelform artikeln tipsar om (oftast i titeln, t.ex. "V85").
-- date = speldagens datum (tolka "idag/lördag" relativt {today}). Om årtal saknas, anta innevarande år.
+- game_type = den spelform artikeln tipsar om (oftast i titeln, t.ex. "V85"). Detta är VIKTIGAST.
+- date = speldagens datum (tolka "idag/imorgon/lördag/söndag" relativt {today}). Om årtal saknas, anta innevarande år. Sätt "okänt" bara om du verkligen inte kan gissa.
 - source_name = härled från URL-domänen + ev. skribent (gemener, inga mellanslag).
-- Om du inte säkert kan avgöra game_type eller date, sätt det fältet till "okänt".
+- Om du inte kan avgöra game_type, sätt det till "okänt".
 
-SIDTEXT (början):
+SIDTEXT:
 \"\"\"
 {snippet}
 \"\"\""""
@@ -492,16 +503,19 @@ SIDTEXT (början):
         return None
     gt = str(data.get("game_type", "")).upper().strip()
     dt = str(data.get("date", "")).strip()
-    if gt in ("", "OKÄND", "OKAND", "OKÄNT", "OKANT") or dt in ("", "okänt"):
-        return None
-    # validera datumformat
-    try:
-        _dt.date.fromisoformat(dt)
-    except ValueError:
-        return None
+    if gt in ("", "OKÄND", "OKAND", "OKÄNT", "OKANT"):
+        return None  # utan spelform kan vi inte göra något
+    # Datum är valfritt — None om okänt/ogiltigt, anroparen löser via kalendern
+    date_val: Optional[str] = None
+    if dt and dt.lower() not in ("okänt", "okant"):
+        try:
+            _dt.date.fromisoformat(dt)
+            date_val = dt
+        except ValueError:
+            date_val = None
     return {
         "game_type": gt,
-        "date": dt,
+        "date": date_val,
         "track": str(data.get("track", "")).strip(),
         "source_name": str(data.get("source_name", "") or "webb").strip().lower().replace(" ", "_"),
     }

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 14px/1.5 -apple-system, sans-serif; width: 340px; padding: 18px; color: #1a1a2e; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    input { width: 100%; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; box-sizing: border-box; }
+    button { margin-top: 12px; padding: 9px 16px; border: none; border-radius: 8px; background: #f59e0b; color: #1a1a2e; font: 600 14px inherit; cursor: pointer; }
+    #saved { margin-left: 10px; color: #15803d; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>⚙️ Inställningar</h1>
+  <label for="base">Backend-URL (Kungens Trav)</label>
+  <input id="base" type="url" placeholder="https://travagentroi-production.up.railway.app" />
+  <div>
+    <button id="save">Spara</button>
+    <span id="saved"></span>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

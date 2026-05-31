@@ -20,6 +20,7 @@ Veckorutin::
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import logging
 import os
@@ -37,6 +38,16 @@ from .tips_scraper import (
 logger = logging.getLogger(__name__)
 
 _CACHE_DIR = Path(__file__).parent.parent.parent / "tips_cache"
+
+
+def _write_tips_cache_raw(game_type: str, date_str: str, raw: dict) -> None:
+    """Skriv tillbaka hela råa tips_cache-dicten till disk."""
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = _CACHE_DIR / f"{game_type}_{date_str}.json"
+    cache_file.write_text(
+        json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
 
 # Återanvänd källvikterna från chat-agenten så konsensus blir konsekvent.
 _SOURCE_WEIGHTS = {
@@ -104,9 +115,17 @@ SCHEMA:
   "best_spike": "<bästa spik enligt källan, eller ''>",
   "best_drag": "<bästa skräll/drag, eller ''>",
   "skrallar": {{ "{game_type}-1": [<hästnummer>], ... }},
+  "interviews": {{ "{game_type}-1": [{{ "num": <hästnummer>, "name": "<hästnamn>", "role": "kusk|tränare|expert|annan", "person": "<personens namn om nämnt, annars ''>", "quote": "<exakt citat eller kort parafras av vad personen säger om hästen>", "sentiment": "positiv|neutral|negativ" }}] }},
   "trainer_comments": {{ }},
   "spetstrid": {{ "{game_type}-1": {{ "predicted_leader": "<num namn>", "confidence": "låg|medel|hög", "contenders": ["<num namn>"], "notes": "<kort>" }} }}
 }}
+
+INTERVJUER ÄR VIKTIGT:
+- Fånga ALLA uttalanden från kuskar och tränare om sina hästar (startkommentarer,
+  citat, "körguide", "så resonerar tränaren"). Tränarnas tankar är värdefulla.
+- En häst kan ha flera intervjuer (både kusk och tränare) — lägg en post per uttalande.
+- Sätt sentiment utifrån hur positiv personen låter inför loppet.
+- Mappa varje intervju till rätt leg + hästnummer via startlistan.
 
 RÅ ARTIKELTEXT:
 \"\"\"
@@ -196,7 +215,7 @@ async def structure_source_with_llm(
 
     data.setdefault("author", source_name)
     # Drop empty optional blocks to keep the cache clean
-    for k in ("trainer_comments", "spetstrid", "skrallar"):
+    for k in ("trainer_comments", "spetstrid", "skrallar", "interviews"):
         if k in data and not data[k]:
             del data[k]
     return data
@@ -411,6 +430,123 @@ async def ingest_raw_text(
         "structured": structured,
         "expert_tips": (consensus or {}).get("expert_tips", {}),
     }
+
+
+async def detect_round_meta(
+    text: str,
+    *,
+    title: str = "",
+    url: str = "",
+    api_key: Optional[str] = None,
+) -> Optional[dict]:
+    """Lista ut vilken spelomgång en artikel handlar om.
+
+    Returnerar {"game_type": "V85", "date": "2026-05-31", "track": "Solvalla",
+    "source_name": "aftonbladet"} eller None om det inte går att avgöra.
+    """
+    api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    snippet = (text or "")[:6000]
+    today = _dt.date.today().isoformat()
+    prompt = f"""Avgör vilken svensk trav-spelomgång nedanstående webbsida handlar om.
+Dagens datum är {today}. Sidans titel: "{title}". URL: "{url}".
+
+Returnera ENBART giltig JSON:
+{{"game_type": "<V75|V85|V86|V64|GS75|V65|okänt>", "date": "<YYYY-MM-DD>", "track": "<bana eller ''>", "source_name": "<kort källnyckel, t.ex. aftonbladet, expressen, travronden, kungenstrav>"}}
+
+Regler:
+- game_type = den spelform artikeln tipsar om (oftast i titeln, t.ex. "V85").
+- date = speldagens datum (tolka "idag/lördag" relativt {today}). Om årtal saknas, anta innevarande år.
+- source_name = härled från URL-domänen + ev. skribent (gemener, inga mellanslag).
+- Om du inte säkert kan avgöra game_type eller date, sätt det fältet till "okänt".
+
+SIDTEXT (början):
+\"\"\"
+{snippet}
+\"\"\""""
+    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                json={
+                    "model": model,
+                    "max_tokens": 300,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+        if resp.status_code != 200:
+            logger.error(f"detect_round_meta API {resp.status_code}: {resp.text[:200]}")
+            return None
+        data = _extract_json(resp.json()["content"][0]["text"])
+    except Exception as e:
+        logger.error(f"detect_round_meta error: {e}")
+        return None
+    if not data:
+        return None
+    gt = str(data.get("game_type", "")).upper().strip()
+    dt = str(data.get("date", "")).strip()
+    if gt in ("", "OKÄND", "OKAND", "OKÄNT", "OKANT") or dt in ("", "okänt"):
+        return None
+    # validera datumformat
+    try:
+        _dt.date.fromisoformat(dt)
+    except ValueError:
+        return None
+    return {
+        "game_type": gt,
+        "date": dt,
+        "track": str(data.get("track", "")).strip(),
+        "source_name": str(data.get("source_name", "") or "webb").strip().lower().replace(" ", "_"),
+    }
+
+
+def merge_interviews_from_sources(game_type: str, date_str: str) -> dict:
+    """Slå ihop alla källors interviews → top-level block {leg: [post, ...]}.
+
+    Skriver tillbaka resultatet i tips_cache under nyckeln ``interviews`` och
+    returnerar det. Avdupliceras på (num, role, person, quote[:60]).
+    """
+    raw = load_tips_cache_raw(game_type, date_str)
+    if not raw:
+        return {}
+    merged: dict[str, list] = {}
+    seen: set = set()
+    for src in (raw.get("sources", {}) or {}).values():
+        if not isinstance(src, dict):
+            continue
+        ivs = src.get("interviews") or {}
+        if not isinstance(ivs, dict):
+            continue
+        author = src.get("author", "")
+        for leg_key, posts in ivs.items():
+            if not isinstance(posts, list):
+                continue
+            for p in posts:
+                if not isinstance(p, dict):
+                    continue
+                key = (
+                    leg_key,
+                    p.get("num"),
+                    p.get("role", ""),
+                    p.get("person", ""),
+                    str(p.get("quote", ""))[:60],
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                entry = dict(p)
+                entry.setdefault("source", author)
+                merged.setdefault(leg_key, []).append(entry)
+    raw["interviews"] = merged
+    _write_tips_cache_raw(game_type, date_str, raw)
+    return merged
 
 
 def build_roster_from_round(game_round) -> dict[int, list]:

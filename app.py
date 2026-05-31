@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
@@ -236,6 +237,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Trav Agent API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Bokmärket POSTar från andra domäner (aftonbladet.se m.fl.) → tillåt cross-origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ETag cache for dashboard HTML (avoid re-generating identical pages)
 _dashboard_html_cache: dict[str, tuple[str, str]] = {}  # key -> (etag, html)
@@ -760,6 +769,187 @@ async def api_tips_rebuild(request: Request):
     except Exception as e:
         logger.error(f"tips rebuild error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _render_bookmarklet_page(base: str) -> str:
+    """Bygg /bookmarklet-sidan med ett dra-och-släpp-bokmärke."""
+    # Bokmärkets JS körs PÅ den inloggade sidan (aftonbladet, expressen, ...)
+    # och POSTar hela sidtexten till vårt backend. Använder bara enkla citattecken
+    # internt så hela strängen kan ligga i en href="..." utan att kollidera.
+    js = (
+        "javascript:(function(){"
+        "var b=document.body?document.body.innerText:'';"
+        "var u=location.href,t=document.title;"
+        "var n=document.createElement('div');"
+        "n.style.cssText='position:fixed;top:12px;right:12px;z-index:2147483647;"
+        "background:#1e293b;color:#fff;padding:12px 16px;border-radius:10px;"
+        "font:14px -apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:340px';"
+        "n.textContent='Skickar tips till Kungens Trav...';"
+        "document.body.appendChild(n);"
+        "fetch('" + base + "/api/tips/ingest-page',{method:'POST',"
+        "headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({url:u,title:t,text:b})})"
+        ".then(function(r){return r.json();})"
+        ".then(function(d){"
+        "if(d.ok){n.style.background='#15803d';"
+        "n.textContent='\\u2713 '+d.game_type+' '+d.day+(d.track?' ('+d.track+')':'')"
+        "+' sparat \\u2022 '+d.interviews_count+' intervjuer';}"
+        "else{n.style.background='#b91c1c';n.textContent='\\u2717 '+(d.error||'misslyckades');}"
+        "setTimeout(function(){n.remove();},7000);})"
+        ".catch(function(e){n.style.background='#b91c1c';"
+        "n.textContent='\\u2717 '+e;setTimeout(function(){n.remove();},7000);});"
+        "})();"
+    )
+    js_attr = js.replace("&", "&amp;").replace('"', "&quot;")
+    return f"""<!DOCTYPE html>
+<html lang="sv"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tips-bokmärke · Kungens Trav</title>
+<style>
+  body{{font:16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:#f8f9fb;color:#1a1a2e;margin:0;padding:40px 20px;}}
+  .wrap{{max-width:640px;margin:0 auto;}}
+  h1{{font-size:26px;margin:0 0 8px;}}
+  .lead{{color:#6b7280;margin:0 0 28px;}}
+  .bm{{display:inline-block;background:#f59e0b;color:#1a1a2e;font-weight:700;
+    text-decoration:none;padding:14px 26px;border-radius:12px;font-size:17px;
+    box-shadow:0 4px 14px rgba(245,158,11,.4);cursor:grab;}}
+  .card{{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:24px;
+    margin:24px 0;}}
+  ol{{padding-left:20px;}} li{{margin:8px 0;}}
+  code{{background:#f3f4f6;padding:2px 6px;border-radius:6px;font-size:14px;}}
+  .note{{font-size:14px;color:#6b7280;}}
+</style></head>
+<body><div class="wrap">
+  <h1>🏇 Tips-bokmärke</h1>
+  <p class="lead">Dra knappen till din bokmärkesrad. Klicka sedan på den när du är
+  inne på en tipssida du är inloggad på — så skickas hela sidan hit och tolkas
+  automatiskt (omgång, tips och alla kusk-/tränarintervjuer).</p>
+
+  <div class="card">
+    <p style="margin-top:0"><strong>Dra mig till bokmärkesraden →</strong></p>
+    <a class="bm" href="{js_attr}">📋 Hämta travtips</a>
+    <p class="note" style="margin-bottom:0">Tips: tryck <code>⌘⇧B</code> (Mac) eller
+    <code>Ctrl⇧B</code> för att visa bokmärkesraden om den är dold.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Så funkar det</h3>
+    <ol>
+      <li>Logga in på t.ex. <code>aftonbladet.se</code>, <code>expressen.se</code>,
+      <code>travronden.se</code> eller <code>kungenstrav.se</code>.</li>
+      <li>Öppna artikeln med dagens tips/spelförslag.</li>
+      <li>Klicka på <strong>Hämta travtips</strong> i bokmärkesraden.</li>
+      <li>En liten ruta uppe till höger bekräftar vilken omgång som sparades och
+      hur många intervjuer som hittades.</li>
+    </ol>
+    <p class="note" style="margin-bottom:0">Backend listar själv ut vilken omgång
+    (V85/V75/V64…) och dag artikeln gäller — du behöver inte välja något.</p>
+  </div>
+</div></body></html>"""
+
+
+@app.post("/api/tips/ingest-page")
+async def api_tips_ingest_page(request: Request):
+    """Bokmärket POSTar hela artikelsidan hit (inloggat innehåll).
+
+    Body: {url, title, text}. Backend listar själv ut vilken omgång det är,
+    hämtar rätt roster, strukturerar tips + ALLA kusk/tränar-intervjuer och
+    slår ihop dem till ett top-level interviews-block.
+    """
+    if not ANTHROPIC_API_KEY:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY saknas"}, status_code=500)
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ogiltigt JSON"}, status_code=400)
+
+    url = (data.get("url") or "").strip()
+    title = (data.get("title") or "").strip()
+    text = (data.get("text") or "")
+    if not text.strip():
+        return JSONResponse({"error": "text saknas"}, status_code=400)
+    # Kapa extremt långa sidor (LLM-kostnad + token-tak)
+    text = text[:40000]
+
+    from trav_agent.data.tips_pipeline import (
+        detect_round_meta,
+        ingest_raw_text,
+        merge_interviews_from_sources,
+        build_roster_from_round,
+    )
+
+    # 1. Lista ut vilken omgång artikeln handlar om
+    meta = await detect_round_meta(text, title=title, url=url, api_key=ANTHROPIC_API_KEY)
+    if not meta:
+        return JSONResponse(
+            {"ok": False, "error": "kunde inte avgöra vilken omgång sidan gäller"},
+            status_code=422,
+        )
+    game_type = meta["game_type"]
+    day = meta["date"]
+    source_name = meta["source_name"]
+
+    # 2. Hämta roster för omgången så LLM mappar namn → nummer
+    key = f"{game_type}/{day}"
+    game_round = _round_cache.get(key)
+    if not game_round:
+        try:
+            client = ATGClient()
+            gr = await client.fetch_full_round(game_type, date.fromisoformat(day))
+            if gr:
+                CompositeAnalyzer().analyze_round(gr)
+                _round_cache[key] = gr
+                game_round = gr
+        except Exception as e:
+            logger.warning(f"ingest-page: kunde inte hämta omgång {key}: {e}")
+
+    roster = None
+    n_legs = 8
+    if game_round:
+        roster = build_roster_from_round(game_round)
+        n_legs = len(game_round.races)
+
+    # 3. Strukturera tips + intervjuer och spara källan
+    try:
+        result = await ingest_raw_text(
+            game_type, day, source_name, text,
+            roster=roster, api_key=ANTHROPIC_API_KEY,
+            rebuild_consensus=True, n_legs=n_legs,
+        )
+    except Exception as e:
+        logger.error(f"ingest-page error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    if not result.get("ok"):
+        return JSONResponse({"ok": False, "meta": meta, **result}, status_code=422)
+
+    # 4. Slå ihop intervjuer från alla källor → top-level interviews-block
+    interviews = {}
+    try:
+        interviews = merge_interviews_from_sources(game_type, day)
+    except Exception as e:
+        logger.warning(f"ingest-page: merge interviews misslyckades: {e}")
+
+    _tips_cache.pop(f"{game_type}:{day}", None)
+    n_interviews = sum(len(v) for v in interviews.values())
+    return JSONResponse({
+        "ok": True,
+        "game_type": game_type,
+        "day": day,
+        "track": meta.get("track", ""),
+        "source": source_name,
+        "expert_tips": result.get("expert_tips", {}),
+        "interviews_count": n_interviews,
+        "interviews_legs": sorted(interviews.keys()),
+    })
+
+
+@app.get("/bookmarklet", response_class=HTMLResponse)
+async def bookmarklet_page(request: Request):
+    """Sida med dra-och-släpp-bokmärke som scrapar inloggade tipssajter."""
+    base = str(request.base_url).rstrip("/")
+    return HTMLResponse(_render_bookmarklet_page(base))
 
 
 # ── AI Chat (SSE Streaming) ────────────────────────────────────────────────

@@ -58,4 +58,52 @@
   } else {
     window.addEventListener("DOMContentLoaded", () => document.body.appendChild(btn));
   }
+
+  // ── Auto-skicka-läge ──────────────────────────────────────────────────────
+  // Skickar artikeln själv (noll klick) OM:
+  //  1) "autoSend" är påslaget i inställningarna,
+  //  2) sidan ser ut att handla om trav (annars slösar vi LLM-anrop),
+  //  3) den inte redan skickats de senaste 6 timmarna.
+  const TRAV_RE = /\b(v75|v86|v85|v64|v65|gs75|trav|travtips|spik|gardering|streck|lopp)\b/i;
+
+  function looksLikeTrav() {
+    const body = document.body ? document.body.innerText.slice(0, 4000) : "";
+    const hay = (location.href + " " + document.title + " " + body).toLowerCase();
+    return TRAV_RE.test(hay);
+  }
+
+  async function maybeAutoSend() {
+    let cfg;
+    try { cfg = await chrome.storage.sync.get("autoSend"); } catch (e) { return; }
+    if (!cfg || !cfg.autoSend) return;
+    if (!looksLikeTrav()) return;
+
+    const key = "sent:" + location.href.split("#")[0];
+    let store;
+    try { store = await chrome.storage.local.get(key); } catch (e) { store = {}; }
+    if (Date.now() - (store[key] || 0) < 6 * 3600 * 1000) return; // redan skickad nyligen
+
+    // Markera direkt så två triggers inte dubbelskickar
+    try { await chrome.storage.local.set({ [key]: Date.now() }); } catch (e) {}
+
+    flash("⏳ Auto-skickar…", "#334155");
+    chrome.runtime.sendMessage({ type: "ingestThisTab" }, (r) => {
+      if (chrome.runtime.lastError) {
+        try { chrome.storage.local.remove(key); } catch (e) {}
+        flash("⚠️ " + chrome.runtime.lastError.message, "#b91c1c");
+        return;
+      }
+      if (r && r.ok) {
+        flash(`✅ ${r.game_type} ${r.day} • ${r.interviews_count} intervjuer`, "#15803d");
+      } else {
+        // rensa markeringen vid fel så man kan försöka igen
+        try { chrome.storage.local.remove(key); } catch (e) {}
+        flash("⚠️ " + ((r && r.error) || "auto misslyckades"), "#b91c1c");
+      }
+    });
+  }
+
+  // Kör vid laddning + en retry (nyhetssajter laddar ofta innehåll sent/SPA)
+  maybeAutoSend();
+  setTimeout(maybeAutoSend, 3500);
 })();

@@ -6,15 +6,29 @@
     body { font: 14px/1.5 -apple-system, sans-serif; width: 340px; padding: 18px; color: #1a1a2e; }
     h1 { font-size: 16px; margin: 0 0 12px; }
     label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-    input { width: 100%; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; box-sizing: border-box; }
+    input[type=url] { width: 100%; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; box-sizing: border-box; }
     button { margin-top: 12px; padding: 9px 16px; border: none; border-radius: 8px; background: #f59e0b; color: #1a1a2e; font: 600 14px inherit; cursor: pointer; }
     #saved { margin-left: 10px; color: #15803d; font-size: 13px; }
+    .toggle { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0 4px; }
+    .toggle input { margin-top: 3px; }
+    .toggle .txt { font-size: 13px; }
+    .toggle .hint { font-size: 11px; color: #9ca3af; margin-top: 2px; }
   </style>
 </head>
 <body>
   <h1>⚙️ Inställningar</h1>
   <label for="base">Backend-URL (Kungens Trav)</label>
   <input id="base" type="url" placeholder="https://travagentroi-production.up.railway.app" />
+
+  <label class="toggle">
+    <input id="autosend" type="checkbox" />
+    <span class="txt">Auto-skicka travartiklar
+      <div class="hint">Skickar sidan automatiskt (noll klick) när du öppnar en
+      trav-artikel på en bevakad sajt. Skickar bara sidor som ser ut att handla
+      om trav, och max en gång var 6:e timme per artikel.</div>
+    </span>
+  </label>
+
   <div>
     <button id="save">Spara</button>
     <span id="saved"></span>
